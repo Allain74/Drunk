@@ -48,8 +48,9 @@ def _pipeline(statements: list[tuple[str, list]]) -> list[dict]:
             for row in data["rows"]:
                 d = {}
                 for i, cell in enumerate(row):
-                    t, v = cell["type"], cell["value"]
-                    if t == "null":
+                    t = cell["type"]
+                    v = cell.get("value")
+                    if t == "null" or v is None:
                         d[cols[i]] = None
                     elif t == "integer":
                         d[cols[i]] = int(v)
