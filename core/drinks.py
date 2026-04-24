@@ -40,5 +40,5 @@ def find_drink(query: str) -> Drink | None:
 def list_drinks_text() -> str:
     lines = ["📋 *Boissons disponibles :*\n"]
     for key, d in DRINKS.items():
-        lines.append(f"• `{d.aliases[0]}` — {d.name} ({d.abv}%)")
+        lines.append(f"• `/{d.aliases[0]}` — {d.name} ({d.abv}%)")
     return "\n".join(lines)
