@@ -17,7 +17,7 @@ load_dotenv()
 _ws_clients: set[WebSocket] = set()
 _bot_app = None
 
-RENDER_URL = os.environ.get("RENDER_URL", "http://localhost:8000")
+RENDER_URL = os.environ.get("RENDER_URL", "https://drunk-l34t.onrender.com")
 
 
 @asynccontextmanager
