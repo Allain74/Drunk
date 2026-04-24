@@ -36,6 +36,34 @@ async def lifespan(app: FastAPI):
         drop_pending_updates=True,
     )
 
+    from telegram import BotCommand
+    await _bot_app.bot.set_my_commands([
+        BotCommand("p",          "Configurer ton profil  →  /p 80 h"),
+        BotCommand("tac",        "Voir ton taux d'alcool actuel"),
+        BotCommand("h",          "Historique des verres de la session"),
+        BotCommand("stop",       "Remettre les compteurs à zéro"),
+        BotCommand("liste",      "Voir toutes les boissons disponibles"),
+        BotCommand("demi",       "🍺 Demi 25cl (5%)"),
+        BotCommand("pinte",      "🍺 Pinte 50cl (5%)"),
+        BotCommand("demif",      "🍺 Demi forte 25cl (8.5%)"),
+        BotCommand("pintef",     "🍺 Pinte forte 50cl (8.5%)"),
+        BotCommand("vin",        "🍷 Verre vin rouge 12cl"),
+        BotCommand("blanc",      "🥂 Verre vin blanc 12cl"),
+        BotCommand("champagne",  "🥂 Coupe champagne 10cl"),
+        BotCommand("vodka",      "🥃 Shot vodka 4cl"),
+        BotCommand("whisky",     "🥃 Shot whisky 4cl"),
+        BotCommand("tequila",    "🥃 Shot tequila 4cl"),
+        BotCommand("rhum",       "🥃 Shot rhum 4cl"),
+        BotCommand("shot96",     "💥 Shot alcool 96° 4cl"),
+        BotCommand("mojito",     "🍹 Mojito"),
+        BotCommand("gin",        "🍹 Gin tonic"),
+        BotCommand("aperol",     "🍹 Aperol spritz"),
+        BotCommand("longisland", "🍹 Long Island"),
+        BotCommand("pastis",     "🌿 Pastis 2.5cl"),
+        BotCommand("cidre",      "🍎 Cidre 25cl"),
+        BotCommand("sangria",    "🍷 Sangria 20cl"),
+    ])
+
     asyncio.create_task(_broadcast_loop())
 
     yield
