@@ -127,7 +127,7 @@ async def _broadcast(data: list[dict]):
             await ws.send_text(json.dumps(data))
         except Exception:
             dead.add(ws)
-    _ws_clients -= dead
+    _ws_clients.difference_update(dead)
 
 
 async def _broadcast_loop():
