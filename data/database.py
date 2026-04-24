@@ -90,6 +90,17 @@ def log_drink(telegram_id: int, drink_key: str, alc_grams: float) -> bool:
     return True
 
 
+def get_session_drinks_detail(telegram_id: int) -> list[sqlite3.Row]:
+    session = get_active_session(telegram_id)
+    if not session:
+        return []
+    with get_conn() as conn:
+        return conn.execute(
+            "SELECT drink_key, alc_grams, logged_at FROM drink_logs WHERE session_id=? ORDER BY logged_at",
+            (session["id"],)
+        ).fetchall()
+
+
 def get_session_drinks(telegram_id: int) -> list[tuple[float, datetime]]:
     session = get_active_session(telegram_id)
     if not session:

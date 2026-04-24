@@ -1,5 +1,6 @@
 import os
 import logging
+from datetime import datetime
 from dotenv import load_dotenv
 import httpx
 from telegram import Update
@@ -11,7 +12,8 @@ from core.drinks import DRINKS, list_drinks_text
 from core.widmark import alcohol_grams, total_bac, bac_label, sober_in_hours
 from data.database import (
     init_db, upsert_user, get_user,
-    start_session, get_active_session, log_drink, get_session_drinks, end_session
+    start_session, get_active_session, log_drink, get_session_drinks,
+    get_session_drinks_detail, end_session
 )
 
 load_dotenv()
@@ -126,6 +128,22 @@ async def cmd_tac(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 # ── /stop ─────────────────────────────────────────────────────────────────────
 
+async def cmd_historique(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    tid = update.effective_user.id
+    rows = get_session_drinks_detail(tid)
+    if not rows:
+        await update.message.reply_text("🫗 Aucune boisson cette session.")
+        return
+    lines = ["📋 *Tes boissons cette session :*\n"]
+    for i, r in enumerate(rows, 1):
+        heure = datetime.fromisoformat(r["logged_at"]).strftime("%H:%M")
+        drink = DRINKS.get(r["drink_key"])
+        nom = drink.name if drink else r["drink_key"]
+        lines.append(f"{i}. {nom} — {heure}")
+    lines.append(f"\n_Total : {len(rows)} verre(s)_")
+    await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+
+
 async def cmd_stop(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     end_session(update.effective_user.id)
     ensure_session(update.effective_user.id)
@@ -139,14 +157,17 @@ async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     text = text.replace("é", "e").replace("è", "e").replace("à", "a")
 
     # Commandes texte spéciales
-    if text in ("liste", "list"):
+    if text in ("liste", "list", "l"):
         await update.message.reply_text(list_drinks_text(), parse_mode="Markdown")
         return
-    if text in ("tac", "mon tac"):
+    if text in ("tac", "mon tac", "t"):
         await cmd_tac(update, ctx)
         return
-    if text in ("stop", "reset"):
+    if text in ("stop", "reset", "r"):
         await cmd_stop(update, ctx)
+        return
+    if text in ("historique", "histo", "h"):
+        await cmd_historique(update, ctx)
         return
 
     drink_key = ALIAS_MAP.get(text)
@@ -162,7 +183,8 @@ def create_application() -> Application:
     app = ApplicationBuilder().token(token).updater(None).build()
 
     app.add_handler(CommandHandler("start",  cmd_start))
-    app.add_handler(CommandHandler(["profil", "p"], cmd_profil))
+    app.add_handler(CommandHandler(["profil", "p"],          cmd_profil))
+    app.add_handler(CommandHandler(["historique", "h", "histo"], cmd_historique))
     app.add_handler(CommandHandler(["tac", "t"],    cmd_tac))
     app.add_handler(CommandHandler(["stop", "reset", "r"], cmd_stop))
     app.add_handler(CommandHandler(["liste", "l"],  lambda u, c: u.message.reply_text(list_drinks_text(), parse_mode="Markdown")))
