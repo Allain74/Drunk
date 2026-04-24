@@ -8,4 +8,4 @@ services:
       - key: TELEGRAM_BOT_TOKEN
         sync: false
       - key: API_URL
-        value: https://alcootracker.onrender.com
+        value: https://drunk-l34t.onrender.com
