@@ -102,6 +102,22 @@ def log_drink(telegram_id: int, drink_key: str, alc_grams: float) -> bool:
     return True
 
 
+def delete_last_drink(telegram_id: int) -> str | None:
+    """Supprime le dernier verre. Retourne le nom de la boisson ou None."""
+    session = get_active_session(telegram_id)
+    if not session:
+        return None
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT id, drink_key FROM drink_logs WHERE session_id=? ORDER BY logged_at DESC LIMIT 1",
+            (session["id"],)
+        ).fetchone()
+        if not row:
+            return None
+        conn.execute("DELETE FROM drink_logs WHERE id=?", (row["id"],))
+        return row["drink_key"]
+
+
 def get_session_drinks_detail(telegram_id: int) -> list[sqlite3.Row]:
     session = get_active_session(telegram_id)
     if not session:

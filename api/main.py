@@ -158,3 +158,31 @@ async def trigger_refresh():
     snapshot = build_snapshot()
     await _broadcast(snapshot)
     return {"ok": True}
+
+
+@app.get("/history")
+def get_history():
+    """Retourne l'historique des boissons par user pour le graphique."""
+    from data.database import get_all_users, get_active_session, get_conn
+    users = get_all_users()
+    result = []
+    for user in users:
+        session = get_active_session(user["telegram_id"])
+        if not session:
+            continue
+        with get_conn() as conn:
+            rows = conn.execute(
+                "SELECT drink_key, alc_grams, logged_at FROM drink_logs WHERE session_id=? ORDER BY logged_at",
+                (session["id"],)
+            ).fetchall()
+        points = []
+        for r in rows:
+            t = datetime.fromisoformat(r["logged_at"]).replace(tzinfo=timezone.utc)
+            points.append({"t": t.isoformat(), "alc_g": r["alc_grams"]})
+        result.append({
+            "username": user["username"],
+            "weight_kg": user["weight_kg"],
+            "gender": user["gender"],
+            "points": points,
+        })
+    return result
