@@ -1,16 +1,13 @@
 import os
 from datetime import datetime, timezone
 from dotenv import load_dotenv
-import psycopg2
-import psycopg2.extras
+import psycopg
 
 load_dotenv()
 
 
 def get_conn():
-    conn = psycopg2.connect(os.environ["DATABASE_URL"])
-    conn.autocommit = False
-    return conn
+    return psycopg.connect(os.environ["DATABASE_URL"], autocommit=False)
 
 
 def init_db():
