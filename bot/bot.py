@@ -260,7 +260,7 @@ async def cmd_defi(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 # ── /site ─────────────────────────────────────────────────────────────────────
 
 async def cmd_site(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    url = os.environ.get("SITE_URL", "https://drunk-l34t.onrender.com")
+    url = os.environ.get("SITE_URL", "https://drunk-weld.vercel.app")
     await update.message.reply_text(f"🌐 Dashboard en temps réel :\n{url}")
 
 
