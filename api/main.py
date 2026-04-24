@@ -5,10 +5,9 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.middleware.cors import CORSMiddleware
 from telegram import Update
-from telegram.error import Conflict
 
 from data.database import init_db, get_all_users, get_all_active_drinks
 from core.widmark import total_bac, bac_label, sober_in_hours
@@ -16,33 +15,34 @@ from core.widmark import total_bac, bac_label, sober_in_hours
 load_dotenv()
 
 _ws_clients: set[WebSocket] = set()
+_bot_app = None
+
+RENDER_URL = os.environ.get("RENDER_URL", "http://localhost:8000")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global _bot_app
     init_db()
 
-    # Démarre le bot Telegram dans le même event loop
     from bot.bot import create_application
+    _bot_app = create_application()
+    await _bot_app.initialize()
+    await _bot_app.start()
 
-    async def ignore_conflict(update, context):
-        if isinstance(context.error, Conflict):
-            return
-        raise context.error
-
-    bot_app = create_application()
-    bot_app.add_error_handler(ignore_conflict)
-    await bot_app.initialize()
-    await bot_app.start()
-    await bot_app.updater.start_polling(drop_pending_updates=True, allowed_updates=Update.ALL_TYPES)
+    # Webhook : Telegram envoie les messages à notre URL
+    await _bot_app.bot.set_webhook(
+        url=f"{RENDER_URL}/telegram-webhook",
+        drop_pending_updates=True,
+    )
 
     asyncio.create_task(_broadcast_loop())
 
     yield
 
-    await bot_app.updater.stop()
-    await bot_app.stop()
-    await bot_app.shutdown()
+    await _bot_app.bot.delete_webhook()
+    await _bot_app.stop()
+    await _bot_app.shutdown()
 
 
 app = FastAPI(title="AlcooTracker API", lifespan=lifespan)
@@ -55,7 +55,17 @@ app.add_middleware(
 )
 
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
+# ── Webhook Telegram ──────────────────────────────────────────────────────────
+
+@app.post("/telegram-webhook")
+async def telegram_webhook(request: Request):
+    data = await request.json()
+    update = Update.de_json(data, _bot_app.bot)
+    await _bot_app.process_update(update)
+    return {"ok": True}
+
+
+# ── Helpers dashboard ─────────────────────────────────────────────────────────
 
 def build_snapshot() -> list[dict]:
     users = {u["telegram_id"]: u for u in get_all_users()}
@@ -66,11 +76,11 @@ def build_snapshot() -> list[dict]:
         drinks = drinks_by_user.get(uid, [])
         bac = total_bac(drinks, user["weight_kg"], user["gender"], now)
         result.append({
-            "username":   user["username"],
-            "bac":        round(bac, 3),
-            "label":      bac_label(bac),
-            "sober_in_h": round(sober_in_hours(bac), 1),
-            "nb_drinks":  len(drinks),
+            "username":    user["username"],
+            "bac":         round(bac, 3),
+            "label":       bac_label(bac),
+            "sober_in_h":  round(sober_in_hours(bac), 1),
+            "nb_drinks":   len(drinks),
             "has_session": uid in drinks_by_user,
         })
     result.sort(key=lambda x: x["bac"], reverse=True)

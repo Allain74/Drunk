@@ -9,3 +9,5 @@ services:
         sync: false
       - key: API_URL
         value: https://drunk-l34t.onrender.com
+      - key: RENDER_URL
+        value: https://drunk-l34t.onrender.com
