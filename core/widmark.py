@@ -30,7 +30,7 @@ def bac_contribution(
     hours_elapsed = (now - drink_time).total_seconds() / 3600
 
     # Pic TAC apporté par cette boisson
-    peak = alc_grams / (weight_kg * r * 10)
+    peak = alc_grams / (weight_kg * r)
 
     # L'élimination commence après la période d'absorption
     hours_eliminating = max(0.0, hours_elapsed - ABSORPTION_DELAY)
