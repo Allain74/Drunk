@@ -3,7 +3,7 @@ import logging
 from datetime import datetime
 from dotenv import load_dotenv
 import httpx
-from telegram import Update
+from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
 from telegram.ext import (
     ApplicationBuilder, CommandHandler, MessageHandler,
     ContextTypes, Application, filters
@@ -13,7 +13,7 @@ from core.widmark import alcohol_grams, total_bac, bac_label, sober_in_hours
 from data.database import (
     init_db, upsert_user, get_user,
     start_session, get_active_session, log_drink, get_session_drinks,
-    get_session_drinks_detail, end_session
+    get_session_drinks_detail, end_session, update_location
 )
 
 load_dotenv()
@@ -54,6 +54,13 @@ async def _do_drink(update: Update, drink_key: str):
         f"⏱ Sobre dans ~*{sober_in_hours(bac):.1f}h*",
         parse_mode="Markdown"
     )
+
+    # Bouton de partage de position
+    keyboard = ReplyKeyboardMarkup(
+        [[KeyboardButton("📍 Partager ma position", request_location=True)]],
+        resize_keyboard=True, one_time_keyboard=True
+    )
+    await update.message.reply_text("📍 Tu veux partager ta position ?", reply_markup=keyboard)
 
     api_url = os.environ.get("API_URL", "http://localhost:8000")
     try:
@@ -128,6 +135,24 @@ async def cmd_tac(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 # ── /stop ─────────────────────────────────────────────────────────────────────
 
+async def handle_location(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    tid = update.effective_user.id
+    if not get_user(tid):
+        return
+    loc = update.message.location
+    update_location(tid, loc.latitude, loc.longitude)
+    await update.message.reply_text(
+        "📍 Position enregistrée !",
+        reply_markup=ReplyKeyboardRemove()
+    )
+    api_url = os.environ.get("API_URL", "http://localhost:8000")
+    try:
+        async with httpx.AsyncClient() as client:
+            await client.post(f"{api_url}/refresh", timeout=3)
+    except Exception:
+        pass
+
+
 async def cmd_historique(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     tid = update.effective_user.id
     rows = get_session_drinks_detail(tid)
@@ -200,6 +225,8 @@ def create_application() -> Application:
 
     # Handler texte libre (sans /)
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
+    # Handler position
+    app.add_handler(MessageHandler(filters.LOCATION, handle_location))
 
     return app
 

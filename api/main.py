@@ -83,6 +83,8 @@ def build_snapshot() -> list[dict]:
             "sober_in_h":  round(sober_in_hours(bac), 1),
             "nb_drinks":   len(drinks),
             "has_session": uid in drinks_by_user,
+            "lat":         user["latitude"],
+            "lon":         user["longitude"],
         })
     result.sort(key=lambda x: x["bac"], reverse=True)
     return result

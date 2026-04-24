@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>AlcooTracker 🍺</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -215,6 +217,29 @@
     }
     #empty .icon { font-size: 3.5rem; margin-bottom: 12px; }
     #empty p { font-size: 1rem; }
+
+    /* ── Map ── */
+    #map-section {
+      max-width: 1000px;
+      margin: 32px auto 0;
+    }
+
+    #map-section h2 {
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--sub);
+      margin-bottom: 12px;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+    }
+
+    #map {
+      height: 320px;
+      border-radius: 18px;
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
   </style>
 </head>
 <body>
@@ -233,10 +258,57 @@
   <p>Aucune session active pour le moment.</p>
 </div>
 
+<div id="map-section" style="display:none">
+  <h2>📍 Positions</h2>
+  <div id="map"></div>
+</div>
+
 <script>
   const WS_URL = location.hostname === "localhost"
     ? "ws://localhost:8001/ws"
     : "wss://drunk-l34t.onrender.com/ws";
+
+  // ── Carte Leaflet ──
+  let map = null;
+  const markers = {};
+
+  function initMap() {
+    if (map) return;
+    map = L.map('map').setView([46.8, 2.3], 5);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap'
+    }).addTo(map);
+  }
+
+  function updateMap(data) {
+    const withLoc = data.filter(u => u.lat && u.lon);
+    const section = document.getElementById('map-section');
+    if (!withLoc.length) { section.style.display = 'none'; return; }
+    section.style.display = 'block';
+    initMap();
+
+    withLoc.forEach(u => {
+      const lvl   = level(u.bac);
+      const color = COLORS[lvl];
+      const icon  = L.divIcon({
+        className: '',
+        html: `<div style="background:${color};color:#fff;font-weight:700;font-size:11px;
+                padding:4px 8px;border-radius:99px;white-space:nowrap;
+                box-shadow:0 2px 8px #0003;border:2px solid #fff">
+                ${esc(u.username)} ${u.bac.toFixed(2)}g/L</div>`,
+        iconAnchor: [0, 0]
+      });
+      if (markers[u.username]) {
+        markers[u.username].setLatLng([u.lat, u.lon]).setIcon(icon);
+      } else {
+        markers[u.username] = L.marker([u.lat, u.lon], { icon }).addTo(map);
+      }
+    });
+
+    // Centrer sur tous les marqueurs
+    const bounds = L.latLngBounds(withLoc.map(u => [u.lat, u.lon]));
+    map.fitBounds(bounds, { padding: [40, 40] });
+  }
 
   const COLORS = ['#22c55e','#84cc16','#eab308','#f97316','#ef4444','#a855f7'];
   const EMOJIS = ['😶','🙂','😄','😵','🤢','💀'];
@@ -303,6 +375,7 @@
     if (!data.length) { grid.innerHTML = ''; empty.style.display = 'block'; return; }
     empty.style.display = 'none';
     grid.innerHTML = data.map(renderCard).join('');
+    updateMap(data);
   }
 
   let ws, retryDelay = 2000;

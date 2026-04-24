@@ -18,7 +18,10 @@ def init_db():
                 telegram_id     INTEGER PRIMARY KEY,
                 username        TEXT NOT NULL,
                 weight_kg       REAL NOT NULL,
-                gender          TEXT NOT NULL CHECK(gender IN ('homme', 'femme'))
+                gender          TEXT NOT NULL CHECK(gender IN ('homme', 'femme')),
+                latitude        REAL,
+                longitude       REAL,
+                location_at     TEXT
             );
             CREATE TABLE IF NOT EXISTS sessions (
                 id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -57,6 +60,15 @@ def get_user(telegram_id: int) -> sqlite3.Row | None:
 def get_all_users() -> list[sqlite3.Row]:
     with get_conn() as conn:
         return conn.execute("SELECT * FROM users").fetchall()
+
+
+def update_location(telegram_id: int, lat: float, lon: float):
+    now = datetime.now(timezone.utc).isoformat()
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE users SET latitude=?, longitude=?, location_at=? WHERE telegram_id=?",
+            (lat, lon, now, telegram_id)
+        )
 
 
 def start_session(telegram_id: int) -> int:
