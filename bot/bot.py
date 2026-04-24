@@ -158,7 +158,7 @@ async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 def create_application() -> Application:
     token = os.environ["TELEGRAM_BOT_TOKEN"]
-    app = ApplicationBuilder().token(token).build()
+    app = ApplicationBuilder().token(token).updater(None).build()
 
     app.add_handler(CommandHandler("start",  cmd_start))
     app.add_handler(CommandHandler("profil", cmd_profil))
