@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AlcooTracker 🍺</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #0f0f1a;
+      color: #e0e0e0;
+      min-height: 100vh;
+      padding: 24px 16px;
+    }
+
+    h1 {
+      text-align: center;
+      font-size: 2rem;
+      margin-bottom: 6px;
+      color: #f0c040;
+    }
+
+    #status {
+      text-align: center;
+      font-size: 0.8rem;
+      color: #666;
+      margin-bottom: 28px;
+    }
+
+    #grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 20px;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .card {
+      background: #1a1a2e;
+      border-radius: 16px;
+      padding: 20px 24px;
+      border: 1px solid #2a2a4a;
+      transition: transform 0.2s;
+    }
+
+    .card:hover { transform: translateY(-3px); }
+
+    .card .name {
+      font-size: 1.2rem;
+      font-weight: 700;
+      margin-bottom: 12px;
+      color: #fff;
+    }
+
+    .card .bac-value {
+      font-size: 2.6rem;
+      font-weight: 900;
+      line-height: 1;
+      margin-bottom: 6px;
+    }
+
+    .card .label { font-size: 0.9rem; margin-bottom: 12px; }
+
+    .bar-bg {
+      background: #2a2a4a;
+      border-radius: 8px;
+      height: 10px;
+      margin-bottom: 10px;
+      overflow: hidden;
+    }
+
+    .bar-fill {
+      height: 100%;
+      border-radius: 8px;
+      transition: width 0.8s ease, background 0.8s;
+    }
+
+    .card .meta {
+      font-size: 0.78rem;
+      color: #888;
+    }
+
+    /* Couleurs selon TAC */
+    .level-0  { color: #4caf50; }
+    .level-1  { color: #8bc34a; }
+    .level-2  { color: #ffc107; }
+    .level-3  { color: #ff9800; }
+    .level-4  { color: #f44336; }
+    .level-5  { color: #e91e63; }
+
+    .bar-0  { background: #4caf50; }
+    .bar-1  { background: #8bc34a; }
+    .bar-2  { background: #ffc107; }
+    .bar-3  { background: #ff9800; }
+    .bar-4  { background: #f44336; }
+    .bar-5  { background: #e91e63; }
+
+    #empty {
+      text-align: center;
+      color: #555;
+      margin-top: 60px;
+      font-size: 1.1rem;
+    }
+  </style>
+</head>
+<body>
+
+<h1>🍺 AlcooTracker</h1>
+<div id="status">Connexion…</div>
+<div id="grid"></div>
+<div id="empty" style="display:none">Aucune session active pour le moment.</div>
+
+<script>
+  // ── Config ──────────────────────────────────────────────────────────────────
+  // Remplace par l'URL de ton backend Render en production
+  const WS_URL = (location.hostname === "localhost")
+    ? "ws://localhost:8001/ws"
+    : "wss://TON-APP.onrender.com/ws";
+
+  // ── TAC → niveau (0–5) ──────────────────────────────────────────────────────
+  function bacLevel(bac) {
+    if (bac === 0)    return 0;
+    if (bac < 0.2)   return 1;
+    if (bac < 0.5)   return 2;
+    if (bac < 0.8)   return 3;
+    if (bac < 1.5)   return 4;
+    return 5;
+  }
+
+  // Barre : 2.0 g/L = 100%
+  function bacPercent(bac) {
+    return Math.min(100, (bac / 2.0) * 100).toFixed(1);
+  }
+
+  function renderCard(user) {
+    const lvl = bacLevel(user.bac);
+    const pct = bacPercent(user.bac);
+    return `
+      <div class="card">
+        <div class="name">${escHtml(user.username)}</div>
+        <div class="bac-value level-${lvl}">${user.bac.toFixed(2)} <span style="font-size:1rem;font-weight:400">g/L</span></div>
+        <div class="label">${escHtml(user.label)}</div>
+        <div class="bar-bg"><div class="bar-fill bar-${lvl}" style="width:${pct}%"></div></div>
+        <div class="meta">
+          🍹 ${user.nb_drinks} consommation(s) &nbsp;|&nbsp; ⏱ sobre dans ~${user.sober_in_h}h
+          ${!user.has_session ? '<br>⚪ Pas de session active' : ''}
+        </div>
+      </div>`;
+  }
+
+  function escHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  function render(data) {
+    const grid  = document.getElementById("grid");
+    const empty = document.getElementById("empty");
+    if (!data.length) {
+      grid.innerHTML = "";
+      empty.style.display = "block";
+      return;
+    }
+    empty.style.display = "none";
+    grid.innerHTML = data.map(renderCard).join("");
+  }
+
+  // ── WebSocket ───────────────────────────────────────────────────────────────
+  let ws, retryDelay = 2000;
+
+  function connect() {
+    ws = new WebSocket(WS_URL);
+
+    ws.onopen = () => {
+      document.getElementById("status").textContent = "✅ Connecté — mise à jour en temps réel";
+      retryDelay = 2000;
+    };
+
+    ws.onmessage = (e) => {
+      const data = JSON.parse(e.data);
+      render(data);
+      document.getElementById("status").textContent =
+        `Dernière mise à jour : ${new Date().toLocaleTimeString("fr-FR")}`;
+    };
+
+    ws.onclose = () => {
+      document.getElementById("status").textContent = `⚠️ Déconnecté — reconnexion dans ${retryDelay/1000}s…`;
+      setTimeout(connect, retryDelay);
+      retryDelay = Math.min(retryDelay * 2, 30000);
+    };
+
+    ws.onerror = () => ws.close();
+  }
+
+  connect();
+</script>
+</body>
+</html>
