@@ -7,7 +7,10 @@ load_dotenv()
 
 
 def get_conn():
-    return psycopg.connect(os.environ["DATABASE_URL"], autocommit=False)
+    url = os.environ["DATABASE_URL"]
+    if "sslmode" not in url:
+        url += "?sslmode=require"
+    return psycopg.connect(url, autocommit=False)
 
 
 def init_db():
