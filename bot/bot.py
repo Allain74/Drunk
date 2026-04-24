@@ -86,6 +86,7 @@ async def cmd_profil(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     try:
         weight = float(args[0].replace(",", "."))
         gender = args[1].lower()
+        gender = {"h": "homme", "f": "femme"}.get(gender, gender)
         assert gender in ("homme", "femme")
         assert 30 < weight < 250
     except (ValueError, AssertionError):
@@ -161,10 +162,10 @@ def create_application() -> Application:
     app = ApplicationBuilder().token(token).updater(None).build()
 
     app.add_handler(CommandHandler("start",  cmd_start))
-    app.add_handler(CommandHandler("profil", cmd_profil))
-    app.add_handler(CommandHandler("tac",    cmd_tac))
-    app.add_handler(CommandHandler("stop",   cmd_stop))
-    app.add_handler(CommandHandler("liste",  lambda u, c: u.message.reply_text(list_drinks_text(), parse_mode="Markdown")))
+    app.add_handler(CommandHandler(["profil", "p"], cmd_profil))
+    app.add_handler(CommandHandler(["tac", "t"],    cmd_tac))
+    app.add_handler(CommandHandler(["stop", "reset", "r"], cmd_stop))
+    app.add_handler(CommandHandler(["liste", "l"],  lambda u, c: u.message.reply_text(list_drinks_text(), parse_mode="Markdown")))
 
     # Commandes slash par boisson
     registered = set()
