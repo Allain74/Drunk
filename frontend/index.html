@@ -195,6 +195,11 @@
       background:none; border:none; font-size:1.4rem;
       cursor:pointer; color:var(--sub);
     }
+    .drink-list { margin-top:16px; border-top:1px solid var(--border); padding-top:12px; }
+    .drink-list h4 { font-size:0.75rem; color:var(--sub); font-weight:600; text-transform:uppercase; margin-bottom:8px; }
+    .drink-item { display:flex; justify-content:space-between; font-size:0.82rem; padding:4px 0; border-bottom:1px solid var(--border); }
+    .drink-item:last-child { border-bottom:none; }
+    .drink-time { color:var(--sub); font-size:0.75rem; }
 
     /* ── Défi ── */
     #defi-panel { max-width:1000px; margin:0 auto; }
@@ -299,6 +304,7 @@
     <button class="modal-close" onclick="closeModal()">✕</button>
     <h3 id="modal-title">Évolution du TAC</h3>
     <canvas id="chart" height="200"></canvas>
+    <div class="drink-list" id="drink-list"></div>
   </div>
 </div>
 
@@ -431,6 +437,16 @@
     map.fitBounds(L.latLngBounds(withLoc.map(u=>[u.lat,u.lon])),{padding:[40,40]});
   }
 
+  // ── Noms boissons ──
+  const DRINK_NAMES = {
+    demi:'🍺 Demi 25cl', pinte:'🍺 Pinte 50cl', demif:'🍺 Demi forte', pintef:'🍺 Pinte forte',
+    biere_bouteille:'🍺 Bouteille 33cl', vin_rouge:'🍷 Vin rouge', vin_blanc:'🥂 Vin blanc',
+    champagne:'🥂 Champagne', shot_vodka:'🥃 Vodka', shot_tequila:'🥃 Tequila',
+    shot_whisky:'🥃 Whisky', shot_rhum:'🥃 Rhum', shot_96:'💥 Shot 96°',
+    mojito:'🍹 Mojito', gin_tonic:'🍹 Gin tonic', aperol:'🍹 Aperol spritz',
+    long_island:'🍹 Long Island', sangria:'🍷 Sangria', cidre:'🍎 Cidre', pastis:'🌿 Pastis',
+  };
+
   // ── Graphique ──
   let chartInst = null;
 
@@ -440,10 +456,21 @@
 
     const history = await fetch(`${API}/history`).then(r=>r.json());
     const user = history.find(u => u.username === username);
+    const drinkList = document.getElementById('drink-list');
     if (!user || !user.points.length) {
       document.getElementById('chart').style.display='none';
+      drinkList.innerHTML='';
       return;
     }
+
+    // Liste des boissons
+    drinkList.innerHTML = `<h4>Boissons consommées</h4>` +
+      user.points.map(p => {
+        const t = new Date(p.t);
+        const heure = t.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+        const nom = DRINK_NAMES[p.drink_key] || p.drink_key;
+        return `<div class="drink-item"><span>${nom}</span><span class="drink-time">${heure}</span></div>`;
+      }).join('');
 
     // Calcul TAC à chaque point
     const R = user.gender === 'homme' ? 0.68 : 0.55;

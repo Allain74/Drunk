@@ -16,6 +16,7 @@ load_dotenv()
 
 _ws_clients: set[WebSocket] = set()
 _bot_app = None
+_danger_notified: dict[int, datetime] = {}
 
 RENDER_URL = os.environ.get("RENDER_URL", "https://drunk-l34t.onrender.com")
 
@@ -65,6 +66,7 @@ async def lifespan(app: FastAPI):
     ])
 
     asyncio.create_task(_broadcast_loop())
+    asyncio.create_task(_danger_loop())
 
     yield
 
@@ -130,8 +132,40 @@ async def _broadcast(data: list[dict]):
 
 async def _broadcast_loop():
     while True:
-        await asyncio.sleep(30)
+        await asyncio.sleep(60)
         await _broadcast(build_snapshot())
+
+
+async def _danger_loop():
+    while True:
+        await asyncio.sleep(300)
+        now = datetime.now(timezone.utc)
+        users = {u["telegram_id"]: u for u in get_all_users()}
+        drinks_by_user = get_all_active_drinks()
+        for uid, user in users.items():
+            drinks = drinks_by_user.get(uid, [])
+            if not drinks:
+                _danger_notified.pop(uid, None)
+                continue
+            bac = total_bac(drinks, user["weight_kg"], user["gender"], now)
+            if bac <= 1.5:
+                _danger_notified.pop(uid, None)
+                continue
+            last_drink_t = max(d[1] for d in drinks)
+            if (now - last_drink_t).total_seconds() < 1800:
+                continue
+            last_notif = _danger_notified.get(uid)
+            if last_notif and (now - last_notif).total_seconds() < 3600:
+                continue
+            _danger_notified[uid] = now
+            try:
+                await _bot_app.bot.send_message(
+                    chat_id=uid,
+                    text=f"👀 *{user['username']}*, t'es encore vivant ? {bac:.2f} g/L depuis un moment...",
+                    parse_mode="Markdown"
+                )
+            except Exception:
+                pass
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -178,7 +212,7 @@ def get_history():
         points = []
         for r in rows:
             t = datetime.fromisoformat(r["logged_at"]).replace(tzinfo=timezone.utc)
-            points.append({"t": t.isoformat(), "alc_g": r["alc_grams"]})
+            points.append({"t": t.isoformat(), "alc_g": r["alc_grams"], "drink_key": r["drink_key"]})
         result.append({
             "username": user["username"],
             "weight_kg": user["weight_kg"],

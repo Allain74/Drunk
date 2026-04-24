@@ -1,6 +1,7 @@
 import os
 import logging
 from datetime import datetime, timezone, timedelta
+from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
 import httpx
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
@@ -46,11 +47,13 @@ def fun_message(bac: float) -> str:
     msgs = FUN_MESSAGES[lvl]
     return f"\n_{random.choice(msgs)}_" if msgs else ""
 
+PARIS = ZoneInfo("Europe/Paris")
+
 def sober_time_str(bac: float) -> str:
     if bac <= 0:
         return "maintenant"
     h = sober_in_hours(bac)
-    target = datetime.now() + timedelta(hours=h)
+    target = datetime.now(PARIS) + timedelta(hours=h)
     return f"vers {target.strftime('%Hh%M')} (~{h:.1f}h)"
 
 
@@ -254,6 +257,13 @@ async def cmd_defi(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
 
 
+# ── /site ─────────────────────────────────────────────────────────────────────
+
+async def cmd_site(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    url = os.environ.get("SITE_URL", "https://drunk-l34t.onrender.com")
+    await update.message.reply_text(f"🌐 Dashboard en temps réel :\n{url}")
+
+
 # ── /stop ─────────────────────────────────────────────────────────────────────
 
 async def cmd_stop(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -313,6 +323,7 @@ def create_application() -> Application:
     app.add_handler(CommandHandler(["annuler", "a"],              cmd_annuler))
     app.add_handler(CommandHandler(["defi", "classement"],        cmd_defi))
     app.add_handler(CommandHandler(["stop", "reset", "r"],        cmd_stop))
+    app.add_handler(CommandHandler("site",                        cmd_site))
     app.add_handler(CommandHandler(["liste", "l"],                lambda u, c: u.message.reply_text(list_drinks_text(), parse_mode="Markdown")))
 
     registered = set()
