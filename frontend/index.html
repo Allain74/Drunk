@@ -4,192 +4,378 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AlcooTracker 🍺</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-    body {
-      font-family: 'Segoe UI', sans-serif;
-      background: #0f0f1a;
-      color: #e0e0e0;
-      min-height: 100vh;
-      padding: 24px 16px;
+    :root {
+      --bg:       #080b14;
+      --surface:  #0e1320;
+      --border:   #1e2640;
+      --text:     #e8eaf6;
+      --muted:    #4a5280;
+      --c0:  #4caf50;
+      --c1:  #8bc34a;
+      --c2:  #ffc107;
+      --c3:  #ff9800;
+      --c4:  #f44336;
+      --c5:  #e040fb;
     }
 
-    h1 {
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 32px 16px 64px;
+    }
+
+    /* ── Header ── */
+    header {
       text-align: center;
-      font-size: 2rem;
-      margin-bottom: 6px;
-      color: #f0c040;
+      margin-bottom: 40px;
+    }
+
+    header h1 {
+      font-size: clamp(1.8rem, 5vw, 2.8rem);
+      font-weight: 900;
+      letter-spacing: -1px;
+      background: linear-gradient(135deg, #f0c040, #ff7043);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
     }
 
     #status {
-      text-align: center;
-      font-size: 0.8rem;
-      color: #666;
-      margin-bottom: 28px;
+      margin-top: 8px;
+      font-size: 0.78rem;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
     }
 
+    #status-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--muted);
+      transition: background 0.4s;
+    }
+    #status-dot.ok { background: #4caf50; box-shadow: 0 0 6px #4caf5088; }
+
+    /* ── Grid ── */
     #grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
       gap: 20px;
       max-width: 1100px;
       margin: 0 auto;
     }
 
+    /* ── Card ── */
     .card {
-      background: #1a1a2e;
-      border-radius: 16px;
-      padding: 20px 24px;
-      border: 1px solid #2a2a4a;
-      transition: transform 0.2s;
-    }
-
-    .card:hover { transform: translateY(-3px); }
-
-    .card .name {
-      font-size: 1.2rem;
-      font-weight: 700;
-      margin-bottom: 12px;
-      color: #fff;
-    }
-
-    .card .bac-value {
-      font-size: 2.6rem;
-      font-weight: 900;
-      line-height: 1;
-      margin-bottom: 6px;
-    }
-
-    .card .label { font-size: 0.9rem; margin-bottom: 12px; }
-
-    .bar-bg {
-      background: #2a2a4a;
-      border-radius: 8px;
-      height: 10px;
-      margin-bottom: 10px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 24px;
+      position: relative;
       overflow: hidden;
+      transition: transform 0.2s, box-shadow 0.2s;
     }
 
-    .bar-fill {
-      height: 100%;
-      border-radius: 8px;
-      transition: width 0.8s ease, background 0.8s;
+    .card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 12px 40px #0006;
     }
 
-    .card .meta {
-      font-size: 0.78rem;
-      color: #888;
+    .card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+      border-radius: 20px 20px 0 0;
+      background: var(--accent, #4caf50);
     }
 
-    /* Couleurs selon TAC */
-    .level-0  { color: #4caf50; }
-    .level-1  { color: #8bc34a; }
-    .level-2  { color: #ffc107; }
-    .level-3  { color: #ff9800; }
-    .level-4  { color: #f44336; }
-    .level-5  { color: #e91e63; }
+    .card-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+    }
 
-    .bar-0  { background: #4caf50; }
-    .bar-1  { background: #8bc34a; }
-    .bar-2  { background: #ffc107; }
-    .bar-3  { background: #ff9800; }
-    .bar-4  { background: #f44336; }
-    .bar-5  { background: #e91e63; }
+    .card-name {
+      font-size: 1.1rem;
+      font-weight: 700;
+    }
 
+    .card-badge {
+      font-size: 0.7rem;
+      font-weight: 600;
+      padding: 3px 10px;
+      border-radius: 99px;
+      background: var(--accent-bg, #4caf5022);
+      color: var(--accent, #4caf50);
+      white-space: nowrap;
+    }
+
+    /* ── Gauge ── */
+    .gauge-wrap {
+      position: relative;
+      width: 130px;
+      height: 70px;
+      margin: 0 auto 16px;
+    }
+
+    .gauge-svg {
+      width: 130px;
+      height: 70px;
+    }
+
+    .gauge-track {
+      fill: none;
+      stroke: var(--border);
+      stroke-width: 10;
+      stroke-linecap: round;
+    }
+
+    .gauge-fill {
+      fill: none;
+      stroke-width: 10;
+      stroke-linecap: round;
+      stroke: var(--accent, #4caf50);
+      transition: stroke-dashoffset 1s cubic-bezier(.4,0,.2,1), stroke 0.6s;
+      filter: drop-shadow(0 0 4px var(--accent, #4caf50));
+    }
+
+    .gauge-value {
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      text-align: center;
+      font-size: 1.6rem;
+      font-weight: 900;
+      color: var(--accent, #4caf50);
+      line-height: 1;
+    }
+
+    .gauge-unit {
+      font-size: 0.65rem;
+      font-weight: 400;
+      color: var(--muted);
+    }
+
+    /* ── Stats row ── */
+    .stats {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .stat {
+      flex: 1;
+      background: var(--bg);
+      border-radius: 12px;
+      padding: 10px 8px;
+      text-align: center;
+    }
+
+    .stat-val {
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .stat-lbl {
+      font-size: 0.65rem;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    /* ── Label ── */
+    .card-label {
+      text-align: center;
+      font-size: 0.82rem;
+      margin-bottom: 4px;
+      color: var(--muted);
+    }
+
+    /* ── Empty ── */
     #empty {
       text-align: center;
-      color: #555;
-      margin-top: 60px;
-      font-size: 1.1rem;
+      color: var(--muted);
+      margin-top: 80px;
     }
+
+    #empty .big { font-size: 3rem; margin-bottom: 12px; }
+    #empty p   { font-size: 0.95rem; }
+
+    /* ── Legal marker ── */
+    .legal-marker {
+      position: relative;
+      height: 4px;
+      background: var(--border);
+      border-radius: 4px;
+      margin: 12px 0 4px;
+      overflow: visible;
+    }
+
+    .legal-fill {
+      height: 100%;
+      border-radius: 4px;
+      background: var(--accent, #4caf50);
+      transition: width 1s cubic-bezier(.4,0,.2,1);
+      max-width: 100%;
+    }
+
+    .legal-line {
+      position: absolute;
+      top: -4px; bottom: -4px;
+      width: 2px;
+      background: #ff9800;
+      left: 25%; /* 0.5 / 2.0 = 25% */
+    }
+
+    .legal-line::after {
+      content: '0.5';
+      position: absolute;
+      top: -18px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 0.6rem;
+      color: #ff9800;
+      white-space: nowrap;
+    }
+
+    .no-session { opacity: 0.45; }
   </style>
 </head>
 <body>
 
-<h1>🍺 AlcooTracker</h1>
-<div id="status">Connexion…</div>
+<header>
+  <h1>🍺 AlcooTracker</h1>
+  <div id="status">
+    <div id="status-dot"></div>
+    <span id="status-text">Connexion…</span>
+  </div>
+</header>
+
 <div id="grid"></div>
-<div id="empty" style="display:none">Aucune session active pour le moment.</div>
+<div id="empty" style="display:none">
+  <div class="big">🫗</div>
+  <p>Aucune session active pour le moment.</p>
+</div>
 
 <script>
-  // ── Config ──────────────────────────────────────────────────────────────────
-  // Remplace par l'URL de ton backend Render en production
-  const WS_URL = (location.hostname === "localhost")
+  const WS_URL = location.hostname === "localhost"
     ? "ws://localhost:8001/ws"
     : "wss://drunk-l34t.onrender.com/ws";
 
-  // ── TAC → niveau (0–5) ──────────────────────────────────────────────────────
-  function bacLevel(bac) {
-    if (bac === 0)    return 0;
-    if (bac < 0.2)   return 1;
-    if (bac < 0.5)   return 2;
-    if (bac < 0.8)   return 3;
-    if (bac < 1.5)   return 4;
+  // Niveau 0-5 selon TAC
+  function level(bac) {
+    if (bac === 0)   return 0;
+    if (bac < 0.2)  return 1;
+    if (bac < 0.5)  return 2;
+    if (bac < 0.8)  return 3;
+    if (bac < 1.5)  return 4;
     return 5;
   }
 
-  // Barre : 2.0 g/L = 100%
-  function bacPercent(bac) {
-    return Math.min(100, (bac / 2.0) * 100).toFixed(1);
+  const COLORS  = ['#4caf50','#8bc34a','#ffc107','#ff9800','#f44336','#e040fb'];
+  const ACCENTS = ['#4caf5022','#8bc34a22','#ffc10722','#ff980022','#f4433622','#e040fb22'];
+
+  // Arc SVG : demi-cercle 130x70, r=55, centre 65x65
+  const R = 55, CX = 65, CY = 65;
+  const ARC_LEN = Math.PI * R; // demi-cercle = πr
+
+  function arcPath() {
+    return `M ${CX - R} ${CY} A ${R} ${R} 0 0 1 ${CX + R} ${CY}`;
   }
 
-  function renderCard(user) {
-    const lvl = bacLevel(user.bac);
-    const pct = bacPercent(user.bac);
+  function pct(bac) { return Math.min(1, bac / 2.0); }
+
+  function renderCard(u) {
+    const lvl   = level(u.bac);
+    const color = COLORS[lvl];
+    const acbg  = ACCENTS[lvl];
+    const fill  = pct(u.bac);
+    const dash  = ARC_LEN;
+    const offset = dash * (1 - fill);
+    const noSess = !u.has_session;
+
     return `
-      <div class="card">
-        <div class="name">${escHtml(user.username)}</div>
-        <div class="bac-value level-${lvl}">${user.bac.toFixed(2)} <span style="font-size:1rem;font-weight:400">g/L</span></div>
-        <div class="label">${escHtml(user.label)}</div>
-        <div class="bar-bg"><div class="bar-fill bar-${lvl}" style="width:${pct}%"></div></div>
-        <div class="meta">
-          🍹 ${user.nb_drinks} consommation(s) &nbsp;|&nbsp; ⏱ sobre dans ~${user.sober_in_h}h
-          ${!user.has_session ? '<br>⚪ Pas de session active' : ''}
+    <div class="card ${noSess ? 'no-session' : ''}" style="--accent:${color};--accent-bg:${acbg}">
+      <div class="card-top">
+        <div class="card-name">${esc(u.username)}</div>
+        <div class="card-badge">${esc(u.label)}</div>
+      </div>
+
+      <div class="gauge-wrap">
+        <svg class="gauge-svg" viewBox="0 0 130 70">
+          <path class="gauge-track" d="${arcPath()}"/>
+          <path class="gauge-fill"
+            d="${arcPath()}"
+            stroke-dasharray="${dash}"
+            stroke-dashoffset="${offset}"
+            style="stroke:${color}"
+          />
+        </svg>
+        <div class="gauge-value" style="color:${color}">
+          ${u.bac.toFixed(2)}<br><span class="gauge-unit">g/L</span>
         </div>
-      </div>`;
+      </div>
+
+      <div class="legal-marker">
+        <div class="legal-fill" style="width:${Math.min(100, fill*100).toFixed(1)}%"></div>
+        <div class="legal-line"></div>
+      </div>
+
+      <div class="stats">
+        <div class="stat">
+          <div class="stat-val">${u.nb_drinks}</div>
+          <div class="stat-lbl">verres</div>
+        </div>
+        <div class="stat">
+          <div class="stat-val">${u.sober_in_h}h</div>
+          <div class="stat-lbl">sobre dans</div>
+        </div>
+      </div>
+    </div>`;
   }
 
-  function escHtml(s) {
-    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, c =>
+      ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
 
   function render(data) {
-    const grid  = document.getElementById("grid");
-    const empty = document.getElementById("empty");
-    if (!data.length) {
-      grid.innerHTML = "";
-      empty.style.display = "block";
-      return;
-    }
-    empty.style.display = "none";
-    grid.innerHTML = data.map(renderCard).join("");
+    const grid  = document.getElementById('grid');
+    const empty = document.getElementById('empty');
+    if (!data.length) { grid.innerHTML = ''; empty.style.display = 'block'; return; }
+    empty.style.display = 'none';
+    grid.innerHTML = data.map(renderCard).join('');
   }
 
-  // ── WebSocket ───────────────────────────────────────────────────────────────
+  // ── WebSocket ──
   let ws, retryDelay = 2000;
+
+  function setStatus(connected, text) {
+    document.getElementById('status-dot').className = connected ? 'ok' : '';
+    document.getElementById('status-text').textContent = text;
+  }
 
   function connect() {
     ws = new WebSocket(WS_URL);
-
-    ws.onopen = () => {
-      document.getElementById("status").textContent = "✅ Connecté — mise à jour en temps réel";
-      retryDelay = 2000;
+    ws.onopen = () => { setStatus(true, 'Connecté — mise à jour en temps réel'); retryDelay = 2000; };
+    ws.onmessage = e => {
+      render(JSON.parse(e.data));
+      setStatus(true, 'Mis à jour à ' + new Date().toLocaleTimeString('fr-FR'));
     };
-
-    ws.onmessage = (e) => {
-      const data = JSON.parse(e.data);
-      render(data);
-      document.getElementById("status").textContent =
-        `Dernière mise à jour : ${new Date().toLocaleTimeString("fr-FR")}`;
-    };
-
     ws.onclose = () => {
-      document.getElementById("status").textContent = `⚠️ Déconnecté — reconnexion dans ${retryDelay/1000}s…`;
+      setStatus(false, `Déconnecté — reconnexion dans ${retryDelay/1000}s`);
       setTimeout(connect, retryDelay);
       retryDelay = Math.min(retryDelay * 2, 30000);
     };
-
     ws.onerror = () => ws.close();
   }
 
