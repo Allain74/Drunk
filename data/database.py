@@ -35,7 +35,8 @@ def _pipeline(statements: list[tuple[str, list]]) -> list[dict]:
         headers={"Authorization": f"Bearer {TURSO_TOKEN}"},
         timeout=10,
     )
-    r.raise_for_status()
+    if not r.is_success:
+        raise Exception(f"Turso {r.status_code}: {r.text}")
     parsed = []
     for res in r.json()["results"]:
         if res["type"] == "error":
@@ -107,12 +108,17 @@ def init_db():
 
 
 def upsert_user(telegram_id: int, username: str, weight_kg: float, gender: str):
-    _execute("""
-        INSERT INTO users (telegram_id, username, weight_kg, gender)
-        VALUES (?, ?, ?, ?)
-        ON CONFLICT(telegram_id) DO UPDATE SET
-            username=excluded.username, weight_kg=excluded.weight_kg, gender=excluded.gender
-    """, [telegram_id, username, weight_kg, gender])
+    existing = _fetchone("SELECT telegram_id FROM users WHERE telegram_id=?", [telegram_id])
+    if existing:
+        _execute(
+            "UPDATE users SET username=?, weight_kg=?, gender=? WHERE telegram_id=?",
+            [username, weight_kg, gender, telegram_id]
+        )
+    else:
+        _execute(
+            "INSERT INTO users (telegram_id, username, weight_kg, gender) VALUES (?, ?, ?, ?)",
+            [telegram_id, username, weight_kg, gender]
+        )
 
 
 def get_user(telegram_id: int) -> dict | None:
