@@ -7,6 +7,8 @@ from datetime import datetime, timezone
 from dotenv import load_dotenv
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from telegram import Update
+from telegram.error import Conflict
 
 from data.database import init_db, get_all_users, get_all_active_drinks
 from core.widmark import total_bac, bac_label, sober_in_hours
@@ -22,10 +24,17 @@ async def lifespan(app: FastAPI):
 
     # Démarre le bot Telegram dans le même event loop
     from bot.bot import create_application
+
+    async def ignore_conflict(update, context):
+        if isinstance(context.error, Conflict):
+            return
+        raise context.error
+
     bot_app = create_application()
+    bot_app.add_error_handler(ignore_conflict)
     await bot_app.initialize()
     await bot_app.start()
-    await bot_app.updater.start_polling()
+    await bot_app.updater.start_polling(drop_pending_updates=True, allowed_updates=Update.ALL_TYPES)
 
     asyncio.create_task(_broadcast_loop())
 
