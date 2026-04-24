@@ -17,7 +17,7 @@ def _args(values: list) -> list:
         elif isinstance(v, int):
             result.append({"type": "integer", "value": str(v)})
         elif isinstance(v, float):
-            result.append({"type": "float", "value": str(v)})
+            result.append({"type": "float", "value": v})
         else:
             result.append({"type": "text", "value": str(v)})
     return result
