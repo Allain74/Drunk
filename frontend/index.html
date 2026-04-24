@@ -1,25 +1,27 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>AlcooTracker 🍺</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg:       #080b14;
-      --surface:  #0e1320;
-      --border:   #1e2640;
-      --text:     #e8eaf6;
-      --muted:    #4a5280;
-      --c0:  #4caf50;
-      --c1:  #8bc34a;
-      --c2:  #ffc107;
-      --c3:  #ff9800;
-      --c4:  #f44336;
-      --c5:  #e040fb;
+      --bg:      #f4f6fb;
+      --card:    #ffffff;
+      --border:  #e2e8f0;
+      --text:    #1a202c;
+      --sub:     #64748b;
+      --muted:   #cbd5e1;
+      --shadow:  0 2px 16px #0000000d;
+      --c0: #22c55e;
+      --c1: #84cc16;
+      --c2: #eab308;
+      --c3: #f97316;
+      --c4: #ef4444;
+      --c5: #a855f7;
     }
 
     body {
@@ -27,20 +29,21 @@
       background: var(--bg);
       color: var(--text);
       min-height: 100vh;
-      padding: 32px 16px 64px;
+      padding: 36px 16px 80px;
     }
 
     /* ── Header ── */
-    header {
-      text-align: center;
-      margin-bottom: 40px;
-    }
+    header { text-align: center; margin-bottom: 40px; }
 
     header h1 {
-      font-size: clamp(1.8rem, 5vw, 2.8rem);
+      font-size: clamp(1.6rem, 4vw, 2.4rem);
       font-weight: 900;
       letter-spacing: -1px;
-      background: linear-gradient(135deg, #f0c040, #ff7043);
+      color: #1a202c;
+    }
+
+    header h1 span {
+      background: linear-gradient(135deg, #6366f1, #06b6d4);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       background-clip: text;
@@ -49,220 +52,184 @@
     #status {
       margin-top: 8px;
       font-size: 0.78rem;
-      color: var(--muted);
+      color: var(--sub);
       display: flex;
       align-items: center;
       justify-content: center;
       gap: 6px;
     }
 
-    #status-dot {
-      width: 8px; height: 8px;
+    #dot {
+      width: 7px; height: 7px;
       border-radius: 50%;
       background: var(--muted);
-      transition: background 0.4s;
+      transition: background .4s;
     }
-    #status-dot.ok { background: #4caf50; box-shadow: 0 0 6px #4caf5088; }
+    #dot.ok { background: #22c55e; box-shadow: 0 0 6px #22c55e88; }
 
     /* ── Grid ── */
     #grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-      gap: 20px;
-      max-width: 1100px;
+      grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+      gap: 18px;
+      max-width: 1000px;
       margin: 0 auto;
     }
 
     /* ── Card ── */
     .card {
-      background: var(--surface);
+      background: var(--card);
       border: 1px solid var(--border);
-      border-radius: 20px;
-      padding: 24px;
+      border-radius: 18px;
+      padding: 22px 22px 18px;
+      box-shadow: var(--shadow);
+      transition: transform .2s, box-shadow .2s;
       position: relative;
       overflow: hidden;
-      transition: transform 0.2s, box-shadow 0.2s;
     }
 
     .card:hover {
-      transform: translateY(-4px);
-      box-shadow: 0 12px 40px #0006;
+      transform: translateY(-3px);
+      box-shadow: 0 8px 32px #0000001a;
     }
 
-    .card::before {
-      content: '';
+    .card-stripe {
       position: absolute;
       top: 0; left: 0; right: 0;
-      height: 3px;
-      border-radius: 20px 20px 0 0;
-      background: var(--accent, #4caf50);
+      height: 4px;
+      border-radius: 18px 18px 0 0;
     }
 
-    .card-top {
+    /* ── Name row ── */
+    .card-head {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin-bottom: 20px;
+      margin-bottom: 18px;
     }
 
     .card-name {
-      font-size: 1.1rem;
+      font-size: 1rem;
       font-weight: 700;
+      color: var(--text);
     }
 
-    .card-badge {
-      font-size: 0.7rem;
-      font-weight: 600;
-      padding: 3px 10px;
-      border-radius: 99px;
-      background: var(--accent-bg, #4caf5022);
-      color: var(--accent, #4caf50);
-      white-space: nowrap;
+    .card-emoji {
+      font-size: 1.4rem;
     }
 
-    /* ── Gauge ── */
-    .gauge-wrap {
-      position: relative;
-      width: 130px;
-      height: 70px;
-      margin: 0 auto 16px;
-    }
-
-    .gauge-svg {
-      width: 130px;
-      height: 70px;
-    }
-
-    .gauge-track {
-      fill: none;
-      stroke: var(--border);
-      stroke-width: 10;
-      stroke-linecap: round;
-    }
-
-    .gauge-fill {
-      fill: none;
-      stroke-width: 10;
-      stroke-linecap: round;
-      stroke: var(--accent, #4caf50);
-      transition: stroke-dashoffset 1s cubic-bezier(.4,0,.2,1), stroke 0.6s;
-      filter: drop-shadow(0 0 4px var(--accent, #4caf50));
-    }
-
-    .gauge-value {
-      position: absolute;
-      bottom: 0; left: 0; right: 0;
+    /* ── Big BAC number ── */
+    .bac-block {
       text-align: center;
-      font-size: 1.6rem;
+      margin-bottom: 14px;
+    }
+
+    .bac-number {
+      font-size: 3rem;
       font-weight: 900;
-      color: var(--accent, #4caf50);
       line-height: 1;
+      letter-spacing: -2px;
     }
 
-    .gauge-unit {
-      font-size: 0.65rem;
-      font-weight: 400;
+    .bac-unit {
+      font-size: 0.75rem;
+      font-weight: 500;
+      color: var(--sub);
+      margin-top: 2px;
+    }
+
+    .bac-label {
+      font-size: 0.8rem;
+      font-weight: 500;
+      color: var(--sub);
+      margin-top: 4px;
+    }
+
+    /* ── Progress bar ── */
+    .bar-wrap {
+      margin-bottom: 14px;
+    }
+
+    .bar-labels {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.62rem;
       color: var(--muted);
+      margin-bottom: 4px;
     }
 
-    /* ── Stats row ── */
+    .bar-bg {
+      height: 8px;
+      background: var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .bar-fill {
+      height: 100%;
+      border-radius: 8px;
+      transition: width 1s cubic-bezier(.4,0,.2,1);
+    }
+
+    .bar-legal {
+      position: absolute;
+      top: 0; bottom: 0;
+      left: 25%;
+      width: 2px;
+      background: #f97316;
+    }
+
+    /* ── Stats ── */
     .stats {
       display: flex;
       gap: 8px;
-      margin-top: 12px;
     }
 
     .stat {
       flex: 1;
       background: var(--bg);
-      border-radius: 12px;
-      padding: 10px 8px;
+      border-radius: 10px;
+      padding: 8px;
       text-align: center;
     }
 
     .stat-val {
       font-size: 1rem;
       font-weight: 700;
-      color: var(--text);
     }
 
     .stat-lbl {
-      font-size: 0.65rem;
-      color: var(--muted);
-      margin-top: 2px;
+      font-size: 0.62rem;
+      color: var(--sub);
+      margin-top: 1px;
     }
 
-    /* ── Label ── */
-    .card-label {
-      text-align: center;
-      font-size: 0.82rem;
-      margin-bottom: 4px;
-      color: var(--muted);
-    }
+    .no-session { opacity: 0.5; }
 
     /* ── Empty ── */
     #empty {
       text-align: center;
-      color: var(--muted);
+      color: var(--sub);
       margin-top: 80px;
     }
-
-    #empty .big { font-size: 3rem; margin-bottom: 12px; }
-    #empty p   { font-size: 0.95rem; }
-
-    /* ── Legal marker ── */
-    .legal-marker {
-      position: relative;
-      height: 4px;
-      background: var(--border);
-      border-radius: 4px;
-      margin: 12px 0 4px;
-      overflow: visible;
-    }
-
-    .legal-fill {
-      height: 100%;
-      border-radius: 4px;
-      background: var(--accent, #4caf50);
-      transition: width 1s cubic-bezier(.4,0,.2,1);
-      max-width: 100%;
-    }
-
-    .legal-line {
-      position: absolute;
-      top: -4px; bottom: -4px;
-      width: 2px;
-      background: #ff9800;
-      left: 25%; /* 0.5 / 2.0 = 25% */
-    }
-
-    .legal-line::after {
-      content: '0.5';
-      position: absolute;
-      top: -18px;
-      left: 50%;
-      transform: translateX(-50%);
-      font-size: 0.6rem;
-      color: #ff9800;
-      white-space: nowrap;
-    }
-
-    .no-session { opacity: 0.45; }
+    #empty .icon { font-size: 3.5rem; margin-bottom: 12px; }
+    #empty p { font-size: 1rem; }
   </style>
 </head>
 <body>
 
 <header>
-  <h1>🍺 AlcooTracker</h1>
+  <h1>🍺 <span>AlcooTracker</span></h1>
   <div id="status">
-    <div id="status-dot"></div>
+    <div id="dot"></div>
     <span id="status-text">Connexion…</span>
   </div>
 </header>
 
 <div id="grid"></div>
 <div id="empty" style="display:none">
-  <div class="big">🫗</div>
+  <div class="icon">🫗</div>
   <p>Aucune session active pour le moment.</p>
 </div>
 
@@ -271,69 +238,51 @@
     ? "ws://localhost:8001/ws"
     : "wss://drunk-l34t.onrender.com/ws";
 
-  // Niveau 0-5 selon TAC
+  const COLORS = ['#22c55e','#84cc16','#eab308','#f97316','#ef4444','#a855f7'];
+  const EMOJIS = ['😶','🙂','😄','😵','🤢','💀'];
+  const LABELS_SHORT = ['Sobre','Léger','Alcoolisé','⚠️ Limite','Ivre','Danger'];
+
   function level(bac) {
-    if (bac === 0)   return 0;
-    if (bac < 0.2)  return 1;
-    if (bac < 0.5)  return 2;
-    if (bac < 0.8)  return 3;
-    if (bac < 1.5)  return 4;
+    if (bac === 0)  return 0;
+    if (bac < 0.2) return 1;
+    if (bac < 0.5) return 2;
+    if (bac < 0.8) return 3;
+    if (bac < 1.5) return 4;
     return 5;
   }
-
-  const COLORS  = ['#4caf50','#8bc34a','#ffc107','#ff9800','#f44336','#e040fb'];
-  const ACCENTS = ['#4caf5022','#8bc34a22','#ffc10722','#ff980022','#f4433622','#e040fb22'];
-
-  // Arc SVG : demi-cercle 130x70, r=55, centre 65x65
-  const R = 55, CX = 65, CY = 65;
-  const ARC_LEN = Math.PI * R; // demi-cercle = πr
-
-  function arcPath() {
-    return `M ${CX - R} ${CY} A ${R} ${R} 0 0 1 ${CX + R} ${CY}`;
-  }
-
-  function pct(bac) { return Math.min(1, bac / 2.0); }
 
   function renderCard(u) {
     const lvl   = level(u.bac);
     const color = COLORS[lvl];
-    const acbg  = ACCENTS[lvl];
-    const fill  = pct(u.bac);
-    const dash  = ARC_LEN;
-    const offset = dash * (1 - fill);
-    const noSess = !u.has_session;
+    const emoji = EMOJIS[lvl];
+    const pct   = Math.min(100, (u.bac / 2.0) * 100).toFixed(1);
 
     return `
-    <div class="card ${noSess ? 'no-session' : ''}" style="--accent:${color};--accent-bg:${acbg}">
-      <div class="card-top">
+    <div class="card ${!u.has_session ? 'no-session' : ''}">
+      <div class="card-stripe" style="background:${color}"></div>
+      <div class="card-head">
         <div class="card-name">${esc(u.username)}</div>
-        <div class="card-badge">${esc(u.label)}</div>
+        <div class="card-emoji">${emoji}</div>
       </div>
 
-      <div class="gauge-wrap">
-        <svg class="gauge-svg" viewBox="0 0 130 70">
-          <path class="gauge-track" d="${arcPath()}"/>
-          <path class="gauge-fill"
-            d="${arcPath()}"
-            stroke-dasharray="${dash}"
-            stroke-dashoffset="${offset}"
-            style="stroke:${color}"
-          />
-        </svg>
-        <div class="gauge-value" style="color:${color}">
-          ${u.bac.toFixed(2)}<br><span class="gauge-unit">g/L</span>
+      <div class="bac-block">
+        <div class="bac-number" style="color:${color}">${u.bac.toFixed(2)}</div>
+        <div class="bac-unit">g/L de sang</div>
+        <div class="bac-label">${LABELS_SHORT[lvl]}</div>
+      </div>
+
+      <div class="bar-wrap">
+        <div class="bar-labels"><span>0</span><span style="color:#f97316">0.5 limite</span><span>2.0</span></div>
+        <div class="bar-bg">
+          <div class="bar-fill" style="width:${pct}%;background:${color}"></div>
+          <div class="bar-legal"></div>
         </div>
-      </div>
-
-      <div class="legal-marker">
-        <div class="legal-fill" style="width:${Math.min(100, fill*100).toFixed(1)}%"></div>
-        <div class="legal-line"></div>
       </div>
 
       <div class="stats">
         <div class="stat">
           <div class="stat-val">${u.nb_drinks}</div>
-          <div class="stat-lbl">verres</div>
+          <div class="stat-lbl">verre(s)</div>
         </div>
         <div class="stat">
           <div class="stat-val">${u.sober_in_h}h</div>
@@ -356,23 +305,22 @@
     grid.innerHTML = data.map(renderCard).join('');
   }
 
-  // ── WebSocket ──
   let ws, retryDelay = 2000;
 
-  function setStatus(connected, text) {
-    document.getElementById('status-dot').className = connected ? 'ok' : '';
-    document.getElementById('status-text').textContent = text;
+  function setStatus(ok, txt) {
+    document.getElementById('dot').className = ok ? 'ok' : '';
+    document.getElementById('status-text').textContent = txt;
   }
 
   function connect() {
     ws = new WebSocket(WS_URL);
-    ws.onopen = () => { setStatus(true, 'Connecté — mise à jour en temps réel'); retryDelay = 2000; };
+    ws.onopen  = () => { setStatus(true, 'Connecté — temps réel'); retryDelay = 2000; };
     ws.onmessage = e => {
       render(JSON.parse(e.data));
       setStatus(true, 'Mis à jour à ' + new Date().toLocaleTimeString('fr-FR'));
     };
     ws.onclose = () => {
-      setStatus(false, `Déconnecté — reconnexion dans ${retryDelay/1000}s`);
+      setStatus(false, `Reconnexion dans ${retryDelay/1000}s…`);
       setTimeout(connect, retryDelay);
       retryDelay = Math.min(retryDelay * 2, 30000);
     };

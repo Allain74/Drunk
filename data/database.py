@@ -105,15 +105,21 @@ def get_session_drinks(telegram_id: int) -> list[tuple[float, datetime]]:
     session = get_active_session(telegram_id)
     if not session:
         return []
+    cutoff = (datetime.now(timezone.utc).timestamp() - 86400)
     with get_conn() as conn:
         rows = conn.execute(
             "SELECT alc_grams, logged_at FROM drink_logs WHERE session_id=? ORDER BY logged_at",
             (session["id"],)
         ).fetchall()
-    return [(r["alc_grams"], datetime.fromisoformat(r["logged_at"]).replace(tzinfo=timezone.utc)) for r in rows]
+    return [
+        (r["alc_grams"], datetime.fromisoformat(r["logged_at"]).replace(tzinfo=timezone.utc))
+        for r in rows
+        if datetime.fromisoformat(r["logged_at"]).replace(tzinfo=timezone.utc).timestamp() >= cutoff
+    ]
 
 
 def get_all_active_drinks() -> dict[int, list[tuple[float, datetime]]]:
+    cutoff = (datetime.now(timezone.utc).timestamp() - 86400)
     with get_conn() as conn:
         rows = conn.execute("""
             SELECT dl.telegram_id, dl.alc_grams, dl.logged_at
@@ -122,7 +128,7 @@ def get_all_active_drinks() -> dict[int, list[tuple[float, datetime]]]:
         """).fetchall()
     result: dict[int, list] = {}
     for r in rows:
-        result.setdefault(r["telegram_id"], []).append(
-            (r["alc_grams"], datetime.fromisoformat(r["logged_at"]).replace(tzinfo=timezone.utc))
-        )
+        t = datetime.fromisoformat(r["logged_at"]).replace(tzinfo=timezone.utc)
+        if t.timestamp() >= cutoff:
+            result.setdefault(r["telegram_id"], []).append((r["alc_grams"], t))
     return result
