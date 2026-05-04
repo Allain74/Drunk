@@ -9,7 +9,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.middleware.cors import CORSMiddleware
 from telegram import Update
 
-from data.database import init_db, get_all_users, get_all_active_drinks, get_active_session, get_drinks_by_session, get_all_time_stats
+from data.database import init_db, get_all_users, get_all_active_drinks, get_active_session, get_drinks_by_session, get_all_time_stats, get_last_drink_time
 from core.widmark import total_bac, bac_label, sober_in_hours
 
 load_dotenv()
@@ -17,6 +17,7 @@ load_dotenv()
 _ws_clients: set[WebSocket] = set()
 _bot_app = None
 _danger_notified: dict[int, datetime] = {}
+_inactivity_notified: set[int] = set()
 
 RENDER_URL = os.environ.get("RENDER_URL", "https://drunk-l34t.onrender.com")
 
@@ -199,6 +200,26 @@ async def _danger_loop():
                 )
             except Exception:
                 pass
+
+        # Notif inactivité 7 jours
+        for user in get_all_users():
+            uid = user["telegram_id"]
+            last_t = get_last_drink_time(uid)
+            if last_t is None:
+                continue
+            days_inactive = (now - last_t).total_seconds() / 86400
+            if days_inactive >= 7 and uid not in _inactivity_notified:
+                _inactivity_notified.add(uid)
+                try:
+                    await _bot_app.bot.send_message(
+                        chat_id=uid,
+                        text=f"😤 *{user['username']}*, t'es devenu gay pour pas picoler depuis une semaine ? Allez, bois un verre ! 🍺",
+                        parse_mode="Markdown"
+                    )
+                except Exception:
+                    pass
+            elif days_inactive < 7:
+                _inactivity_notified.discard(uid)
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────

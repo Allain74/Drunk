@@ -285,6 +285,16 @@ def get_all_time_stats() -> list[dict]:
     return sorted(users.values(), key=lambda x: x["total_alc_g"], reverse=True)
 
 
+def get_last_drink_time(telegram_id: int) -> datetime | None:
+    row = _fetchone(
+        "SELECT logged_at FROM drink_logs WHERE telegram_id=? ORDER BY logged_at DESC LIMIT 1",
+        [telegram_id]
+    )
+    if not row:
+        return None
+    return datetime.fromisoformat(row["logged_at"]).replace(tzinfo=timezone.utc)
+
+
 def get_top_drinks(telegram_id: int, n: int = 5) -> list[str]:
     rows = _fetchall("""
         SELECT drink_key, COUNT(*) as cnt
