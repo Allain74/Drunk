@@ -20,6 +20,8 @@ from data.database import (
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
 
+ADMIN_ID = int(os.environ.get("ADMIN_ID", "0"))
+
 ALIAS_MAP: dict[str, str] = {}
 for key, drink in DRINKS.items():
     for alias in drink.aliases:
@@ -70,6 +72,15 @@ async def _notify_all(ctx, sender_id: int, message: str):
                 await ctx.bot.send_message(chat_id=user["telegram_id"], text=message, parse_mode="Markdown")
             except Exception:
                 pass
+
+
+async def _notify_everyone(ctx, message: str):
+    """Envoie un message à tous les utilisateurs sans exception."""
+    for user in get_all_users():
+        try:
+            await ctx.bot.send_message(chat_id=user["telegram_id"], text=message, parse_mode="Markdown")
+        except Exception:
+            pass
 
 
 async def _refresh_api():
@@ -158,6 +169,11 @@ async def _do_drink(update: Update, ctx: ContextTypes.DEFAULT_TYPE, drink_key: s
         resize_keyboard=True, one_time_keyboard=True
     )
     await update.message.reply_text(text, parse_mode="Markdown", reply_markup=keyboard)
+
+    # Notif premier verre de la session
+    if nb == 1:
+        site = os.environ.get("SITE_URL", "https://drunk-weld.vercel.app")
+        await _notify_all(ctx, tid, f"🍺 *{user_data['username']}* commence à boire ! Rejoins-le !\n{site}")
 
     # Notif si quelqu'un passe 0.8 g/L pour la première fois (franchissement)
     if prev_bac < 0.8 <= bac:
@@ -257,6 +273,24 @@ async def cmd_defi(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
 
 
+# ── /notif ────────────────────────────────────────────────────────────────────
+
+async def cmd_notif(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    tid = update.effective_user.id
+    if ADMIN_ID == 0:
+        await update.message.reply_text(f"⚙️ Ton ID Telegram : `{tid}`\nAjoute `ADMIN_ID={tid}` dans les variables Render.", parse_mode="Markdown")
+        return
+    if tid != ADMIN_ID:
+        await update.message.reply_text("❌ Commande réservée à l'admin.")
+        return
+    if not ctx.args:
+        await update.message.reply_text("Usage : /notif <message>")
+        return
+    message = "📢 " + " ".join(ctx.args)
+    await _notify_everyone(ctx, message)
+    await update.message.reply_text(f"✅ Message envoyé à tous !")
+
+
 # ── /site ─────────────────────────────────────────────────────────────────────
 
 async def cmd_site(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -324,6 +358,7 @@ def create_application() -> Application:
     app.add_handler(CommandHandler(["defi", "classement"],        cmd_defi))
     app.add_handler(CommandHandler(["stop", "reset", "r"],        cmd_stop))
     app.add_handler(CommandHandler("site",                        cmd_site))
+    app.add_handler(CommandHandler("notif",                       cmd_notif))
     app.add_handler(CommandHandler(["liste", "l"],                lambda u, c: u.message.reply_text(list_drinks_text(), parse_mode="Markdown")))
 
     registered = set()
