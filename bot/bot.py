@@ -15,7 +15,7 @@ from data.database import (
     init_db, upsert_user, get_user, get_user_by_username, get_all_users,
     start_session, get_active_session, log_drink, get_session_drinks,
     get_session_drinks_detail, delete_last_drink, end_session, update_location,
-    is_banned, ban_user, unban_user, rename_user, get_top_drinks
+    is_banned, ban_user, unban_user, rename_user, get_top_drinks, update_max_bac
 )
 
 load_dotenv()
@@ -183,6 +183,7 @@ async def _send_drink_response(reply_func, tid: int, drink_key: str, user_data: 
     if nb > 0 and nb % 3 == 0:
         text += f"\n\n💧 *{nb} verres — pense à boire de l'eau !*"
 
+    update_max_bac(tid, bac)
     await reply_func(text, parse_mode="Markdown", reply_markup=_quick_keyboard(tid, drink_key))
 
     if nb == 1:

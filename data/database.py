@@ -82,6 +82,10 @@ def _fetchone(sql: str, args=None) -> dict | None:
 
 
 def init_db():
+    try:
+        _execute("ALTER TABLE users ADD COLUMN max_bac REAL DEFAULT 0")
+    except Exception:
+        pass
     _pipeline([
         ("""CREATE TABLE IF NOT EXISTS users (
             telegram_id INTEGER PRIMARY KEY,
@@ -146,6 +150,13 @@ def get_user_by_username(username: str) -> dict | None:
 
 def get_all_users() -> list[dict]:
     return _fetchall("SELECT * FROM users")
+
+
+def update_max_bac(telegram_id: int, bac: float):
+    _execute(
+        "UPDATE users SET max_bac=? WHERE telegram_id=? AND (max_bac IS NULL OR max_bac < ?)",
+        [bac, telegram_id, bac]
+    )
 
 
 def update_location(telegram_id: int, lat: float, lon: float):

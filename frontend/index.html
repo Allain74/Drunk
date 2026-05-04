@@ -311,7 +311,7 @@
 <div id="defi-panel" class="panel">
   <div class="podium" id="podium"></div>
   <table class="defi-table">
-    <thead><tr><th>#</th><th>Joueur</th><th>TAC</th><th>Verres</th><th>Sobre dans</th></tr></thead>
+    <thead><tr><th>#</th><th>Joueur</th><th>TAC</th><th>Record</th><th>Verres</th><th>Sobre dans</th></tr></thead>
     <tbody id="defi-tbody"></tbody>
   </table>
 </div>
@@ -414,6 +414,7 @@
       <div class="stats">
         <div class="stat"><div class="stat-val">${u.nb_drinks}</div><div class="stat-lbl">verre(s)</div></div>
         <div class="stat"><div class="stat-val">${u.sober_in_h}h</div><div class="stat-lbl">sobre dans</div></div>
+        ${u.max_bac > 0 ? `<div class="stat"><div class="stat-val" style="color:#f97316">${u.max_bac}</div><div class="stat-lbl">record g/L</div></div>` : ''}
       </div>
     </div>`;
   }
@@ -441,6 +442,7 @@
         <td>${medals[i]||i+1}</td>
         <td><strong>${esc(u.username)}</strong></td>
         <td style="color:${color};font-weight:700">${u.bac.toFixed(2)} g/L</td>
+        <td style="color:#f97316;font-weight:700">${u.max_bac > 0 ? u.max_bac + ' g/L' : '—'}</td>
         <td>${u.nb_drinks}</td>
         <td>${u.sober_in_h}h</td>
       </tr>`;

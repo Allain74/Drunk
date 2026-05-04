@@ -140,6 +140,7 @@ def build_snapshot() -> list[dict]:
             "has_session": uid in drinks_by_user,
             "lat":         user["latitude"],
             "lon":         user["longitude"],
+            "max_bac":     round(user.get("max_bac") or 0, 2),
         })
     result.sort(key=lambda x: x["bac"], reverse=True)
     return result
