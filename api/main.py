@@ -9,7 +9,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.middleware.cors import CORSMiddleware
 from telegram import Update
 
-from data.database import init_db, get_all_users, get_all_active_drinks, get_active_session, get_drinks_by_session
+from data.database import init_db, get_all_users, get_all_active_drinks, get_active_session, get_drinks_by_session, get_all_time_stats
 from core.widmark import total_bac, bac_label, sober_in_hours
 
 load_dotenv()
@@ -63,6 +63,8 @@ async def lifespan(app: FastAPI):
         BotCommand("pastis",     "🌿 Pastis 2.5cl"),
         BotCommand("cidre",      "🍎 Cidre 25cl"),
         BotCommand("sangria",    "🍷 Sangria 20cl"),
+        BotCommand("annuler",    "↩️ Annuler le dernier verre"),
+        BotCommand("site",       "🌐 Lien du dashboard"),
     ])
 
     asyncio.create_task(_broadcast_loop())
@@ -131,7 +133,7 @@ async def _broadcast(data: list[dict]):
 
 async def _broadcast_loop():
     while True:
-        await asyncio.sleep(120)
+        await asyncio.sleep(300)
         await _broadcast(build_snapshot())
 
 
@@ -191,6 +193,11 @@ async def trigger_refresh():
     snapshot = build_snapshot()
     await _broadcast(snapshot)
     return {"ok": True}
+
+
+@app.get("/alltime")
+def get_alltime():
+    return get_all_time_stats()
 
 
 @app.get("/history")

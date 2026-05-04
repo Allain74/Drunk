@@ -223,6 +223,25 @@ def get_all_active_drinks() -> dict[int, list[tuple[float, datetime]]]:
     return result
 
 
+def get_all_time_stats() -> list[dict]:
+    rows = _fetchall("""
+        SELECT u.username, dl.drink_key, COUNT(*) as count, SUM(dl.alc_grams) as total_alc
+        FROM drink_logs dl
+        JOIN users u ON dl.telegram_id = u.telegram_id
+        GROUP BY u.telegram_id, dl.drink_key
+        ORDER BY u.username, count DESC
+    """)
+    users: dict[str, dict] = {}
+    for r in rows:
+        name = r["username"]
+        if name not in users:
+            users[name] = {"username": name, "total_drinks": 0, "total_alc_g": 0.0, "breakdown": []}
+        users[name]["total_drinks"] += r["count"]
+        users[name]["total_alc_g"] = round(users[name]["total_alc_g"] + r["total_alc"], 1)
+        users[name]["breakdown"].append({"drink_key": r["drink_key"], "count": r["count"]})
+    return sorted(users.values(), key=lambda x: x["total_drinks"], reverse=True)
+
+
 def get_drinks_by_session(session_id: int) -> list[dict]:
     return _fetchall(
         "SELECT drink_key, alc_grams, logged_at FROM drink_logs WHERE session_id=? ORDER BY logged_at",
