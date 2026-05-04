@@ -260,12 +260,12 @@ def get_all_time_stats() -> list[dict]:
         ORDER BY u.username, count DESC
     """)
     days_rows = _fetchall("""
-        SELECT u.username, COUNT(DISTINCT DATE(dl.logged_at)) as nb_days
+        SELECT u.username, COUNT(DISTINCT DATE(dl.logged_at)) as nb_days, MAX(u.max_bac) as max_bac
         FROM drink_logs dl
         JOIN users u ON dl.telegram_id = u.telegram_id
         GROUP BY u.telegram_id
     """)
-    nb_days_map = {r["username"]: r["nb_days"] for r in days_rows}
+    nb_days_map = {r["username"]: (r["nb_days"], r.get("max_bac") or 0) for r in days_rows}
 
     users: dict[str, dict] = {}
     for r in rows:
@@ -277,9 +277,10 @@ def get_all_time_stats() -> list[dict]:
         users[name]["breakdown"].append({"drink_key": r["drink_key"], "count": r["count"]})
 
     for u in users.values():
-        nb_days = nb_days_map.get(u["username"], 1)
+        nb_days, max_bac = nb_days_map.get(u["username"], (1, 0))
         u["nb_days"] = nb_days
         u["avg_doses_per_day"] = round((u["total_alc_g"] / 10) / nb_days, 1)
+        u["max_bac"] = round(max_bac, 2)
 
     return sorted(users.values(), key=lambda x: x["total_alc_g"], reverse=True)
 

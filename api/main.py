@@ -131,6 +131,12 @@ def build_snapshot() -> list[dict]:
     for uid, user in users.items():
         drinks = drinks_by_user.get(uid, [])
         bac = total_bac(drinks, user["weight_kg"], user["gender"], now)
+        # Peak BAC during current session (last 24h)
+        peak_24h = 0.0
+        for i in range(len(drinks)):
+            b = total_bac(drinks[:i+1], user["weight_kg"], user["gender"], drinks[i][1])
+            if b > peak_24h:
+                peak_24h = b
         result.append({
             "username":    user["username"],
             "bac":         round(bac, 3),
@@ -141,6 +147,7 @@ def build_snapshot() -> list[dict]:
             "lat":         user["latitude"],
             "lon":         user["longitude"],
             "max_bac":     round(user.get("max_bac") or 0, 2),
+            "peak_24h":    round(peak_24h, 2),
         })
     result.sort(key=lambda x: x["bac"], reverse=True)
     return result

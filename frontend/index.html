@@ -319,7 +319,7 @@
 <!-- Palmarès -->
 <div id="palmares-panel" class="panel">
   <table class="palmares-table">
-    <thead><tr><th>#</th><th>Joueur</th><th>Doses total</th><th>Moy./jour conso</th><th>Verres</th><th>Alcool pur</th></tr></thead>
+    <thead><tr><th>#</th><th>Joueur</th><th>Doses total</th><th>Moy./jour conso</th><th>Record ever</th><th>Verres</th><th>Alcool pur</th></tr></thead>
     <tbody id="palmares-tbody"></tbody>
   </table>
 </div>
@@ -442,7 +442,7 @@
         <td>${medals[i]||i+1}</td>
         <td><strong>${esc(u.username)}</strong></td>
         <td style="color:${color};font-weight:700">${u.bac.toFixed(2)} g/L</td>
-        <td style="color:#f97316;font-weight:700">${u.max_bac > 0 ? u.max_bac + ' g/L' : '—'}</td>
+        <td style="color:#f97316;font-weight:700">${u.peak_24h > 0 ? u.peak_24h + ' g/L' : '—'}</td>
         <td>${u.nb_drinks}</td>
         <td>${u.sober_in_h}h</td>
       </tr>`;
@@ -582,6 +582,7 @@
         <td><strong>${esc(u.username)}</strong></td>
         <td>${(u.total_alc_g/10).toFixed(1)}</td>
         <td>${u.avg_doses_per_day}</td>
+        <td style="color:#f97316;font-weight:700">${u.max_bac > 0 ? u.max_bac + ' g/L' : '—'}</td>
         <td>${u.total_drinks}</td>
         <td>${u.total_alc_g.toFixed(0)}g</td>
       </tr>`).join('');
