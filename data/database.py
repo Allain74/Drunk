@@ -6,6 +6,8 @@ _RAW_URL = os.environ.get("TURSO_DATABASE_URL", "")
 TURSO_URL = _RAW_URL.replace("libsql://", "https://")
 TURSO_TOKEN = os.environ.get("TURSO_AUTH_TOKEN", "")
 
+_client = httpx.Client(timeout=10)
+
 
 def _args(values: list) -> list:
     result = []
@@ -29,11 +31,10 @@ def _pipeline(statements: list[tuple[str, list]]) -> list[dict]:
         for sql, args in statements
     ]
     requests.append({"type": "close"})
-    r = httpx.post(
+    r = _client.post(
         f"{TURSO_URL}/v2/pipeline",
         json={"requests": requests},
         headers={"Authorization": f"Bearer {TURSO_TOKEN}"},
-        timeout=10,
     )
     if not r.is_success:
         raise Exception(f"Turso {r.status_code}: {r.text}")

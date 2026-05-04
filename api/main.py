@@ -131,7 +131,7 @@ async def _broadcast(data: list[dict]):
 
 async def _broadcast_loop():
     while True:
-        await asyncio.sleep(60)
+        await asyncio.sleep(120)
         await _broadcast(build_snapshot())
 
 
