@@ -4,9 +4,9 @@ from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
 import httpx
-from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
+from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import (
-    ApplicationBuilder, CommandHandler, MessageHandler,
+    ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler,
     ContextTypes, Application, filters
 )
 from core.drinks import DRINKS, list_drinks_text
@@ -15,7 +15,7 @@ from data.database import (
     init_db, upsert_user, get_user, get_user_by_username, get_all_users,
     start_session, get_active_session, log_drink, get_session_drinks,
     get_session_drinks_detail, delete_last_drink, end_session, update_location,
-    is_banned, ban_user, unban_user, rename_user
+    is_banned, ban_user, unban_user, rename_user, get_top_drinks
 )
 
 load_dotenv()
@@ -150,6 +150,50 @@ async def cmd_profil(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     )
 
 
+# ── Clavier rapide ────────────────────────────────────────────────────────────
+
+def _quick_keyboard(tid: int, last_key: str) -> InlineKeyboardMarkup:
+    top = get_top_drinks(tid, 5)
+    suggestions = [last_key]
+    for k in top:
+        if k not in suggestions:
+            suggestions.append(k)
+        if len(suggestions) == 3:
+            break
+    buttons = [
+        InlineKeyboardButton(DRINKS[k].name, callback_data=f"drink:{k}")
+        for k in suggestions if k in DRINKS
+    ]
+    return InlineKeyboardMarkup([buttons])
+
+
+async def _send_drink_response(reply_func, tid: int, drink_key: str, user_data: dict, ctx):
+    drinks_data = get_session_drinks(tid)
+    nb = len(drinks_data)
+    bac = total_bac(drinks_data, user_data["weight_kg"], user_data["gender"])
+    prev_bac = total_bac(drinks_data[:-1], user_data["weight_kg"], user_data["gender"]) if nb > 1 else 0.0
+    drink = DRINKS[drink_key]
+
+    text = (
+        f"✅ *{drink.name}*\n\n"
+        f"🧪 TAC : *{bac:.2f} g/L* — {bac_label(bac)}\n"
+        f"⏱ Sobre {sober_time_str(bac)}"
+        f"{fun_message(bac)}"
+    )
+    if nb > 0 and nb % 3 == 0:
+        text += f"\n\n💧 *{nb} verres — pense à boire de l'eau !*"
+
+    await reply_func(text, parse_mode="Markdown", reply_markup=_quick_keyboard(tid, drink_key))
+
+    if nb == 1:
+        site = os.environ.get("SITE_URL", "https://drunk-weld.vercel.app")
+        await _notify_all(ctx, tid, f"🍺 *{user_data['username']}* commence à boire ! Rejoins-le !\n{site}")
+    if prev_bac < 0.8 <= bac:
+        await _notify_all(ctx, tid, f"⚠️ *{user_data['username']}* vient de dépasser la limite légale ({bac:.2f} g/L) 🚨")
+
+    await _refresh_api()
+
+
 # ── Boisson ───────────────────────────────────────────────────────────────────
 
 async def _do_drink(update: Update, ctx: ContextTypes.DEFAULT_TYPE, drink_key: str):
@@ -159,46 +203,28 @@ async def _do_drink(update: Update, ctx: ContextTypes.DEFAULT_TYPE, drink_key: s
     if not user_data:
         await update.message.reply_text("❌ Configure ton profil d'abord : /p 80 h")
         return
-
     ensure_session(tid)
     drink = DRINKS[drink_key]
-    alc_g = alcohol_grams(drink.volume_ml, drink.abv)
-    log_drink(tid, drink_key, alc_g)
+    log_drink(tid, drink_key, alcohol_grams(drink.volume_ml, drink.abv))
+    await _send_drink_response(update.message.reply_text, tid, drink_key, user_data, ctx)
 
-    drinks_data = get_session_drinks(tid)
-    nb = len(drinks_data)
-    bac = total_bac(drinks_data, user_data["weight_kg"], user_data["gender"])
-    prev_bac = total_bac(drinks_data[:-1], user_data["weight_kg"], user_data["gender"]) if nb > 1 else 0.0
 
-    text = (
-        f"✅ *{drink.name}*\n\n"
-        f"🧪 TAC : *{bac:.2f} g/L* — {bac_label(bac)}\n"
-        f"⏱ Sobre {sober_time_str(bac)}"
-        f"{fun_message(bac)}"
-    )
-
-    # Rappel eau toutes les 3 boissons
-    if nb > 0 and nb % 3 == 0:
-        text += f"\n\n💧 *{nb} verres — pense à boire de l'eau !*"
-
-    # Bouton position
-    keyboard = ReplyKeyboardMarkup(
-        [[KeyboardButton("📍 Partager ma position", request_location=True)]],
-        resize_keyboard=True, one_time_keyboard=True
-    )
-    await update.message.reply_text(text, parse_mode="Markdown", reply_markup=keyboard)
-
-    # Notif premier verre de la session
-    if nb == 1:
-        site = os.environ.get("SITE_URL", "https://drunk-weld.vercel.app")
-        await _notify_all(ctx, tid, f"🍺 *{user_data['username']}* commence à boire ! Rejoins-le !\n{site}")
-
-    # Notif si quelqu'un passe 0.8 g/L pour la première fois (franchissement)
-    if prev_bac < 0.8 <= bac:
-        name = user_data["username"]
-        await _notify_all(ctx, tid, f"⚠️ *{name}* vient de dépasser la limite légale ({bac:.2f} g/L) 🚨")
-
-    await _refresh_api()
+async def handle_drink_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    drink_key = query.data.split(":")[1]
+    tid = update.effective_user.id
+    if is_banned(tid):
+        await query.answer("🚫 Tu as été banni.", show_alert=True)
+        return
+    user_data = get_user(tid)
+    if not user_data:
+        await query.answer("❌ Configure ton profil : /p 80 h", show_alert=True)
+        return
+    ensure_session(tid)
+    drink = DRINKS[drink_key]
+    log_drink(tid, drink_key, alcohol_grams(drink.volume_ml, drink.abv))
+    await _send_drink_response(query.message.reply_text, tid, drink_key, user_data, ctx)
 
 
 # ── /annuler ──────────────────────────────────────────────────────────────────
@@ -568,6 +594,7 @@ def create_application() -> Application:
 
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
     app.add_handler(MessageHandler(filters.LOCATION, handle_location))
+    app.add_handler(CallbackQueryHandler(handle_drink_callback, pattern="^drink:"))
     return app
 
 

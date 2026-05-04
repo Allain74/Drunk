@@ -273,6 +273,15 @@ def get_all_time_stats() -> list[dict]:
     return sorted(users.values(), key=lambda x: x["total_alc_g"], reverse=True)
 
 
+def get_top_drinks(telegram_id: int, n: int = 5) -> list[str]:
+    rows = _fetchall("""
+        SELECT drink_key, COUNT(*) as cnt
+        FROM drink_logs WHERE telegram_id=?
+        GROUP BY drink_key ORDER BY cnt DESC LIMIT ?
+    """, [telegram_id, n])
+    return [r["drink_key"] for r in rows]
+
+
 def get_drinks_by_session(session_id: int) -> list[dict]:
     return _fetchall(
         "SELECT drink_key, alc_grams, logged_at FROM drink_logs WHERE session_id=? ORDER BY logged_at",
