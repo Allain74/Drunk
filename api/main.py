@@ -47,6 +47,7 @@ async def lifespan(app: FastAPI):
         BotCommand("stop",       "Remettre les compteurs à zéro"),
         BotCommand("defi",       "🏆 Classement de la soirée"),
         BotCommand("ou",         "📍 Position de quelqu'un  →  /ou Prénom"),
+        BotCommand("invite",     "🎉 Inviter tout le monde à boire avec toi"),
         BotCommand("site",       "🌐 Lien du dashboard"),
         BotCommand("liste",      "Voir toutes les boissons disponibles"),
         BotCommand("demi",       "🍺 Demi 25cl (5%)"),
@@ -73,8 +74,11 @@ async def lifespan(app: FastAPI):
     admin_commands = user_commands + [
         BotCommand("notif",      "📢 Envoyer un message à tous"),
         BotCommand("notifmaj",   "🔔 Notifier une mise à jour"),
-        BotCommand("add",        "➕ Ajouter un verre à quelqu'un"),
-        BotCommand("del",        "➖ Supprimer un verre à quelqu'un"),
+        BotCommand("add",        "➕ Ajouter un verre  →  /add Prénom boisson"),
+        BotCommand("del",        "➖ Supprimer un verre  →  /del Prénom"),
+        BotCommand("ban",        "🚫 Bannir un utilisateur  →  /ban Prénom"),
+        BotCommand("unban",      "✅ Débannir  →  /unban Prénom"),
+        BotCommand("rename",     "✏️ Renommer  →  /rename Ancien Nouveau"),
     ]
 
     await _bot_app.bot.set_my_commands(user_commands, scope=BotCommandScopeDefault())

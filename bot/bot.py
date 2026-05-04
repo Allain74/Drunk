@@ -14,7 +14,8 @@ from core.widmark import alcohol_grams, total_bac, bac_label, sober_in_hours
 from data.database import (
     init_db, upsert_user, get_user, get_user_by_username, get_all_users,
     start_session, get_active_session, log_drink, get_session_drinks,
-    get_session_drinks_detail, delete_last_drink, end_session, update_location
+    get_session_drinks_detail, delete_last_drink, end_session, update_location,
+    is_banned, ban_user, unban_user, rename_user
 )
 
 load_dotenv()
@@ -137,6 +138,7 @@ async def cmd_profil(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def _do_drink(update: Update, ctx: ContextTypes.DEFAULT_TYPE, drink_key: str):
     tid = update.effective_user.id
+    if await _check_banned(update): return
     user_data = get_user(tid)
     if not user_data:
         await update.message.reply_text("❌ Configure ton profil d'abord : /p 80 h")
@@ -273,6 +275,39 @@ async def cmd_defi(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
 
 
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+async def _check_banned(update: Update) -> bool:
+    if is_banned(update.effective_user.id):
+        await update.message.reply_text("🚫 Tu as été banni de ce bot.")
+        return True
+    return False
+
+
+# ── /invite ───────────────────────────────────────────────────────────────────
+
+async def cmd_invite(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    tid = update.effective_user.id
+    if await _check_banned(update): return
+    user = get_user(tid)
+    if not user:
+        await update.message.reply_text("❌ Configure ton profil d'abord : /p 80 h")
+        return
+    lat, lon = user.get("latitude"), user.get("longitude")
+    msg = f"🎉 *{user['username']}* t'invite à venir boire avec lui/elle !"
+    if lat and lon:
+        msg += "\n📍 Sa position ci-dessous 👇"
+    for other in get_all_users():
+        if other["telegram_id"] != tid:
+            try:
+                await ctx.bot.send_message(chat_id=other["telegram_id"], text=msg, parse_mode="Markdown")
+                if lat and lon:
+                    await ctx.bot.send_location(chat_id=other["telegram_id"], latitude=lat, longitude=lon)
+            except Exception:
+                pass
+    await update.message.reply_text("✅ Invitation envoyée à tous !")
+
+
 # ── /ou ───────────────────────────────────────────────────────────────────────
 
 async def cmd_ou(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -308,6 +343,53 @@ async def cmd_notif(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     message = "📢 " + " ".join(ctx.args)
     await _notify_everyone(ctx, message)
     await update.message.reply_text(f"✅ Message envoyé à tous !")
+
+
+# ── /ban /unban /rename (admin) ──────────────────────────────────────────────
+
+async def cmd_ban(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if not _is_admin(update.effective_user.id):
+        return
+    if not ctx.args:
+        await update.message.reply_text("Usage : /ban <prénom>")
+        return
+    target = get_user_by_username(ctx.args[0])
+    if not target:
+        await update.message.reply_text(f"❌ Utilisateur '{ctx.args[0]}' introuvable.")
+        return
+    ban_user(target["telegram_id"])
+    await update.message.reply_text(f"🚫 *{target['username']}* banni.", parse_mode="Markdown")
+
+
+async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if not _is_admin(update.effective_user.id):
+        return
+    if not ctx.args:
+        await update.message.reply_text("Usage : /unban <prénom>")
+        return
+    target = get_user_by_username(ctx.args[0])
+    if not target:
+        await update.message.reply_text(f"❌ Utilisateur '{ctx.args[0]}' introuvable.")
+        return
+    unban_user(target["telegram_id"])
+    await update.message.reply_text(f"✅ *{target['username']}* débanni.", parse_mode="Markdown")
+
+
+async def cmd_rename(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Usage : /rename <ancien> <nouveau>"""
+    if not _is_admin(update.effective_user.id):
+        return
+    if len(ctx.args) < 2:
+        await update.message.reply_text("Usage : /rename <ancien_prénom> <nouveau_prénom>")
+        return
+    target = get_user_by_username(ctx.args[0])
+    if not target:
+        await update.message.reply_text(f"❌ Utilisateur '{ctx.args[0]}' introuvable.")
+        return
+    new_name = ctx.args[1]
+    rename_user(target["telegram_id"], new_name)
+    await update.message.reply_text(f"✅ Renommé : *{target['username']}* → *{new_name}*", parse_mode="Markdown")
+    await _refresh_api()
 
 
 # ── /notifmaj ─────────────────────────────────────────────────────────────────
@@ -449,6 +531,10 @@ def create_application() -> Application:
     app.add_handler(CommandHandler(["stop", "reset", "r"],        cmd_stop))
     app.add_handler(CommandHandler("site",                        cmd_site))
     app.add_handler(CommandHandler(["ou", "where"],               cmd_ou))
+    app.add_handler(CommandHandler("invite",                      cmd_invite))
+    app.add_handler(CommandHandler("ban",                         cmd_ban))
+    app.add_handler(CommandHandler("unban",                       cmd_unban))
+    app.add_handler(CommandHandler("rename",                      cmd_rename))
     app.add_handler(CommandHandler("notif",                       cmd_notif))
     app.add_handler(CommandHandler("notifmaj",                    cmd_notifmaj))
     app.add_handler(CommandHandler("add",                         cmd_addverre))

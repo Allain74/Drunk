@@ -106,6 +106,7 @@ def init_db():
             alc_grams   REAL NOT NULL,
             logged_at   TEXT NOT NULL DEFAULT (datetime('now'))
         )""", []),
+        ("CREATE TABLE IF NOT EXISTS banned_users (telegram_id INTEGER PRIMARY KEY)", []),
     ])
 
 
@@ -126,6 +127,18 @@ def upsert_user(telegram_id: int, username: str, weight_kg: float, gender: str):
 def get_user(telegram_id: int) -> dict | None:
     return _fetchone("SELECT * FROM users WHERE telegram_id=?", [telegram_id])
 
+
+def is_banned(telegram_id: int) -> bool:
+    return _fetchone("SELECT 1 FROM banned_users WHERE telegram_id=?", [telegram_id]) is not None
+
+def ban_user(telegram_id: int):
+    _execute("INSERT OR IGNORE INTO banned_users (telegram_id) VALUES (?)", [telegram_id])
+
+def unban_user(telegram_id: int):
+    _execute("DELETE FROM banned_users WHERE telegram_id=?", [telegram_id])
+
+def rename_user(telegram_id: int, new_name: str):
+    _execute("UPDATE users SET username=? WHERE telegram_id=?", [new_name, telegram_id])
 
 def get_user_by_username(username: str) -> dict | None:
     return _fetchone("SELECT * FROM users WHERE LOWER(username)=LOWER(?)", [username])
