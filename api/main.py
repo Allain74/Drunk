@@ -37,12 +37,17 @@ async def lifespan(app: FastAPI):
         drop_pending_updates=True,
     )
 
-    from telegram import BotCommand
-    await _bot_app.bot.set_my_commands([
+    from telegram import BotCommand, BotCommandScopeDefault, BotCommandScopeChat
+
+    user_commands = [
         BotCommand("p",          "Configurer ton profil  →  /p 80 h"),
         BotCommand("tac",        "Voir ton taux d'alcool actuel"),
         BotCommand("h",          "Historique des verres de la session"),
+        BotCommand("annuler",    "↩️ Annuler le dernier verre"),
         BotCommand("stop",       "Remettre les compteurs à zéro"),
+        BotCommand("defi",       "🏆 Classement de la soirée"),
+        BotCommand("ou",         "📍 Position de quelqu'un  →  /ou Prénom"),
+        BotCommand("site",       "🌐 Lien du dashboard"),
         BotCommand("liste",      "Voir toutes les boissons disponibles"),
         BotCommand("demi",       "🍺 Demi 25cl (5%)"),
         BotCommand("pinte",      "🍺 Pinte 50cl (5%)"),
@@ -63,9 +68,23 @@ async def lifespan(app: FastAPI):
         BotCommand("pastis",     "🌿 Pastis 2.5cl"),
         BotCommand("cidre",      "🍎 Cidre 25cl"),
         BotCommand("sangria",    "🍷 Sangria 20cl"),
-        BotCommand("annuler",    "↩️ Annuler le dernier verre"),
-        BotCommand("site",       "🌐 Lien du dashboard"),
-    ])
+    ]
+
+    admin_commands = user_commands + [
+        BotCommand("notif",      "📢 Envoyer un message à tous"),
+        BotCommand("notifmaj",   "🔔 Notifier une mise à jour"),
+        BotCommand("add",        "➕ Ajouter un verre à quelqu'un"),
+        BotCommand("del",        "➖ Supprimer un verre à quelqu'un"),
+    ]
+
+    await _bot_app.bot.set_my_commands(user_commands, scope=BotCommandScopeDefault())
+
+    admin_id = int(os.environ.get("ADMIN_ID", "0"))
+    if admin_id:
+        try:
+            await _bot_app.bot.set_my_commands(admin_commands, scope=BotCommandScopeChat(chat_id=admin_id))
+        except Exception:
+            pass
 
     asyncio.create_task(_broadcast_loop())
     asyncio.create_task(_danger_loop())

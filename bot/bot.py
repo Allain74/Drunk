@@ -273,6 +273,25 @@ async def cmd_defi(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
 
 
+# ── /ou ───────────────────────────────────────────────────────────────────────
+
+async def cmd_ou(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if not ctx.args:
+        await update.message.reply_text("Usage : /ou <prénom>")
+        return
+    username = ctx.args[0]
+    target = get_user_by_username(username)
+    if not target:
+        await update.message.reply_text(f"❌ Utilisateur '{username}' introuvable.")
+        return
+    lat, lon = target.get("latitude"), target.get("longitude")
+    if not lat or not lon:
+        await update.message.reply_text(f"📍 *{target['username']}* n'a pas encore partagé sa position.", parse_mode="Markdown")
+        return
+    await update.message.reply_location(latitude=lat, longitude=lon)
+    await update.message.reply_text(f"📍 Dernière position connue de *{target['username']}*", parse_mode="Markdown")
+
+
 # ── /notif ────────────────────────────────────────────────────────────────────
 
 async def cmd_notif(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -429,6 +448,7 @@ def create_application() -> Application:
     app.add_handler(CommandHandler(["defi", "classement"],        cmd_defi))
     app.add_handler(CommandHandler(["stop", "reset", "r"],        cmd_stop))
     app.add_handler(CommandHandler("site",                        cmd_site))
+    app.add_handler(CommandHandler(["ou", "where"],               cmd_ou))
     app.add_handler(CommandHandler("notif",                       cmd_notif))
     app.add_handler(CommandHandler("notifmaj",                    cmd_notifmaj))
     app.add_handler(CommandHandler("add",                         cmd_addverre))
