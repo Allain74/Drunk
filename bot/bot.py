@@ -317,7 +317,7 @@ async def cmd_addverre(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ Réservé à l'admin.")
         return
     if len(ctx.args) < 2:
-        await update.message.reply_text("Usage : /addverre <prénom> <boisson>")
+        await update.message.reply_text("Usage : /add <prénom> <boisson>")
         return
     username, drink_alias = ctx.args[0], ctx.args[1].lower()
     target = get_user_by_username(username)
@@ -345,7 +345,7 @@ async def cmd_delverre(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ Réservé à l'admin.")
         return
     if not ctx.args:
-        await update.message.reply_text("Usage : /delverre <prénom>")
+        await update.message.reply_text("Usage : /del <prénom>")
         return
     username = ctx.args[0]
     target = get_user_by_username(username)
@@ -431,8 +431,8 @@ def create_application() -> Application:
     app.add_handler(CommandHandler("site",                        cmd_site))
     app.add_handler(CommandHandler("notif",                       cmd_notif))
     app.add_handler(CommandHandler("notifmaj",                    cmd_notifmaj))
-    app.add_handler(CommandHandler("addverre",                    cmd_addverre))
-    app.add_handler(CommandHandler("delverre",                    cmd_delverre))
+    app.add_handler(CommandHandler("add",                         cmd_addverre))
+    app.add_handler(CommandHandler("del",                         cmd_delverre))
     app.add_handler(CommandHandler(["liste", "l"],                lambda u, c: u.message.reply_text(list_drinks_text(), parse_mode="Markdown")))
 
     registered = set()
