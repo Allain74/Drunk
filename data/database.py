@@ -127,6 +127,10 @@ def get_user(telegram_id: int) -> dict | None:
     return _fetchone("SELECT * FROM users WHERE telegram_id=?", [telegram_id])
 
 
+def get_user_by_username(username: str) -> dict | None:
+    return _fetchone("SELECT * FROM users WHERE LOWER(username)=LOWER(?)", [username])
+
+
 def get_all_users() -> list[dict]:
     return _fetchall("SELECT * FROM users")
 

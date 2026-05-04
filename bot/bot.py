@@ -12,7 +12,7 @@ from telegram.ext import (
 from core.drinks import DRINKS, list_drinks_text
 from core.widmark import alcohol_grams, total_bac, bac_label, sober_in_hours
 from data.database import (
-    init_db, upsert_user, get_user, get_all_users,
+    init_db, upsert_user, get_user, get_user_by_username, get_all_users,
     start_session, get_active_session, log_drink, get_session_drinks,
     get_session_drinks_detail, delete_last_drink, end_session, update_location
 )
@@ -291,6 +291,77 @@ async def cmd_notif(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"✅ Message envoyé à tous !")
 
 
+# ── /notifmaj ─────────────────────────────────────────────────────────────────
+
+async def cmd_notifmaj(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    tid = update.effective_user.id
+    if ADMIN_ID and tid != ADMIN_ID:
+        await update.message.reply_text("❌ Commande réservée à l'admin.")
+        return
+    site = os.environ.get("SITE_URL", "https://drunk-weld.vercel.app")
+    msg = f"🔔 *Mise à jour disponible !*\nLe bot vient d'être amélioré — nouvelles fonctionnalités disponibles.\n{site}"
+    await _notify_everyone(ctx, msg)
+    await update.message.reply_text("✅ Notification envoyée !")
+
+
+# ── /addverre /delverre (admin) ───────────────────────────────────────────────
+
+def _is_admin(tid: int) -> bool:
+    return ADMIN_ID != 0 and tid == ADMIN_ID
+
+
+async def cmd_addverre(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Usage : /addverre <username> <boisson>"""
+    tid = update.effective_user.id
+    if not _is_admin(tid):
+        await update.message.reply_text("❌ Réservé à l'admin.")
+        return
+    if len(ctx.args) < 2:
+        await update.message.reply_text("Usage : /addverre <prénom> <boisson>")
+        return
+    username, drink_alias = ctx.args[0], ctx.args[1].lower()
+    target = get_user_by_username(username)
+    if not target:
+        await update.message.reply_text(f"❌ Utilisateur '{username}' introuvable.")
+        return
+    drink_key = ALIAS_MAP.get(drink_alias)
+    if not drink_key:
+        await update.message.reply_text(f"❌ Boisson '{drink_alias}' inconnue.")
+        return
+    ensure_session(target["telegram_id"])
+    drink = DRINKS[drink_key]
+    alc_g = alcohol_grams(drink.volume_ml, drink.abv)
+    log_drink(target["telegram_id"], drink_key, alc_g)
+    drinks_data = get_session_drinks(target["telegram_id"])
+    bac = total_bac(drinks_data, target["weight_kg"], target["gender"])
+    await update.message.reply_text(f"✅ *{drink.name}* ajouté à *{target['username']}*\n🧪 Son TAC : *{bac:.2f} g/L*", parse_mode="Markdown")
+    await _refresh_api()
+
+
+async def cmd_delverre(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Usage : /delverre <username>"""
+    tid = update.effective_user.id
+    if not _is_admin(tid):
+        await update.message.reply_text("❌ Réservé à l'admin.")
+        return
+    if not ctx.args:
+        await update.message.reply_text("Usage : /delverre <prénom>")
+        return
+    username = ctx.args[0]
+    target = get_user_by_username(username)
+    if not target:
+        await update.message.reply_text(f"❌ Utilisateur '{username}' introuvable.")
+        return
+    drink_key = delete_last_drink(target["telegram_id"])
+    if not drink_key:
+        await update.message.reply_text(f"❌ Aucun verre à supprimer pour {username}.")
+        return
+    drink = DRINKS.get(drink_key)
+    nom = drink.name if drink else drink_key
+    await update.message.reply_text(f"↩️ *{nom}* supprimé pour *{target['username']}*", parse_mode="Markdown")
+    await _refresh_api()
+
+
 # ── /site ─────────────────────────────────────────────────────────────────────
 
 async def cmd_site(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -359,6 +430,9 @@ def create_application() -> Application:
     app.add_handler(CommandHandler(["stop", "reset", "r"],        cmd_stop))
     app.add_handler(CommandHandler("site",                        cmd_site))
     app.add_handler(CommandHandler("notif",                       cmd_notif))
+    app.add_handler(CommandHandler("notifmaj",                    cmd_notifmaj))
+    app.add_handler(CommandHandler("addverre",                    cmd_addverre))
+    app.add_handler(CommandHandler("delverre",                    cmd_delverre))
     app.add_handler(CommandHandler(["liste", "l"],                lambda u, c: u.message.reply_text(list_drinks_text(), parse_mode="Markdown")))
 
     registered = set()
