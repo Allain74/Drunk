@@ -231,6 +231,14 @@ def get_all_time_stats() -> list[dict]:
         GROUP BY u.telegram_id, dl.drink_key
         ORDER BY u.username, count DESC
     """)
+    days_rows = _fetchall("""
+        SELECT u.username, COUNT(DISTINCT DATE(dl.logged_at)) as nb_days
+        FROM drink_logs dl
+        JOIN users u ON dl.telegram_id = u.telegram_id
+        GROUP BY u.telegram_id
+    """)
+    nb_days_map = {r["username"]: r["nb_days"] for r in days_rows}
+
     users: dict[str, dict] = {}
     for r in rows:
         name = r["username"]
@@ -239,7 +247,13 @@ def get_all_time_stats() -> list[dict]:
         users[name]["total_drinks"] += r["count"]
         users[name]["total_alc_g"] = round(users[name]["total_alc_g"] + r["total_alc"], 1)
         users[name]["breakdown"].append({"drink_key": r["drink_key"], "count": r["count"]})
-    return sorted(users.values(), key=lambda x: x["total_drinks"], reverse=True)
+
+    for u in users.values():
+        nb_days = nb_days_map.get(u["username"], 1)
+        u["nb_days"] = nb_days
+        u["avg_doses_per_day"] = round((u["total_alc_g"] / 10) / nb_days, 1)
+
+    return sorted(users.values(), key=lambda x: x["total_alc_g"], reverse=True)
 
 
 def get_drinks_by_session(session_id: int) -> list[dict]:

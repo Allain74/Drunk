@@ -319,7 +319,7 @@
 <!-- Palmarès -->
 <div id="palmares-panel" class="panel">
   <table class="palmares-table">
-    <thead><tr><th>#</th><th>Joueur</th><th>Verres</th><th>Doses standard</th><th>Alcool pur</th></tr></thead>
+    <thead><tr><th>#</th><th>Joueur</th><th>Doses total</th><th>Moy./jour conso</th><th>Verres</th><th>Alcool pur</th></tr></thead>
     <tbody id="palmares-tbody"></tbody>
   </table>
 </div>
@@ -578,8 +578,9 @@
       <tr onclick="openModal2('${esc(u.username)}')">
         <td>${medals[i]||i+1}</td>
         <td><strong>${esc(u.username)}</strong></td>
-        <td>${u.total_drinks}</td>
         <td>${(u.total_alc_g/10).toFixed(1)}</td>
+        <td>${u.avg_doses_per_day}</td>
+        <td>${u.total_drinks}</td>
         <td>${u.total_alc_g.toFixed(0)}g</td>
       </tr>`).join('');
   }
