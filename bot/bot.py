@@ -93,18 +93,34 @@ async def _refresh_api():
         pass
 
 
+TOPO_MSG = (
+    "🍺 *Bienvenue sur Drunk ! Par Allain*\n\n"
+    "Ce bot te permet de suivre ton taux d'alcool en temps réel avec tes potes.\n\n"
+    "*Comment ça marche ?*\n\n"
+    "1️⃣ Configure ton profil une seule fois :\n"
+    "`/p 80 h` _(poids en kg + h pour homme, f pour femme)_\n\n"
+    "2️⃣ À chaque verre, tape juste le nom :\n"
+    "`pinte` `demi` `vodka` `vin` `mojito`...\n\n"
+    "3️⃣ Le bot calcule ton TAC en temps réel et te dit à quelle heure tu seras sobre.\n\n"
+    "*Commandes utiles :*\n"
+    "• `/site` — voir le dashboard en temps réel\n"
+    "• `/tac` — voir ton taux d'alcool actuel\n"
+    "• `/annuler` — supprimer le dernier verre\n"
+    "• `/liste` — toutes les boissons disponibles\n\n"
+    "_Tape `/` pour voir toutes les commandes disponibles_ 🎉"
+)
+
+
 # ── /start ────────────────────────────────────────────────────────────────────
 
 async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "🍺 *AlcooTracker*\n\n"
-        "Configure ton profil une seule fois :\n"
-        "`/p 80 h` ou `/p 60 f`\n\n"
-        "Puis envoie le nom de ta boisson directement :\n"
-        "`pinte`, `demi`, `vodka`, `vin`...\n\n"
-        "Tape `/` pour voir toutes les commandes.",
-        parse_mode="Markdown"
-    )
+    await update.message.reply_text(TOPO_MSG, parse_mode="Markdown")
+
+
+# ── /topo ─────────────────────────────────────────────────────────────────────
+
+async def cmd_topo(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(TOPO_MSG, parse_mode="Markdown")
 
 
 # ── /profil ───────────────────────────────────────────────────────────────────
@@ -523,6 +539,7 @@ def create_application() -> Application:
     app = ApplicationBuilder().token(token).updater(None).build()
 
     app.add_handler(CommandHandler("start",                       cmd_start))
+    app.add_handler(CommandHandler("topo",                        cmd_topo))
     app.add_handler(CommandHandler(["profil", "p"],               cmd_profil))
     app.add_handler(CommandHandler(["tac", "t"],                  cmd_tac))
     app.add_handler(CommandHandler(["historique", "h", "histo"],  cmd_historique))

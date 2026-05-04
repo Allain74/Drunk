@@ -40,6 +40,7 @@ async def lifespan(app: FastAPI):
     from telegram import BotCommand, BotCommandScopeDefault, BotCommandScopeChat
 
     user_commands = [
+        BotCommand("topo",       "ℹ️ Comment utiliser le bot"),
         BotCommand("p",          "Configurer ton profil  →  /p 80 h"),
         BotCommand("tac",        "Voir ton taux d'alcool actuel"),
         BotCommand("h",          "Historique des verres de la session"),
