@@ -200,7 +200,13 @@ async def _danger_loop():
             except Exception:
                 pass
 
-        # Notif inactivité 7 jours
+        # Notif inactivité — une fois par semaine d'absence
+        _INACTIVITY_MSGS = [
+            "😤 *{name}*, t'es devenu gay pour pas picoler depuis une semaine ? Allez, bois un verre ! 🍺",
+            "😶 *{name}*, deux semaines sans boire… t'as rejoint les alcooliques anonymes ou quoi ? 🤨",
+            "💀 *{name}*, trois semaines. T'es sobre. C'est honteux. Tes potes ont honte de toi. 🫵",
+            "🚨 *{name}*, un mois sans picoler. Appelle le 15, c'est une urgence médicale. 🏥",
+        ]
         for user in get_all_users():
             uid = user["telegram_id"]
             last_t = get_last_drink_time(uid)
@@ -211,10 +217,12 @@ async def _danger_loop():
                 last_notif = get_last_inactivity_notif(uid)
                 if last_notif is None or (now - last_notif).total_seconds() >= 7 * 86400:
                     set_last_inactivity_notif(uid, now)
+                    weeks = int(days_inactive // 7)
+                    msg_template = _INACTIVITY_MSGS[min(weeks - 1, len(_INACTIVITY_MSGS) - 1)]
                     try:
                         await _bot_app.bot.send_message(
                             chat_id=uid,
-                            text=f"😤 *{user['username']}*, t'es devenu gay pour pas picoler depuis une semaine ? Allez, bois un verre ! 🍺",
+                            text=msg_template.format(name=user["username"]),
                             parse_mode="Markdown"
                         )
                     except Exception:
