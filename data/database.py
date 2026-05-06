@@ -86,6 +86,10 @@ def init_db():
         _execute("ALTER TABLE users ADD COLUMN max_bac REAL DEFAULT 0")
     except Exception:
         pass
+    try:
+        _execute("ALTER TABLE users ADD COLUMN last_inactivity_notif TEXT")
+    except Exception:
+        pass
     _pipeline([
         ("""CREATE TABLE IF NOT EXISTS users (
             telegram_id INTEGER PRIMARY KEY,
@@ -283,6 +287,23 @@ def get_all_time_stats() -> list[dict]:
         u["max_bac"] = round(max_bac, 2)
 
     return sorted(users.values(), key=lambda x: x["total_alc_g"], reverse=True)
+
+
+def set_last_inactivity_notif(telegram_id: int, dt: datetime):
+    _execute(
+        "UPDATE users SET last_inactivity_notif=? WHERE telegram_id=?",
+        [dt.isoformat(), telegram_id]
+    )
+
+
+def get_last_inactivity_notif(telegram_id: int) -> datetime | None:
+    row = _fetchone(
+        "SELECT last_inactivity_notif FROM users WHERE telegram_id=?",
+        [telegram_id]
+    )
+    if not row or not row["last_inactivity_notif"]:
+        return None
+    return datetime.fromisoformat(row["last_inactivity_notif"]).replace(tzinfo=timezone.utc)
 
 
 def get_last_drink_time(telegram_id: int) -> datetime | None:
