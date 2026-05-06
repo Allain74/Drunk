@@ -17,7 +17,7 @@ load_dotenv()
 _ws_clients: set[WebSocket] = set()
 _bot_app = None
 _danger_notified: dict[int, datetime] = {}
-_inactivity_notified: set[int] = set()
+_inactivity_notified: dict[int, datetime] = {}
 
 RENDER_URL = os.environ.get("RENDER_URL", "https://drunk-l34t.onrender.com")
 
@@ -208,18 +208,20 @@ async def _danger_loop():
             if last_t is None:
                 continue
             days_inactive = (now - last_t).total_seconds() / 86400
-            if days_inactive >= 7 and uid not in _inactivity_notified:
-                _inactivity_notified.add(uid)
-                try:
-                    await _bot_app.bot.send_message(
-                        chat_id=uid,
-                        text=f"😤 *{user['username']}*, t'es devenu gay pour pas picoler depuis une semaine ? Allez, bois un verre ! 🍺",
-                        parse_mode="Markdown"
-                    )
-                except Exception:
-                    pass
+            if days_inactive >= 7:
+                last_notif = _inactivity_notified.get(uid)
+                if last_notif is None or (now - last_notif).total_seconds() >= 7 * 86400:
+                    _inactivity_notified[uid] = now
+                    try:
+                        await _bot_app.bot.send_message(
+                            chat_id=uid,
+                            text=f"😤 *{user['username']}*, t'es devenu gay pour pas picoler depuis une semaine ? Allez, bois un verre ! 🍺",
+                            parse_mode="Markdown"
+                        )
+                    except Exception:
+                        pass
             elif days_inactive < 7:
-                _inactivity_notified.discard(uid)
+                _inactivity_notified.pop(uid, None)
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
