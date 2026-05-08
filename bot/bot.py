@@ -949,7 +949,8 @@ async def cmd_bj_bet(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         text = (
             f"🃏 *Blackjack — Partie solo*\n\n"
             f"🎴 Ta main : {display_hand(player_hand)}\n"
-            f"🏠 Croupier : {display_hand(dealer_hand, hide_second=True)}"
+            f"🏠 Croupier : {display_hand(dealer_hand, hide_second=True)}\n\n"
+            f"🌐 {bj_url}"
         )
 
         if is_blackjack(player_hand):
@@ -981,7 +982,11 @@ async def cmd_bj_bet(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             try:
                 await ctx.bot.send_message(
                     chat_id=u["telegram_id"],
-                    text=f"🃏 *{host['username']}* t'invite au Blackjack !\nMise : *{bet} 🪙*",
+                    text=(
+                        f"🃏 *{host['username']}* t'invite au Blackjack !\n"
+                        f"Mise : *{bet} 🪙*\n\n"
+                        f"🌐 Table en direct : {bj_url}"
+                    ),
                     parse_mode="Markdown",
                     reply_markup=join_kb
                 )
@@ -994,7 +999,8 @@ async def cmd_bj_bet(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         ]])
         await update.message.reply_text(
             f"✅ Invitations envoyées à {names} !\n"
-            f"Clique sur *Lancer* quand tout le monde est prêt.",
+            f"Clique sur *Lancer* quand tout le monde est prêt.\n\n"
+            f"🌐 Table en direct : {bj_url}",
             parse_mode="Markdown",
             reply_markup=launch_kb
         )
@@ -1262,30 +1268,62 @@ async def handle_bj_launch_callback(update: Update, ctx: ContextTypes.DEFAULT_TY
         pass
 
     # Distribuer les mains
+    site = os.environ.get("SITE_URL", "https://drunk-weld.vercel.app")
+    bj_url = f"{site}/blackjack.html?session={token}"
+
     deck = new_deck()
     dealer_hand = [deck.pop(), deck.pop()]
+    hands: dict[int, list] = {}
     for p in players:
         hand = [deck.pop(), deck.pop()]
+        hands[p["telegram_id"]] = hand
         update_blackjack_player(session["id"], p["telegram_id"], hand=json.dumps(hand), status="playing")
-        try:
-            await ctx.bot.send_message(
-                chat_id=p["telegram_id"],
-                text=(
-                    f"🃏 *La partie commence !*\n\n"
-                    f"🎴 Ta main : {display_hand(hand)}\n"
-                    f"🏠 Croupier : {display_hand(dealer_hand, hide_second=True)}"
-                ),
-                parse_mode="Markdown",
-                reply_markup=_bj_keyboard()
-            )
-        except Exception:
-            pass
 
     update_blackjack_session(session["id"],
         status="active",
         deck=json.dumps(deck),
         dealer_hand=json.dumps(dealer_hand)
     )
+
+    # Construire l'état global visible par tous
+    all_players_up = get_blackjack_players(session["id"])
+    state_lines = ["👥 *Mains de tout le monde :*\n"]
+    for p in all_players_up:
+        u = get_user(p["telegram_id"])
+        name = u["username"] if u else "?"
+        h = json.loads(p["hand"])
+        state_lines.append(f"🎮 *{name}* : {display_hand(h)}")
+    state_lines.append(f"\n🏠 *Croupier* : {display_hand(dealer_hand, hide_second=True)}")
+    state_txt = "\n".join(state_lines)
+
+    for p in players:
+        hand = hands[p["telegram_id"]]
+        msg = (
+            f"🃏 *La partie commence !*\n\n"
+            f"🎴 Ta main : {display_hand(hand)}\n\n"
+            f"{state_txt}\n\n"
+            f"🌐 Table en direct : {bj_url}"
+        )
+        if is_blackjack(hand):
+            bet = p["bet"]
+            winnings = int(bet * 1.5)
+            add_coins(p["telegram_id"], bet + winnings, "Blackjack ! (×1.5)")
+            update_blackjack_player(session["id"], p["telegram_id"], status="done", result="blackjack")
+            msg += f"\n\n🎉 *BLACKJACK !* Tu gagnes {winnings} 🪙 !"
+            try:
+                await ctx.bot.send_message(chat_id=p["telegram_id"], text=msg, parse_mode="Markdown")
+            except Exception:
+                pass
+        else:
+            try:
+                await ctx.bot.send_message(
+                    chat_id=p["telegram_id"],
+                    text=msg,
+                    parse_mode="Markdown",
+                    reply_markup=_bj_keyboard()
+                )
+            except Exception:
+                pass
 
 
 async def handle_bj_rematch_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -1432,34 +1470,53 @@ async def cmd_lancer_bj(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ Il faut au moins 2 joueurs.")
         return
 
+    site = os.environ.get("SITE_URL", "https://drunk-weld.vercel.app")
+    bj_url = f"{site}/blackjack.html?session={session_row['token']}"
+
     deck = new_deck()
     dealer_hand = [deck.pop(), deck.pop()]
-
+    hands: dict[int, list] = {}
     for p in players:
         hand = [deck.pop(), deck.pop()]
+        hands[p["telegram_id"]] = hand
         update_blackjack_player(session_row["id"], p["telegram_id"],
             hand=json.dumps(hand), status="playing")
-        site = os.environ.get("SITE_URL", "https://drunk-weld.vercel.app")
-        bj_url = f"{site}/blackjack.html?session={session_row['token']}"
-        try:
-            await ctx.bot.send_message(
-                chat_id=p["telegram_id"],
-                text=(
-                    f"🃏 *La partie commence !*\n\n"
-                    f"🎴 Ta main : {display_hand(hand)}\n"
-                    f"🏠 Croupier : {display_hand(dealer_hand, hide_second=True)}"
-                ),
-                parse_mode="Markdown",
-                reply_markup=_bj_keyboard()
-            )
-        except Exception:
-            pass
 
     update_blackjack_session(session_row["id"],
         status="active",
         deck=json.dumps(deck),
         dealer_hand=json.dumps(dealer_hand)
     )
+
+    # État global
+    all_players_up = get_blackjack_players(session_row["id"])
+    state_lines = ["👥 *Mains de tout le monde :*\n"]
+    for p in all_players_up:
+        u = get_user(p["telegram_id"])
+        name = u["username"] if u else "?"
+        h = json.loads(p["hand"])
+        state_lines.append(f"🎮 *{name}* : {display_hand(h)}")
+    state_lines.append(f"\n🏠 *Croupier* : {display_hand(dealer_hand, hide_second=True)}")
+    state_txt = "\n".join(state_lines)
+
+    for p in players:
+        hand = hands[p["telegram_id"]]
+        msg = (
+            f"🃏 *La partie commence !*\n\n"
+            f"🎴 Ta main : {display_hand(hand)}\n\n"
+            f"{state_txt}\n\n"
+            f"🌐 Table en direct : {bj_url}"
+        )
+        try:
+            await ctx.bot.send_message(
+                chat_id=p["telegram_id"],
+                text=msg,
+                parse_mode="Markdown",
+                reply_markup=_bj_keyboard()
+            )
+        except Exception:
+            pass
+
     await update.message.reply_text("✅ Partie lancée ! Tout le monde a reçu sa main.")
 
 
