@@ -1250,7 +1250,11 @@ def create_application() -> Application:
             BJ_BET:     [MessageHandler(filters.TEXT & ~filters.COMMAND, cmd_bj_bet)],
             BJ_PLAYING: [MessageHandler(filters.TEXT & ~filters.COMMAND, cmd_bj_play)],
         },
-        fallbacks=[CommandHandler("annuler", cmd_bj_cancel)],
+        fallbacks=[
+            CommandHandler("annuler", cmd_bj_cancel),
+            CommandHandler("blackjack", cmd_bj_start),
+        ],
+        allow_reentry=True,
         per_user=True,
     )
 
