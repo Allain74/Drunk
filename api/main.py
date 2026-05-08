@@ -10,13 +10,23 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.middleware.cors import CORSMiddleware
 from telegram import Update
 
-from data.database import init_db, get_all_users, get_all_active_drinks, get_active_session, get_drinks_by_session, get_all_time_stats, get_last_drink_time, set_last_inactivity_notif, get_last_inactivity_notif
+from data.database import (
+    init_db, get_all_users, get_all_active_drinks, get_active_session,
+    get_drinks_by_session, get_all_time_stats, get_last_drink_time,
+    set_last_inactivity_notif, get_last_inactivity_notif,
+    get_active_bets, settle_bet, get_bet, get_user, add_coins,
+    get_all_balances, get_transactions,
+    get_blackjack_session, get_blackjack_players, update_blackjack_session,
+    update_blackjack_player,
+)
 from core.recap import build_weekly_recap
 from core.widmark import total_bac, bac_label, sober_in_hours
+from core.blackjack import new_deck, hand_value, display_hand
 
 load_dotenv()
 
 _ws_clients: set[WebSocket] = set()
+_bj_clients: dict[str, set[WebSocket]] = {}
 _bot_app = None
 _danger_notified: dict[int, datetime] = {}
 _last_weekly_recap_date: str = ""  # "YYYY-MM-DD" du dernier lundi envoyé
@@ -74,6 +84,14 @@ async def lifespan(app: FastAPI):
         BotCommand("pastis",     "🌿 Pastis 2.5cl"),
         BotCommand("cidre",      "🍎 Cidre 25cl"),
         BotCommand("sangria",    "🍷 Sangria 20cl"),
+        BotCommand("solde",      "🪙 Voir ton solde de BeerCoins"),
+        BotCommand("offrir",     "🎁 Offrir des coins  →  /offrir Prénom 50"),
+        BotCommand("pari",       "🎰 Lancer un pari"),
+        BotCommand("accepter",   "✅ Accepter un pari"),
+        BotCommand("refuser",    "❌ Refuser un pari"),
+        BotCommand("blackjack",  "🃏 Jouer au blackjack"),
+        BotCommand("rejoindrebj","🃏 Rejoindre une partie  →  /rejoindrebj token mise"),
+        BotCommand("lancerbj",   "🚀 Lancer une partie multi"),
     ]
 
     admin_commands = user_commands + [
@@ -99,6 +117,7 @@ async def lifespan(app: FastAPI):
     asyncio.create_task(_broadcast_loop())
     asyncio.create_task(_danger_loop())
     asyncio.create_task(_weekly_recap_loop())
+    asyncio.create_task(_bet_settlement_loop())
 
     yield
 
@@ -295,6 +314,67 @@ def get_alltime():
     return get_all_time_stats()
 
 
+async def _bet_settlement_loop():
+    while True:
+        await asyncio.sleep(60)
+        now_paris = datetime.now(PARIS)
+        current_time = now_paris.strftime("%H:%M")
+
+        for bet in get_active_bets():
+            if not bet.get("end_time"):
+                continue
+            if current_time < bet["end_time"]:
+                continue
+
+            from data.database import get_session_drinks
+            uid1, uid2 = bet["challenger_id"], bet["opponent_id"]
+            users = {u["telegram_id"]: u for u in get_all_users()}
+
+            if bet["bet_type"] == "verres":
+                drinks1 = get_session_drinks(uid1)
+                drinks2 = get_session_drinks(uid2)
+                count1, count2 = len(drinks1), len(drinks2)
+                winner_id = uid1 if count1 >= count2 else uid2
+                loser_id = uid2 if winner_id == uid1 else uid1
+                detail = f"({count1} vs {count2} verres)"
+
+            elif bet["bet_type"] == "ivre":
+                from core.widmark import total_bac as _total_bac
+                from data.database import get_session_drinks
+                u1 = users.get(uid1, {})
+                u2 = users.get(uid2, {})
+                drinks1 = get_session_drinks(uid1)
+                drinks2 = get_session_drinks(uid2)
+                now_utc = datetime.now(timezone.utc)
+                bac1 = _total_bac(drinks1, u1.get("weight_kg", 70), u1.get("gender", "homme"), now_utc)
+                bac2 = _total_bac(drinks2, u2.get("weight_kg", 70), u2.get("gender", "homme"), now_utc)
+                winner_id = uid1 if bac1 >= bac2 else uid2
+                loser_id = uid2 if winner_id == uid1 else uid1
+                detail = f"({bac1:.2f} vs {bac2:.2f} g/L)"
+
+            else:
+                continue
+
+            settle_bet(bet["id"], winner_id)
+            winner = get_user(winner_id)
+            loser = get_user(loser_id)
+            amount = bet["amount"]
+            add_coins(winner_id, amount, f"Pari gagné contre {loser['username']}")
+            add_coins(loser_id, -amount, f"Pari perdu contre {winner['username']}")
+
+            msg = (
+                f"🏁 *Résultat du pari !* {detail}\n\n"
+                f"🏆 Gagnant : *{winner['username']}* +{amount} 🪙\n"
+                f"💸 Perdant : *{loser['username']}* -{amount} 🪙"
+            )
+
+            for uid in [uid1, uid2]:
+                try:
+                    await _bot_app.bot.send_message(chat_id=uid, text=msg, parse_mode="Markdown")
+                except Exception:
+                    pass
+
+
 @app.get("/history")
 def get_history():
     users = get_all_users()
@@ -315,3 +395,133 @@ def get_history():
             "points": points,
         })
     return result
+
+
+@app.get("/coins")
+def get_coins_endpoint():
+    balances = get_all_balances()
+    result = []
+    for b in balances:
+        txs = get_transactions(b["telegram_id"], 10)
+        result.append({
+            "username": b["username"],
+            "coins": b["coins"] or 0,
+            "transactions": [
+                {"amount": t["amount"], "reason": t["reason"], "at": t["created_at"]}
+                for t in txs
+            ],
+        })
+    return result
+
+
+@app.websocket("/ws/blackjack/{token}")
+async def blackjack_ws(ws: WebSocket, token: str):
+    session = get_blackjack_session(token)
+    if not session:
+        await ws.close()
+        return
+    await ws.accept()
+    _bj_clients.setdefault(token, set()).add(ws)
+
+    async def broadcast_state():
+        sess = get_blackjack_session(token)
+        players = get_blackjack_players(sess["id"])
+        dealer_hand = json.loads(sess["dealer_hand"])
+        hide_dealer = sess["status"] == "active"
+
+        player_data = []
+        for p in players:
+            u = get_user(p["telegram_id"])
+            player_data.append({
+                "username": u["username"] if u else str(p["telegram_id"]),
+                "hand": json.loads(p["hand"]),
+                "status": p["status"],
+                "result": p["result"],
+                "bet": p["bet"],
+            })
+
+        state = {
+            "status": sess["status"],
+            "dealer_hand": (
+                ([dealer_hand[0], "?"] if dealer_hand else []) if hide_dealer else dealer_hand
+            ),
+            "dealer_value": hand_value(dealer_hand) if not hide_dealer else None,
+            "players": player_data,
+        }
+
+        dead = set()
+        for client in list(_bj_clients.get(token, set())):
+            try:
+                await client.send_text(json.dumps(state))
+            except Exception:
+                dead.add(client)
+        _bj_clients.get(token, set()).difference_update(dead)
+
+    try:
+        await broadcast_state()
+        while True:
+            data = await ws.receive_text()
+            msg = json.loads(data)
+            action = msg.get("action")
+            player_id = msg.get("telegram_id")
+
+            if action in ("hit", "stand") and player_id:
+                sess = get_blackjack_session(token)
+                players = get_blackjack_players(sess["id"])
+                player = next((p for p in players if p["telegram_id"] == player_id), None)
+
+                if player and player["status"] == "playing":
+                    hand = json.loads(player["hand"])
+                    deck = json.loads(sess["deck"])
+                    dealer_hand = json.loads(sess["dealer_hand"])
+
+                    if action == "hit":
+                        card = deck.pop()
+                        hand.append(card)
+                        update_blackjack_session(sess["id"], deck=json.dumps(deck))
+                        val = hand_value(hand)
+                        if val > 21:
+                            update_blackjack_player(sess["id"], player_id,
+                                hand=json.dumps(hand), status="bust", result="lose")
+                        else:
+                            update_blackjack_player(sess["id"], player_id, hand=json.dumps(hand))
+
+                    elif action == "stand":
+                        update_blackjack_player(sess["id"], player_id,
+                            hand=json.dumps(hand), status="stand")
+
+                    # Check if all players done
+                    players = get_blackjack_players(sess["id"])
+                    all_done = all(p["status"] in ("stand", "bust", "done") for p in players)
+
+                    if all_done:
+                        # Dealer plays
+                        while hand_value(dealer_hand) < 17:
+                            dealer_hand.append(deck.pop())
+                        dealer_val = hand_value(dealer_hand)
+                        update_blackjack_session(sess["id"],
+                            dealer_hand=json.dumps(dealer_hand),
+                            deck=json.dumps(deck),
+                            status="finished"
+                        )
+
+                        for p in players:
+                            if p["status"] == "bust":
+                                continue
+                            p_val = hand_value(json.loads(p["hand"]))
+                            bet = p["bet"]
+                            if dealer_val > 21 or p_val > dealer_val:
+                                add_coins(p["telegram_id"], bet * 2, "Blackjack gagné")
+                                update_blackjack_player(sess["id"], p["telegram_id"], result="win")
+                            elif p_val == dealer_val:
+                                add_coins(p["telegram_id"], bet, "Blackjack égalité")
+                                update_blackjack_player(sess["id"], p["telegram_id"], result="push")
+                            else:
+                                update_blackjack_player(sess["id"], p["telegram_id"], result="lose")
+
+                    await broadcast_state()
+
+    except Exception:
+        pass
+    finally:
+        _bj_clients.get(token, set()).discard(ws)

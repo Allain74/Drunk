@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="fr" data-theme="dark">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Blackjack 🃏</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:     #0e1117;
+      --card:   #161b27;
+      --border: #1e2640;
+      --text:   #e8eaf6;
+      --sub:    #7986cb;
+      --muted:  #3a4060;
+      --shadow: 0 2px 16px #00000033;
+      --green:  #22c55e;
+      --red:    #ef4444;
+      --gold:   #facc15;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 24px 16px 60px;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+
+    h1 {
+      font-size: clamp(1.4rem, 4vw, 2rem);
+      font-weight: 900;
+      letter-spacing: -1px;
+    }
+
+    h1 span {
+      background: linear-gradient(135deg, #6366f1, #06b6d4);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    #status-bar {
+      text-align: center;
+      font-size: 0.78rem;
+      color: var(--sub);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      margin-bottom: 24px;
+    }
+
+    #dot { width:7px; height:7px; border-radius:50%; background:var(--muted); transition:background .4s; }
+    #dot.ok { background:#22c55e; box-shadow:0 0 6px #22c55e88; }
+
+    .section {
+      max-width: 700px;
+      margin: 0 auto 20px;
+    }
+
+    .section-title {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: var(--sub);
+      letter-spacing: 1px;
+      margin-bottom: 10px;
+    }
+
+    /* ── Dealer ── */
+    #dealer-area {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px;
+      box-shadow: var(--shadow);
+      text-align: center;
+      margin-bottom: 16px;
+    }
+
+    #dealer-area .dealer-label {
+      font-size: 0.8rem;
+      color: var(--sub);
+      margin-bottom: 8px;
+    }
+
+    /* ── Cards ── */
+    .hand-display {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: center;
+      margin: 10px 0;
+    }
+
+    .playing-card {
+      background: #fff;
+      color: #111;
+      border-radius: 8px;
+      padding: 6px 12px;
+      font-weight: 700;
+      font-size: 1rem;
+      box-shadow: 0 2px 6px #0004;
+      min-width: 40px;
+      text-align: center;
+    }
+
+    .playing-card.red {
+      color: #dc2626;
+    }
+
+    .playing-card.hidden {
+      background: #6366f1;
+      color: transparent;
+      user-select: none;
+    }
+
+    .hand-value {
+      font-size: 0.85rem;
+      color: var(--sub);
+      margin-top: 4px;
+    }
+
+    /* ── Players ── */
+    #players-area {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 14px;
+    }
+
+    .player-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px;
+      box-shadow: var(--shadow);
+      position: relative;
+    }
+
+    .player-card.active-player {
+      border-color: #6366f1;
+      box-shadow: 0 0 0 2px #6366f140;
+    }
+
+    .player-card.result-win { border-color: var(--green); }
+    .player-card.result-lose { border-color: var(--red); opacity: 0.7; }
+    .player-card.result-push { border-color: var(--gold); }
+    .player-card.result-blackjack { border-color: var(--gold); }
+
+    .player-name {
+      font-weight: 700;
+      font-size: 0.95rem;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .player-status-badge {
+      font-size: 0.7rem;
+      padding: 2px 8px;
+      border-radius: 99px;
+      font-weight: 600;
+    }
+
+    .badge-playing { background: #6366f120; color: #818cf8; }
+    .badge-stand   { background: #22c55e20; color: #22c55e; }
+    .badge-bust    { background: #ef444420; color: #ef4444; }
+    .badge-done    { background: #facc1520; color: #ca8a04; }
+    .badge-waiting { background: var(--muted); color: var(--sub); }
+
+    .player-bet {
+      font-size: 0.75rem;
+      color: var(--sub);
+      margin-bottom: 8px;
+    }
+
+    .result-label {
+      font-weight: 700;
+      margin-top: 8px;
+      font-size: 0.9rem;
+    }
+
+    .result-win-label    { color: var(--green); }
+    .result-lose-label   { color: var(--red); }
+    .result-push-label   { color: var(--gold); }
+    .result-bj-label     { color: var(--gold); }
+
+    /* ── Actions ── */
+    #action-area {
+      max-width: 700px;
+      margin: 20px auto 0;
+      display: none;
+    }
+
+    #action-area.visible { display: block; }
+
+    .action-title {
+      text-align: center;
+      font-size: 0.85rem;
+      color: var(--sub);
+      margin-bottom: 12px;
+    }
+
+    .action-buttons {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+    }
+
+    .btn {
+      padding: 14px 32px;
+      border-radius: 12px;
+      border: none;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform .1s, opacity .1s;
+    }
+
+    .btn:active { transform: scale(0.97); }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .btn-hit   { background: #6366f1; color: #fff; }
+    .btn-stand { background: #64748b; color: #fff; }
+
+    /* ── Status banner ── */
+    #game-status {
+      max-width: 700px;
+      margin: 0 auto 20px;
+      text-align: center;
+      font-size: 1.1rem;
+      font-weight: 700;
+      padding: 12px;
+      border-radius: 12px;
+      display: none;
+    }
+
+    #game-status.waiting  { background: #6366f120; color: #818cf8; display: block; }
+    #game-status.active   { background: #22c55e20; color: #22c55e; display: block; }
+    #game-status.finished { background: #facc1520; color: #ca8a04; display: block; }
+
+    /* ── Telegram ID prompt ── */
+    #id-prompt {
+      max-width: 420px;
+      margin: 60px auto;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 28px 24px;
+      text-align: center;
+      box-shadow: var(--shadow);
+    }
+
+    #id-prompt h2 { font-size: 1.1rem; margin-bottom: 12px; }
+    #id-prompt p  { font-size: 0.83rem; color: var(--sub); margin-bottom: 18px; }
+
+    .input-row {
+      display: flex;
+      gap: 8px;
+    }
+
+    .input-row input {
+      flex: 1;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text);
+      padding: 10px 14px;
+      font-size: 0.95rem;
+      outline: none;
+    }
+
+    .input-row input:focus { border-color: #6366f1; }
+
+    .btn-sm {
+      padding: 10px 18px;
+      border-radius: 10px;
+      border: none;
+      background: #6366f1;
+      color: #fff;
+      font-weight: 700;
+      cursor: pointer;
+      font-size: 0.9rem;
+    }
+
+    #main-content { display: none; }
+    #main-content.visible { display: block; }
+
+    #error-msg {
+      max-width: 420px;
+      margin: 80px auto;
+      text-align: center;
+      color: var(--red);
+      font-size: 1.1rem;
+      font-weight: 700;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>🃏 <span>Blackjack</span></h1>
+</header>
+
+<div id="status-bar">
+  <div id="dot"></div>
+  <span id="status-text">Connexion…</span>
+</div>
+
+<!-- Shown if session not found -->
+<div id="error-msg" style="display:none">❌ Session introuvable ou expirée.</div>
+
+<!-- Player ID prompt -->
+<div id="id-prompt">
+  <h2>Qui es-tu ?</h2>
+  <p>Entre ton ID Telegram pour jouer.<br>Tu le trouves en envoyant <code>/solde</code> au bot — l'ID est visible dans les logs ou demande à un admin.</p>
+  <div class="input-row">
+    <input type="number" id="tid-input" placeholder="Ton ID Telegram" autocomplete="off"/>
+    <button class="btn-sm" onclick="confirmId()">OK</button>
+  </div>
+  <p style="margin-top:12px;font-size:0.75rem;color:var(--muted)">Ton ID reste dans ce navigateur uniquement.</p>
+</div>
+
+<!-- Main game UI -->
+<div id="main-content">
+  <div id="game-status" class="waiting">⏳ En attente de joueurs…</div>
+
+  <div class="section" id="dealer-section">
+    <div class="section-title">🏠 Croupier</div>
+    <div id="dealer-area">
+      <div class="hand-display" id="dealer-hand"></div>
+      <div class="hand-value" id="dealer-value"></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">👥 Joueurs</div>
+    <div id="players-area"></div>
+  </div>
+
+  <div id="action-area">
+    <div class="action-title">C'est ton tour — que fais-tu ?</div>
+    <div class="action-buttons">
+      <button class="btn btn-hit" id="btn-hit" onclick="sendAction('hit')">🃏 Hit</button>
+      <button class="btn btn-stand" id="btn-stand" onclick="sendAction('stand')">✋ Stand</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const API = location.hostname === 'localhost'
+    ? 'http://localhost:8001'
+    : 'https://drunk-l34t.onrender.com';
+
+  const params = new URLSearchParams(location.search);
+  const SESSION_TOKEN = params.get('session');
+
+  let myTid = parseInt(localStorage.getItem('bj_tid') || '0');
+  let ws = null;
+  let lastState = null;
+
+  // ── Init ──
+  if (!SESSION_TOKEN) {
+    document.getElementById('error-msg').style.display = 'block';
+    document.getElementById('id-prompt').style.display = 'none';
+  } else if (myTid) {
+    showMain();
+  }
+
+  function confirmId() {
+    const val = parseInt(document.getElementById('tid-input').value.trim());
+    if (!val || val < 1000) {
+      alert('ID invalide.');
+      return;
+    }
+    myTid = val;
+    localStorage.setItem('bj_tid', String(myTid));
+    showMain();
+  }
+
+  function showMain() {
+    document.getElementById('id-prompt').style.display = 'none';
+    document.getElementById('main-content').classList.add('visible');
+    connect();
+  }
+
+  // ── Helpers ──
+  function cardColor(card) {
+    if (card === '?' || !card) return '';
+    const suit = card.slice(-1);
+    return (suit === '♥' || suit === '♦') ? 'red' : '';
+  }
+
+  function renderCards(hand, hideSecond) {
+    return hand.map((c, i) => {
+      if (c === '?' || (hideSecond && i === 1)) {
+        return `<div class="playing-card hidden">?</div>`;
+      }
+      return `<div class="playing-card ${cardColor(c)}">${c}</div>`;
+    }).join('');
+  }
+
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  // ── State render ──
+  function render(state) {
+    lastState = state;
+    const statusEl = document.getElementById('game-status');
+    statusEl.className = state.status;
+
+    if (state.status === 'waiting') {
+      statusEl.textContent = '⏳ En attente de joueurs — le créateur doit taper /lancerbj';
+    } else if (state.status === 'active') {
+      statusEl.textContent = '🎮 Partie en cours !';
+    } else if (state.status === 'finished') {
+      statusEl.textContent = '🏁 Partie terminée !';
+    }
+
+    // Dealer
+    const dHand = state.dealer_hand || [];
+    document.getElementById('dealer-hand').innerHTML = renderCards(dHand, false);
+    if (state.dealer_value !== null && state.dealer_value !== undefined) {
+      document.getElementById('dealer-value').textContent = `Total : ${state.dealer_value}`;
+    } else if (dHand.length > 0) {
+      document.getElementById('dealer-value').textContent = '(carte cachée)';
+    } else {
+      document.getElementById('dealer-value').textContent = '';
+    }
+
+    // Players
+    const area = document.getElementById('players-area');
+    area.innerHTML = state.players.map(p => {
+      const isMe = p.telegram_id === myTid || (lastState && state.players.find(x => x.telegram_id === myTid && x.username === p.username));
+      const playing = p.status === 'playing';
+
+      let resultHtml = '';
+      if (p.result === 'win') resultHtml = '<div class="result-label result-win-label">🏆 Gagné !</div>';
+      else if (p.result === 'lose') resultHtml = '<div class="result-label result-lose-label">💸 Perdu</div>';
+      else if (p.result === 'push') resultHtml = '<div class="result-label result-push-label">🤝 Égalité</div>';
+      else if (p.result === 'blackjack') resultHtml = '<div class="result-label result-bj-label">🎉 BLACKJACK !</div>';
+
+      let badgeClass = 'badge-waiting';
+      if (p.status === 'playing') badgeClass = 'badge-playing';
+      else if (p.status === 'stand') badgeClass = 'badge-stand';
+      else if (p.status === 'bust') badgeClass = 'badge-bust';
+      else if (p.status === 'done') badgeClass = 'badge-done';
+
+      const statusLabels = { playing: '🎮 Joue', stand: '✋ Stand', bust: '💥 Bust', done: '✅ Done', waiting: '⏳ Attend' };
+
+      // Compute hand value for display
+      let valDisplay = '';
+      if (p.hand && p.hand.length > 0) {
+        const total = computeHandValue(p.hand);
+        valDisplay = ` = ${total}`;
+      }
+
+      return `<div class="player-card ${p.result ? 'result-' + p.result : ''}" id="pc-${esc(p.username)}">
+        <div class="player-name">
+          <span>${esc(p.username)}</span>
+          <span class="player-status-badge ${badgeClass}">${statusLabels[p.status] || p.status}</span>
+        </div>
+        <div class="player-bet">Mise : ${p.bet} 🪙</div>
+        <div class="hand-display">${renderCards(p.hand || [], false)}</div>
+        ${p.hand && p.hand.length ? `<div class="hand-value">${valDisplay}</div>` : ''}
+        ${resultHtml}
+      </div>`;
+    }).join('');
+
+    // Show action buttons if it's my turn
+    const me = state.players.find(p => p.username === myUsername());
+    const actionArea = document.getElementById('action-area');
+    if (me && me.status === 'playing' && state.status === 'active') {
+      actionArea.classList.add('visible');
+      document.getElementById('btn-hit').disabled = false;
+      document.getElementById('btn-stand').disabled = false;
+    } else {
+      actionArea.classList.remove('visible');
+    }
+  }
+
+  function myUsername() {
+    if (!lastState) return null;
+    // We don't know the username from the TID without an extra lookup.
+    // We store it after first state if we find our TID.
+    return _myUsername;
+  }
+
+  let _myUsername = localStorage.getItem('bj_username') || null;
+
+  function computeHandValue(hand) {
+    let total = 0;
+    let aces = 0;
+    for (const c of hand) {
+      if (c === '?') continue;
+      const r = c.slice(0, -1);
+      if (r === 'A') { total += 11; aces++; }
+      else if (['J','Q','K'].includes(r)) total += 10;
+      else total += parseInt(r);
+    }
+    while (total > 21 && aces) { total -= 10; aces--; }
+    return total;
+  }
+
+  // ── WebSocket ──
+  function setStatus(ok, txt) {
+    document.getElementById('dot').className = ok ? 'ok' : '';
+    document.getElementById('status-text').textContent = txt;
+  }
+
+  function connect() {
+    if (!SESSION_TOKEN) return;
+    const wsUrl = API.replace('http', 'ws').replace('https', 'wss') + `/ws/blackjack/${SESSION_TOKEN}`;
+    ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => {
+      setStatus(true, 'Connecté');
+    };
+
+    ws.onmessage = e => {
+      const state = JSON.parse(e.data);
+      // Try to find our username from our TID
+      if (myTid && !_myUsername) {
+        // We can't match without telegram_id in the state payload.
+        // For now username matching is done when user sets their name.
+      }
+      render(state);
+      setStatus(true, 'Mis à jour à ' + new Date().toLocaleTimeString('fr-FR'));
+    };
+
+    ws.onclose = () => {
+      setStatus(false, 'Reconnexion…');
+      setTimeout(connect, 3000);
+    };
+
+    ws.onerror = () => ws.close();
+  }
+
+  function sendAction(action) {
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    document.getElementById('btn-hit').disabled = true;
+    document.getElementById('btn-stand').disabled = true;
+    ws.send(JSON.stringify({ action, telegram_id: myTid }));
+  }
+</script>
+</body>
+</html>

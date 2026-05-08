@@ -90,6 +90,10 @@ def init_db():
         _execute("ALTER TABLE users ADD COLUMN last_inactivity_notif TEXT")
     except Exception:
         pass
+    try:
+        _execute("ALTER TABLE users ADD COLUMN coins INTEGER DEFAULT 100")
+    except Exception:
+        pass
     _pipeline([
         ("""CREATE TABLE IF NOT EXISTS users (
             telegram_id INTEGER PRIMARY KEY,
@@ -115,6 +119,42 @@ def init_db():
             logged_at   TEXT NOT NULL DEFAULT (datetime('now'))
         )""", []),
         ("CREATE TABLE IF NOT EXISTS banned_users (telegram_id INTEGER PRIMARY KEY)", []),
+        ("""CREATE TABLE IF NOT EXISTS transactions (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            telegram_id INTEGER NOT NULL,
+            amount      INTEGER NOT NULL,
+            reason      TEXT NOT NULL,
+            created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+        )""", []),
+        ("""CREATE TABLE IF NOT EXISTS bets (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            challenger_id INTEGER NOT NULL,
+            opponent_id   INTEGER NOT NULL,
+            bet_type      TEXT NOT NULL,
+            amount        INTEGER NOT NULL,
+            end_time      TEXT,
+            status        TEXT NOT NULL DEFAULT 'pending',
+            winner_id     INTEGER,
+            created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+        )""", []),
+        ("""CREATE TABLE IF NOT EXISTS blackjack_sessions (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            token      TEXT NOT NULL UNIQUE,
+            creator_id INTEGER NOT NULL,
+            status     TEXT NOT NULL DEFAULT 'waiting',
+            deck       TEXT NOT NULL DEFAULT '[]',
+            dealer_hand TEXT NOT NULL DEFAULT '[]',
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )""", []),
+        ("""CREATE TABLE IF NOT EXISTS blackjack_players (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id INTEGER NOT NULL,
+            telegram_id INTEGER NOT NULL,
+            bet        INTEGER NOT NULL DEFAULT 0,
+            hand       TEXT NOT NULL DEFAULT '[]',
+            status     TEXT NOT NULL DEFAULT 'waiting',
+            result     TEXT
+        )""", []),
     ])
 
 
@@ -339,4 +379,125 @@ def get_drinks_by_session(session_id: int) -> list[dict]:
     return _fetchall(
         "SELECT drink_key, alc_grams, logged_at FROM drink_logs WHERE session_id=? ORDER BY logged_at",
         [session_id]
+    )
+
+
+# ── Coins & Transactions ──────────────────────────────────────────────────────
+
+def get_coins(telegram_id: int) -> int:
+    row = _fetchone("SELECT coins FROM users WHERE telegram_id=?", [telegram_id])
+    return int(row["coins"] or 0) if row else 0
+
+
+def add_coins(telegram_id: int, amount: int, reason: str) -> int:
+    _execute("UPDATE users SET coins = coins + ? WHERE telegram_id=?", [amount, telegram_id])
+    _execute(
+        "INSERT INTO transactions (telegram_id, amount, reason) VALUES (?, ?, ?)",
+        [telegram_id, amount, reason]
+    )
+    return get_coins(telegram_id)
+
+
+def get_transactions(telegram_id: int, limit: int = 20) -> list[dict]:
+    return _fetchall(
+        "SELECT amount, reason, created_at FROM transactions WHERE telegram_id=? ORDER BY created_at DESC LIMIT ?",
+        [telegram_id, limit]
+    )
+
+
+def get_all_balances() -> list[dict]:
+    return _fetchall("SELECT telegram_id, username, coins FROM users ORDER BY coins DESC")
+
+
+# ── Bets ──────────────────────────────────────────────────────────────────────
+
+def create_bet(challenger_id: int, opponent_id: int, bet_type: str, amount: int, end_time: str | None) -> int:
+    result = _execute(
+        "INSERT INTO bets (challenger_id, opponent_id, bet_type, amount, end_time) VALUES (?, ?, ?, ?, ?)",
+        [challenger_id, opponent_id, bet_type, amount, end_time]
+    )
+    return int(result["last_insert_rowid"])
+
+
+def get_pending_bet_for(opponent_id: int) -> dict | None:
+    return _fetchone(
+        "SELECT * FROM bets WHERE opponent_id=? AND status='pending' ORDER BY created_at DESC LIMIT 1",
+        [opponent_id]
+    )
+
+
+def accept_bet(bet_id: int):
+    _execute("UPDATE bets SET status='active' WHERE id=?", [bet_id])
+
+
+def cancel_bet(bet_id: int):
+    _execute("UPDATE bets SET status='cancelled' WHERE id=?", [bet_id])
+
+
+def get_active_bets() -> list[dict]:
+    return _fetchall("SELECT * FROM bets WHERE status='active'")
+
+
+def settle_bet(bet_id: int, winner_id: int):
+    _execute("UPDATE bets SET status='settled', winner_id=? WHERE id=?", [winner_id, bet_id])
+
+
+def get_bet(bet_id: int) -> dict | None:
+    return _fetchone("SELECT * FROM bets WHERE id=?", [bet_id])
+
+
+# ── Blackjack ─────────────────────────────────────────────────────────────────
+
+def create_blackjack_session(creator_id: int, token: str) -> int:
+    result = _execute(
+        "INSERT INTO blackjack_sessions (creator_id, token) VALUES (?, ?)",
+        [creator_id, token]
+    )
+    return int(result["last_insert_rowid"])
+
+
+def get_blackjack_session(token: str) -> dict | None:
+    return _fetchone("SELECT * FROM blackjack_sessions WHERE token=?", [token])
+
+
+def get_blackjack_session_by_id(session_id: int) -> dict | None:
+    return _fetchone("SELECT * FROM blackjack_sessions WHERE id=?", [session_id])
+
+
+def update_blackjack_session(session_id: int, **kwargs):
+    sets = ", ".join(f"{k}=?" for k in kwargs)
+    vals = list(kwargs.values()) + [session_id]
+    _execute(f"UPDATE blackjack_sessions SET {sets} WHERE id=?", vals)
+
+
+def add_blackjack_player(session_id: int, telegram_id: int, bet: int):
+    _execute(
+        "INSERT OR IGNORE INTO blackjack_players (session_id, telegram_id, bet) VALUES (?, ?, ?)",
+        [session_id, telegram_id, bet]
+    )
+
+
+def get_blackjack_players(session_id: int) -> list[dict]:
+    return _fetchall("SELECT * FROM blackjack_players WHERE session_id=?", [session_id])
+
+
+def update_blackjack_player(session_id: int, telegram_id: int, **kwargs):
+    sets = ", ".join(f"{k}=?" for k in kwargs)
+    vals = list(kwargs.values()) + [session_id, telegram_id]
+    _execute(f"UPDATE blackjack_players SET {sets} WHERE session_id=? AND telegram_id=?", vals)
+
+
+def get_blackjack_session_by_player(telegram_id: int) -> dict | None:
+    return _fetchone("""
+        SELECT bs.* FROM blackjack_sessions bs
+        JOIN blackjack_players bp ON bs.id = bp.session_id
+        WHERE bp.telegram_id=? AND bs.status IN ('waiting', 'active')
+        ORDER BY bs.created_at DESC LIMIT 1
+    """, [telegram_id])
+
+
+def _get_waiting_session_by_creator(telegram_id: int) -> dict | None:
+    return _fetchone(
+        "SELECT * FROM blackjack_sessions WHERE creator_id=? AND status='waiting' ORDER BY created_at DESC LIMIT 1",
+        [telegram_id]
     )

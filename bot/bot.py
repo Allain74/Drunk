@@ -1,4 +1,6 @@
 import os
+import json
+import secrets
 import logging
 from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
@@ -7,22 +9,32 @@ import httpx
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import (
     ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler,
-    ContextTypes, Application, filters
+    ConversationHandler, ContextTypes, Application, filters
 )
 from core.drinks import DRINKS, list_drinks_text
 from core.widmark import alcohol_grams, total_bac, bac_label, sober_in_hours
 from core.recap import build_weekly_recap
+from core.blackjack import new_deck, hand_value, is_blackjack, display_hand, dealer_should_hit
 from data.database import (
     init_db, upsert_user, get_user, get_user_by_username, get_all_users,
     start_session, get_active_session, log_drink, get_session_drinks,
     get_session_drinks_detail, delete_last_drink, end_session, update_location,
-    is_banned, ban_user, unban_user, rename_user, get_top_drinks, update_max_bac
+    is_banned, ban_user, unban_user, rename_user, get_top_drinks, update_max_bac,
+    get_coins, add_coins, get_transactions, get_all_balances,
+    create_bet, get_pending_bet_for, accept_bet, cancel_bet, settle_bet, get_bet,
+    create_blackjack_session, get_blackjack_session, update_blackjack_session,
+    add_blackjack_player, get_blackjack_players, update_blackjack_player,
+    get_blackjack_session_by_player, _get_waiting_session_by_creator,
 )
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
 
 ADMIN_ID = int(os.environ.get("ADMIN_ID", "0"))
+
+# ── Conversation states ───────────────────────────────────────────────────────
+BET_TYPE, BET_OPPONENT, BET_TIME, BET_AMOUNT = range(4)
+BJ_MODE, BJ_PLAYERS, BJ_BET, BJ_PLAYING = range(4, 8)
 
 ALIAS_MAP: dict[str, str] = {}
 for key, drink in DRINKS.items():
@@ -185,6 +197,7 @@ async def _send_drink_response(reply_func, tid: int, drink_key: str, user_data: 
         text += f"\n\n💧 *{nb} verres — pense à boire de l'eau !*"
 
     update_max_bac(tid, bac)
+    add_coins(tid, 5, f"Verre bu ({DRINKS[drink_key].name})")
     await reply_func(text, parse_mode="Markdown", reply_markup=_quick_keyboard(tid, drink_key))
 
     if nb == 1:
@@ -578,6 +591,560 @@ async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await _do_drink(update, ctx, drink_key)
 
 
+# ── /solde ────────────────────────────────────────────────────────────────────
+
+async def cmd_solde(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    tid = update.effective_user.id
+    coins = get_coins(tid)
+    txs = get_transactions(tid, 5)
+    lines = [f"🪙 *Ton solde : {coins} BeerCoins*\n", "*Dernières transactions :*"]
+    for t in txs:
+        sign = "+" if t["amount"] > 0 else ""
+        lines.append(f"{sign}{t['amount']} 🪙 — {t['reason']}")
+
+    all_bal = get_all_balances()
+    rank = next((i + 1 for i, b in enumerate(all_bal) if b["telegram_id"] == tid), "?")
+    lines.append(f"\n_Classement : #{rank} sur {len(all_bal)}_")
+    await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+
+
+# ── /offrir ───────────────────────────────────────────────────────────────────
+
+async def cmd_offrir(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    tid = update.effective_user.id
+    if len(ctx.args) < 2:
+        await update.message.reply_text("Usage : /offrir <prénom> <montant>")
+        return
+    target = get_user_by_username(ctx.args[0])
+    if not target:
+        await update.message.reply_text(f"❌ Utilisateur '{ctx.args[0]}' introuvable.")
+        return
+    try:
+        amount = int(ctx.args[1])
+        assert amount > 0
+    except Exception:
+        await update.message.reply_text("❌ Montant invalide.")
+        return
+    sender = get_user(tid)
+    if get_coins(tid) < amount:
+        await update.message.reply_text("❌ Solde insuffisant.")
+        return
+    add_coins(tid, -amount, f"Offert à {target['username']}")
+    add_coins(target["telegram_id"], amount, f"Reçu de {sender['username']}")
+    await update.message.reply_text(
+        f"✅ {amount} 🪙 envoyés à *{target['username']}* !",
+        parse_mode="Markdown"
+    )
+    try:
+        await ctx.bot.send_message(
+            chat_id=target["telegram_id"],
+            text=(f"🎁 *{sender['username']}* t'a offert *{amount} 🪙* !\n"
+                  f"💰 Nouveau solde : {get_coins(target['telegram_id'])} 🪙"),
+            parse_mode="Markdown"
+        )
+    except Exception:
+        pass
+
+
+# ── /pari conversation ────────────────────────────────────────────────────────
+
+async def cmd_pari_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    tid = update.effective_user.id
+    if not get_user(tid):
+        await update.message.reply_text("❌ Configure ton profil d'abord : /p 80 h")
+        return ConversationHandler.END
+    await update.message.reply_text(
+        "🎰 *Quel type de pari ?*\n\n"
+        "1️⃣ Plus de verres — qui boit le plus ?\n"
+        "2️⃣ Plus ivre — qui a le TAC le plus haut ?\n"
+        "3️⃣ Pile ou face — 50/50 immédiat\n\n"
+        "_Réponds avec le numéro_",
+        parse_mode="Markdown"
+    )
+    return BET_TYPE
+
+
+async def cmd_pari_type(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    choice = update.message.text.strip()
+    if choice not in ("1", "2", "3"):
+        await update.message.reply_text("❌ Réponds avec 1, 2 ou 3.")
+        return BET_TYPE
+    ctx.user_data["bet_type"] = {"1": "verres", "2": "ivre", "3": "coinflip"}[choice]
+    await update.message.reply_text("👤 Contre qui ? (entre le prénom)")
+    return BET_OPPONENT
+
+
+async def cmd_pari_opponent(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    target = get_user_by_username(update.message.text.strip())
+    if not target:
+        await update.message.reply_text("❌ Utilisateur introuvable. Réessaie.")
+        return BET_OPPONENT
+    if target["telegram_id"] == update.effective_user.id:
+        await update.message.reply_text("❌ Tu peux pas parier contre toi-même.")
+        return BET_OPPONENT
+    ctx.user_data["bet_opponent"] = target
+    bet_type = ctx.user_data["bet_type"]
+    if bet_type in ("verres", "ivre"):
+        await update.message.reply_text("⏰ À quelle heure on règle le pari ? (ex: 23h00 ou 01h30)")
+        return BET_TIME
+    else:
+        coins = get_coins(update.effective_user.id)
+        await update.message.reply_text(f"💰 Quelle est ta mise ? (solde : {coins} 🪙)")
+        return BET_AMOUNT
+
+
+async def cmd_pari_time(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    import re
+    text = update.message.text.strip().replace("h", ":").replace("H", ":")
+    match = re.match(r"(\d{1,2})[:\s]?(\d{0,2})", text)
+    if not match:
+        await update.message.reply_text("❌ Format invalide. Exemple : 23h00 ou 01h30")
+        return BET_TIME
+    hour = int(match.group(1))
+    minute = int(match.group(2)) if match.group(2) else 0
+    ctx.user_data["bet_time"] = f"{hour:02d}:{minute:02d}"
+    coins = get_coins(update.effective_user.id)
+    await update.message.reply_text(f"💰 Quelle est ta mise ? (solde : {coins} 🪙)")
+    return BET_AMOUNT
+
+
+async def cmd_pari_amount(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    tid = update.effective_user.id
+    try:
+        amount = int(update.message.text.strip())
+        assert amount > 0
+    except Exception:
+        await update.message.reply_text("❌ Montant invalide.")
+        return BET_AMOUNT
+    if get_coins(tid) < amount:
+        await update.message.reply_text(f"❌ Solde insuffisant (tu as {get_coins(tid)} 🪙).")
+        return BET_AMOUNT
+
+    opponent = ctx.user_data["bet_opponent"]
+    if get_coins(opponent["telegram_id"]) < amount:
+        await update.message.reply_text(f"❌ {opponent['username']} n'a pas assez de 🪙.")
+        return ConversationHandler.END
+
+    bet_type = ctx.user_data["bet_type"]
+    end_time = ctx.user_data.get("bet_time")
+    sender = get_user(tid)
+
+    bet_id = create_bet(tid, opponent["telegram_id"], bet_type, amount, end_time)
+
+    type_labels = {"verres": "plus de verres", "ivre": "TAC le plus haut", "coinflip": "pile ou face"}
+    label = type_labels[bet_type]
+    end_str = f" (règlement à {end_time})" if end_time else ""
+
+    msg = (
+        f"🎰 *{sender['username']}* te propose un pari !\n\n"
+        f"Type : *{label}*{end_str}\n"
+        f"Mise : *{amount} 🪙*\n\n"
+        f"Réponds /accepter pour accepter ou /refuser pour décliner."
+    )
+
+    ctx.user_data.clear()
+
+    try:
+        await ctx.bot.send_message(chat_id=opponent["telegram_id"], text=msg, parse_mode="Markdown")
+    except Exception:
+        pass
+
+    await update.message.reply_text(
+        f"✅ Pari envoyé à *{opponent['username']}* — en attente de sa réponse !",
+        parse_mode="Markdown"
+    )
+    return ConversationHandler.END
+
+
+async def cmd_pari_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    ctx.user_data.clear()
+    await update.message.reply_text("❌ Pari annulé.")
+    return ConversationHandler.END
+
+
+# ── /accepter & /refuser ──────────────────────────────────────────────────────
+
+async def cmd_accepter(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    tid = update.effective_user.id
+    bet = get_pending_bet_for(tid)
+    if not bet:
+        await update.message.reply_text("❌ Aucun pari en attente.")
+        return
+
+    if get_coins(tid) < bet["amount"]:
+        await update.message.reply_text("❌ Solde insuffisant pour accepter ce pari.")
+        return
+
+    if bet["bet_type"] == "coinflip":
+        import random as _rand
+        winner_id = _rand.choice([bet["challenger_id"], bet["opponent_id"]])
+        loser_id = bet["opponent_id"] if winner_id == bet["challenger_id"] else bet["challenger_id"]
+        settle_bet(bet["id"], winner_id)
+        winner = get_user(winner_id)
+        loser = get_user(loser_id)
+        add_coins(winner_id, bet["amount"], f"Pari gagné contre {loser['username']}")
+        add_coins(loser_id, -bet["amount"], f"Pari perdu contre {winner['username']}")
+        result_msg = (
+            f"🪙 *Pile ou face !*\n\n"
+            f"🏆 Gagnant : *{winner['username']}* +{bet['amount']} 🪙\n"
+            f"💸 Perdant : *{loser['username']}* -{bet['amount']} 🪙"
+        )
+        for uid in [bet["challenger_id"], bet["opponent_id"]]:
+            try:
+                await ctx.bot.send_message(chat_id=uid, text=result_msg, parse_mode="Markdown")
+            except Exception:
+                pass
+    else:
+        accept_bet(bet["id"])
+        type_labels = {"verres": "plus de verres", "ivre": "TAC le plus haut"}
+        label = type_labels.get(bet["bet_type"], bet["bet_type"])
+        end_str = f" à {bet['end_time']}" if bet.get("end_time") else ""
+        msg = f"✅ Pari accepté ! *{label}*{end_str} — mise : {bet['amount']} 🪙\nBonne chance ! 🍀"
+        await update.message.reply_text(msg, parse_mode="Markdown")
+        try:
+            await ctx.bot.send_message(
+                chat_id=bet["challenger_id"],
+                text=f"✅ *{get_user(tid)['username']}* a accepté ton pari ! {msg}",
+                parse_mode="Markdown"
+            )
+        except Exception:
+            pass
+
+
+async def cmd_refuser(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    tid = update.effective_user.id
+    bet = get_pending_bet_for(tid)
+    if not bet:
+        await update.message.reply_text("❌ Aucun pari en attente.")
+        return
+    cancel_bet(bet["id"])
+    await update.message.reply_text("❌ Pari refusé.")
+    try:
+        await ctx.bot.send_message(
+            chat_id=bet["challenger_id"],
+            text=f"❌ *{get_user(tid)['username']}* a refusé ton pari.",
+            parse_mode="Markdown"
+        )
+    except Exception:
+        pass
+
+
+# ── /blackjack conversation ───────────────────────────────────────────────────
+
+async def cmd_bj_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    tid = update.effective_user.id
+    if not get_user(tid):
+        await update.message.reply_text("❌ Configure ton profil d'abord : /p 80 h")
+        return ConversationHandler.END
+    coins = get_coins(tid)
+    if coins <= 0:
+        await update.message.reply_text("❌ Tu n'as plus de 🪙 pour jouer.")
+        return ConversationHandler.END
+    await update.message.reply_text(
+        "🃏 *Blackjack !*\n\n"
+        "Solo ou multi ?\n"
+        "1️⃣ Solo (contre le croupier)\n"
+        "2️⃣ Multi (invite des joueurs)",
+        parse_mode="Markdown"
+    )
+    return BJ_MODE
+
+
+async def cmd_bj_mode(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    choice = update.message.text.strip()
+    if choice not in ("1", "2"):
+        await update.message.reply_text("❌ Réponds 1 (solo) ou 2 (multi).")
+        return BJ_MODE
+    ctx.user_data["bj_mode"] = "solo" if choice == "1" else "multi"
+    if ctx.user_data["bj_mode"] == "multi":
+        await update.message.reply_text(
+            "👥 Qui invites-tu ? (entre les prénoms séparés par des espaces)\nEx: Thomas Lucas Marie"
+        )
+        return BJ_PLAYERS
+    else:
+        coins = get_coins(update.effective_user.id)
+        await update.message.reply_text(f"💰 Quelle est ta mise ? (solde : {coins} 🪙)")
+        return BJ_BET
+
+
+async def cmd_bj_players(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    tid = update.effective_user.id
+    names = update.message.text.strip().split()
+    players = []
+    not_found = []
+    for name in names:
+        u = get_user_by_username(name)
+        if u and u["telegram_id"] != tid:
+            players.append(u)
+        else:
+            not_found.append(name)
+    if not_found:
+        await update.message.reply_text(f"❌ Introuvable : {', '.join(not_found)}. Réessaie.")
+        return BJ_PLAYERS
+    if not players:
+        await update.message.reply_text("❌ Aucun joueur valide.")
+        return BJ_PLAYERS
+    ctx.user_data["bj_invited"] = players
+    coins = get_coins(tid)
+    await update.message.reply_text(f"💰 Quelle est ta mise ? (solde : {coins} 🪙)")
+    return BJ_BET
+
+
+async def cmd_bj_bet(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    tid = update.effective_user.id
+    try:
+        bet = int(update.message.text.strip())
+        assert 1 <= bet <= get_coins(tid)
+    except Exception:
+        await update.message.reply_text(f"❌ Mise invalide (solde : {get_coins(tid)} 🪙).")
+        return BJ_BET
+
+    ctx.user_data["bj_bet"] = bet
+    token = secrets.token_urlsafe(8)
+    session_id = create_blackjack_session(tid, token)
+    ctx.user_data["bj_token"] = token
+    ctx.user_data["bj_session_id"] = session_id
+
+    site = os.environ.get("SITE_URL", "https://drunk-weld.vercel.app")
+    bj_url = f"{site}/blackjack.html?session={token}"
+
+    if ctx.user_data.get("bj_mode") == "solo":
+        deck = new_deck()
+        player_hand = [deck.pop(), deck.pop()]
+        dealer_hand = [deck.pop(), deck.pop()]
+
+        update_blackjack_session(session_id,
+            status="active",
+            deck=json.dumps(deck),
+            dealer_hand=json.dumps(dealer_hand)
+        )
+        add_blackjack_player(session_id, tid, bet)
+        update_blackjack_player(session_id, tid, hand=json.dumps(player_hand), status="playing")
+
+        add_coins(tid, -bet, "Mise blackjack")
+
+        text = (
+            f"🃏 *Blackjack — Partie solo*\n\n"
+            f"🎴 Ta main : {display_hand(player_hand)}\n"
+            f"🏠 Croupier : {display_hand(dealer_hand, hide_second=True)}\n\n"
+        )
+
+        if is_blackjack(player_hand):
+            winnings = int(bet * 1.5)
+            add_coins(tid, bet + winnings, "Blackjack ! (×1.5)")
+            update_blackjack_player(session_id, tid, status="done", result="blackjack")
+            update_blackjack_session(session_id, status="finished")
+            text += f"🎉 *BLACKJACK !* Tu gagnes {winnings} 🪙 !"
+            await update.message.reply_text(text, parse_mode="Markdown")
+        else:
+            text += f"🎰 Joue sur le site : {bj_url}\n\nOu tape *hit* (carte) / *stand* (rester)"
+            ctx.user_data["bj_active"] = True
+            await update.message.reply_text(text, parse_mode="Markdown")
+            return BJ_PLAYING
+
+        ctx.user_data.clear()
+        return ConversationHandler.END
+    else:
+        invited = ctx.user_data.get("bj_invited", [])
+        add_blackjack_player(session_id, tid, bet)
+        add_coins(tid, -bet, "Mise blackjack")
+
+        names = ", ".join(u["username"] for u in invited)
+        msg = (
+            f"🃏 *{get_user(tid)['username']}* t'invite à une partie de Blackjack !\n"
+            f"Mise : {bet} 🪙\n"
+            f"Rejoins ici : {bj_url}\n\n"
+            f"Ou tape /rejoindrebj {token} <mise>"
+        )
+        for u in invited:
+            try:
+                await ctx.bot.send_message(chat_id=u["telegram_id"], text=msg, parse_mode="Markdown")
+            except Exception:
+                pass
+
+        await update.message.reply_text(
+            f"✅ Invitations envoyées à {names} !\n"
+            f"Lien : {bj_url}\n"
+            f"Tape /lancerbj quand tout le monde est prêt.",
+            parse_mode="Markdown"
+        )
+        ctx.user_data.clear()
+        return ConversationHandler.END
+
+
+async def cmd_bj_play(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Handle hit/stand during solo play via Telegram."""
+    tid = update.effective_user.id
+    action = update.message.text.strip().lower()
+
+    session = get_blackjack_session_by_player(tid)
+    if not session:
+        await update.message.reply_text("❌ Aucune partie en cours.")
+        return ConversationHandler.END
+
+    players = get_blackjack_players(session["id"])
+    player = next((p for p in players if p["telegram_id"] == tid), None)
+    if not player or player["status"] != "playing":
+        return ConversationHandler.END
+
+    hand = json.loads(player["hand"])
+    deck = json.loads(session["deck"])
+    dealer_hand = json.loads(session["dealer_hand"])
+
+    if action in ("hit", "carte", "h"):
+        card = deck.pop()
+        hand.append(card)
+        update_blackjack_session(session["id"], deck=json.dumps(deck))
+        val = hand_value(hand)
+
+        if val > 21:
+            update_blackjack_player(session["id"], tid, hand=json.dumps(hand), status="bust", result="lose")
+            update_blackjack_session(session["id"], status="finished")
+            bet = player["bet"]
+            await update.message.reply_text(
+                f"🃏 Ta main : {display_hand(hand)}\n💥 *Bust !* Tu perds {bet} 🪙.",
+                parse_mode="Markdown"
+            )
+            return ConversationHandler.END
+        else:
+            update_blackjack_player(session["id"], tid, hand=json.dumps(hand))
+            await update.message.reply_text(
+                f"🃏 Ta main : {display_hand(hand)}\n"
+                f"🏠 Croupier : {display_hand(dealer_hand, hide_second=True)}\n\n"
+                f"*hit* (carte) / *stand* (rester)",
+                parse_mode="Markdown"
+            )
+            return BJ_PLAYING
+
+    elif action in ("stand", "rester", "s"):
+        update_blackjack_player(session["id"], tid, hand=json.dumps(hand), status="stand")
+
+        while hand_value(dealer_hand) < 17:
+            dealer_hand.append(deck.pop())
+
+        update_blackjack_session(session["id"],
+            dealer_hand=json.dumps(dealer_hand),
+            deck=json.dumps(deck),
+            status="finished"
+        )
+
+        player_val = hand_value(hand)
+        dealer_val = hand_value(dealer_hand)
+        bet = player["bet"]
+
+        result_text = f"🃏 Ta main : {display_hand(hand)}\n🏠 Croupier : {display_hand(dealer_hand)}\n\n"
+
+        if dealer_val > 21 or player_val > dealer_val:
+            add_coins(tid, bet * 2, f"Blackjack gagné (vs croupier {dealer_val})")
+            update_blackjack_player(session["id"], tid, result="win")
+            result_text += f"🏆 *Tu gagnes !* +{bet} 🪙"
+        elif player_val == dealer_val:
+            add_coins(tid, bet, "Blackjack égalité")
+            update_blackjack_player(session["id"], tid, result="push")
+            result_text += "🤝 *Égalité !* Mise remboursée."
+        else:
+            update_blackjack_player(session["id"], tid, result="lose")
+            result_text += f"💸 *Perdu !* -{bet} 🪙"
+
+        await update.message.reply_text(result_text, parse_mode="Markdown")
+        return ConversationHandler.END
+
+    else:
+        await update.message.reply_text("Tape *hit* ou *stand*", parse_mode="Markdown")
+        return BJ_PLAYING
+
+
+async def cmd_bj_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    ctx.user_data.clear()
+    await update.message.reply_text("❌ Blackjack annulé.")
+    return ConversationHandler.END
+
+
+# ── /rejoindrebj & /lancerbj ──────────────────────────────────────────────────
+
+async def cmd_rejoindre_bj(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    tid = update.effective_user.id
+    if not get_user(tid):
+        await update.message.reply_text("❌ Configure ton profil : /p 80 h")
+        return
+    if len(ctx.args) < 2:
+        await update.message.reply_text("Usage : /rejoindrebj <token> <mise>")
+        return
+    token, bet_str = ctx.args[0], ctx.args[1]
+    session = get_blackjack_session(token)
+    if not session or session["status"] != "waiting":
+        await update.message.reply_text("❌ Session introuvable ou déjà commencée.")
+        return
+    try:
+        bet = int(bet_str)
+        assert 1 <= bet <= get_coins(tid)
+    except Exception:
+        await update.message.reply_text(f"❌ Mise invalide (solde : {get_coins(tid)} 🪙).")
+        return
+
+    existing = get_blackjack_players(session["id"])
+    if any(p["telegram_id"] == tid for p in existing):
+        await update.message.reply_text("❌ Tu as déjà rejoint cette partie.")
+        return
+
+    add_blackjack_player(session["id"], tid, bet)
+    add_coins(tid, -bet, "Mise blackjack")
+    user = get_user(tid)
+    await update.message.reply_text(f"✅ Tu as rejoint la partie ! Mise : {bet} 🪙")
+    try:
+        await ctx.bot.send_message(
+            chat_id=session["creator_id"],
+            text=f"✅ *{user['username']}* a rejoint la partie ! (mise : {bet} 🪙)",
+            parse_mode="Markdown"
+        )
+    except Exception:
+        pass
+
+
+async def cmd_lancer_bj(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    tid = update.effective_user.id
+
+    session_row = _get_waiting_session_by_creator(tid)
+    if not session_row:
+        await update.message.reply_text("❌ Aucune partie en attente.")
+        return
+
+    players = get_blackjack_players(session_row["id"])
+    if len(players) < 2:
+        await update.message.reply_text("❌ Il faut au moins 2 joueurs.")
+        return
+
+    deck = new_deck()
+    dealer_hand = [deck.pop(), deck.pop()]
+
+    for p in players:
+        hand = [deck.pop(), deck.pop()]
+        update_blackjack_player(session_row["id"], p["telegram_id"],
+            hand=json.dumps(hand), status="playing")
+        site = os.environ.get("SITE_URL", "https://drunk-weld.vercel.app")
+        bj_url = f"{site}/blackjack.html?session={session_row['token']}"
+        try:
+            await ctx.bot.send_message(
+                chat_id=p["telegram_id"],
+                text=(
+                    f"🃏 *La partie commence !*\n\n"
+                    f"🎴 Ta main : {display_hand(hand)}\n"
+                    f"🏠 Croupier : {display_hand(dealer_hand, hide_second=True)}\n\n"
+                    f"Joue ici : {bj_url}"
+                ),
+                parse_mode="Markdown"
+            )
+        except Exception:
+            pass
+
+    update_blackjack_session(session_row["id"],
+        status="active",
+        deck=json.dumps(deck),
+        dealer_hand=json.dumps(dealer_hand)
+    )
+    await update.message.reply_text("✅ Partie lancée ! Tout le monde a reçu sa main.")
+
+
 # ── App ───────────────────────────────────────────────────────────────────────
 
 def create_application() -> Application:
@@ -612,6 +1179,45 @@ def create_application() -> Application:
             if cmd not in registered and cmd.replace("9", "").replace("6", "").isalpha():
                 app.add_handler(CommandHandler(cmd, lambda u, c, k=key: _do_drink(u, c, k)))
                 registered.add(cmd)
+
+    # ── ConversationHandlers (must come BEFORE generic text handler) ──────────
+    pari_conv = ConversationHandler(
+        entry_points=[
+            CommandHandler("pari", cmd_pari_start),
+            MessageHandler(filters.Regex(r'^(?i)pari$'), cmd_pari_start),
+        ],
+        states={
+            BET_TYPE:     [MessageHandler(filters.TEXT & ~filters.COMMAND, cmd_pari_type)],
+            BET_OPPONENT: [MessageHandler(filters.TEXT & ~filters.COMMAND, cmd_pari_opponent)],
+            BET_TIME:     [MessageHandler(filters.TEXT & ~filters.COMMAND, cmd_pari_time)],
+            BET_AMOUNT:   [MessageHandler(filters.TEXT & ~filters.COMMAND, cmd_pari_amount)],
+        },
+        fallbacks=[CommandHandler("annuler", cmd_pari_cancel)],
+        per_user=True,
+    )
+
+    bj_conv = ConversationHandler(
+        entry_points=[CommandHandler("blackjack", cmd_bj_start)],
+        states={
+            BJ_MODE:    [MessageHandler(filters.TEXT & ~filters.COMMAND, cmd_bj_mode)],
+            BJ_PLAYERS: [MessageHandler(filters.TEXT & ~filters.COMMAND, cmd_bj_players)],
+            BJ_BET:     [MessageHandler(filters.TEXT & ~filters.COMMAND, cmd_bj_bet)],
+            BJ_PLAYING: [MessageHandler(filters.TEXT & ~filters.COMMAND, cmd_bj_play)],
+        },
+        fallbacks=[CommandHandler("annuler", cmd_bj_cancel)],
+        per_user=True,
+    )
+
+    app.add_handler(pari_conv)
+    app.add_handler(bj_conv)
+
+    # ── New commands ──────────────────────────────────────────────────────────
+    app.add_handler(CommandHandler("solde",       cmd_solde))
+    app.add_handler(CommandHandler("offrir",      cmd_offrir))
+    app.add_handler(CommandHandler("accepter",    cmd_accepter))
+    app.add_handler(CommandHandler("refuser",     cmd_refuser))
+    app.add_handler(CommandHandler("rejoindrebj", cmd_rejoindre_bj))
+    app.add_handler(CommandHandler("lancerbj",    cmd_lancer_bj))
 
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
     app.add_handler(MessageHandler(filters.LOCATION, handle_location))

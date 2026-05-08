@@ -277,6 +277,26 @@
     .breakdown-item { display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border); font-size:0.88rem; }
     .breakdown-item:last-child { border-bottom:none; }
     .breakdown-count { font-weight:700; color:#6366f1; }
+
+    /* ── Thune ── */
+    #thune-panel { max-width:1000px; margin:0 auto; }
+    .thune-table { width:100%; border-collapse:collapse; background:var(--card); border-radius:16px; overflow:hidden; box-shadow:var(--shadow); }
+    .thune-table th { background:var(--border); padding:10px 16px; text-align:left; font-size:0.75rem; color:var(--sub); font-weight:600; text-transform:uppercase; }
+    .thune-table td { padding:12px 16px; border-top:1px solid var(--border); font-size:0.9rem; }
+    .thune-table tr:hover td { background:var(--bg); cursor:pointer; }
+    .coin-badge { display:inline-block; background:#facc15; color:#78350f; font-weight:700; border-radius:8px; padding:2px 10px; font-size:0.92rem; }
+
+    /* ── Modal thune ── */
+    .modal-bg3 { display:none; position:fixed; inset:0; background:#0007; z-index:100; align-items:center; justify-content:center; padding:16px; }
+    .modal-bg3.open { display:flex; }
+    .modal3 { background:var(--card); border-radius:20px; padding:24px; width:100%; max-width:480px; position:relative; max-height:80vh; overflow-y:auto; }
+    .modal3 h3 { font-size:1.1rem; font-weight:700; margin-bottom:16px; }
+    .modal3-close { position:absolute; top:16px; right:16px; background:none; border:none; font-size:1.4rem; cursor:pointer; color:var(--sub); }
+    .tx-item { display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border); font-size:0.85rem; }
+    .tx-item:last-child { border-bottom:none; }
+    .tx-pos { color:#22c55e; font-weight:700; }
+    .tx-neg { color:#ef4444; font-weight:700; }
+    .tx-time { color:var(--sub); font-size:0.72rem; }
   </style>
 </head>
 <body>
@@ -295,6 +315,7 @@
   <button class="tab active" onclick="showTab('live')">📊 Live</button>
   <button class="tab" onclick="showTab('defi')">🏆 Défi</button>
   <button class="tab" onclick="showTab('palmares')">🏅 Palmarès</button>
+  <button class="tab" onclick="showTab('thune')">💰 Ma thune</button>
 </div>
 
 <!-- Live -->
@@ -322,6 +343,23 @@
     <thead><tr><th>#</th><th>Joueur</th><th>Doses total</th><th>Moy./jour conso</th><th>Record ever</th><th>Verres</th><th>Alcool pur</th></tr></thead>
     <tbody id="palmares-tbody"></tbody>
   </table>
+</div>
+
+<!-- Ma thune -->
+<div id="thune-panel" class="panel">
+  <table class="thune-table">
+    <thead><tr><th>#</th><th>Joueur</th><th>BeerCoins</th></tr></thead>
+    <tbody id="thune-tbody"></tbody>
+  </table>
+</div>
+
+<!-- Modal thune détail -->
+<div class="modal-bg3" id="modal-bg3" onclick="closeModal3(event)">
+  <div class="modal3">
+    <button class="modal3-close" onclick="closeModal3()">✕</button>
+    <h3 id="modal3-title"></h3>
+    <div id="modal3-content"></div>
+  </div>
 </div>
 
 <!-- Modal all-time détail -->
@@ -379,12 +417,14 @@
 
   // ── Tabs ──
   function showTab(name) {
-    const tabs = ['live','defi','palmares'];
+    const tabs = ['live','defi','palmares','thune'];
     document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', tabs[i]===name));
     document.getElementById('live-panel').classList.toggle('active', name==='live');
     document.getElementById('defi-panel').classList.toggle('active', name==='defi');
     document.getElementById('palmares-panel').classList.toggle('active', name==='palmares');
+    document.getElementById('thune-panel').classList.toggle('active', name==='thune');
     if (name === 'palmares') loadPalmares();
+    if (name === 'thune') loadThune();
   }
 
   // ── Cards ──
@@ -650,6 +690,53 @@
   }
 
   connect();
+
+  // ── Thune ──
+  let _thune = [];
+
+  async function loadThune() {
+    _thune = await fetch(`${API}/coins`).then(r => r.json());
+    const medals = ['🥇','🥈','🥉'];
+    const tbody = document.getElementById('thune-tbody');
+    tbody.innerHTML = _thune.map((u, i) => `
+      <tr onclick="openModal3('${esc(u.username)}')">
+        <td>${medals[i] || i+1}</td>
+        <td><strong>${esc(u.username)}</strong></td>
+        <td><span class="coin-badge">🪙 ${u.coins}</span></td>
+      </tr>`).join('');
+  }
+
+  function openModal3(username) {
+    const user = _thune.find(u => u.username === username);
+    if (!user) return;
+    document.getElementById('modal3-title').textContent = `🪙 ${username} — ${user.coins} BeerCoins`;
+    const content = document.getElementById('modal3-content');
+    if (!user.transactions || !user.transactions.length) {
+      content.innerHTML = '<p style="color:var(--sub);margin-top:8px">Aucune transaction.</p>';
+    } else {
+      content.innerHTML = user.transactions.map(t => {
+        const pos = t.amount >= 0;
+        const sign = pos ? '+' : '';
+        const cls = pos ? 'tx-pos' : 'tx-neg';
+        const d = new Date(t.at);
+        const fmt = d.toLocaleString('fr-FR', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+        return `<div class="tx-item">
+          <span>${esc(t.reason)}</span>
+          <span>
+            <span class="${cls}">${sign}${t.amount} 🪙</span>
+            <br><span class="tx-time">${fmt}</span>
+          </span>
+        </div>`;
+      }).join('');
+    }
+    document.getElementById('modal-bg3').classList.add('open');
+  }
+
+  function closeModal3(e) {
+    if (!e || e.target === document.getElementById('modal-bg3')) {
+      document.getElementById('modal-bg3').classList.remove('open');
+    }
+  }
 </script>
 </body>
 </html>
