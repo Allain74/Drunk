@@ -231,6 +231,11 @@ async def _danger_loop():
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
+@app.api_route("/ping", methods=["GET", "HEAD"])
+async def ping():
+    return {"ok": True}
+
+
 @app.get("/snapshot")
 def get_snapshot():
     return build_snapshot()
