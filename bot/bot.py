@@ -846,6 +846,18 @@ async def cmd_bj_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not get_user(tid):
         await update.message.reply_text("❌ Configure ton profil d'abord : /p 80 h")
         return ConversationHandler.END
+
+    # Rembourser toute partie non terminée
+    old = get_blackjack_session_by_player(tid)
+    if old:
+        players = get_blackjack_players(old["id"])
+        player = next((p for p in players if p["telegram_id"] == tid), None)
+        if player and player["bet"] > 0 and player["status"] not in ("bust", "done"):
+            add_coins(tid, player["bet"], "Remboursement partie abandonnée")
+            update_blackjack_player(old["id"], tid, status="done", result="abandoned")
+            await update.message.reply_text(f"↩️ Ancienne partie annulée — *{player['bet']} 🪙* remboursés.", parse_mode="Markdown")
+        update_blackjack_session(old["id"], status="finished")
+
     coins = get_coins(tid)
     if coins <= 0:
         await update.message.reply_text("❌ Tu n'as plus de 🪙 pour jouer.")
