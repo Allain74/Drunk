@@ -936,7 +936,7 @@ async def cmd_bj_bet(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         text = (
             f"🃏 *Blackjack — Partie solo*\n\n"
             f"🎴 Ta main : {display_hand(player_hand)}\n"
-            f"🏠 Croupier : {display_hand(dealer_hand, hide_second=True)}\n\n"
+            f"🏠 Croupier : {display_hand(dealer_hand, hide_second=True)}"
         )
 
         if is_blackjack(player_hand):
@@ -944,12 +944,10 @@ async def cmd_bj_bet(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             add_coins(tid, bet + winnings, "Blackjack ! (×1.5)")
             update_blackjack_player(session_id, tid, status="done", result="blackjack")
             update_blackjack_session(session_id, status="finished")
-            text += f"🎉 *BLACKJACK !* Tu gagnes {winnings} 🪙 !"
+            text += f"\n\n🎉 *BLACKJACK !* Tu gagnes {winnings} 🪙 !"
             await update.message.reply_text(text, parse_mode="Markdown")
         else:
-            text += f"🎰 Joue sur le site : {bj_url}\n\nOu tape *hit* (carte) / *stand* (rester)"
-            ctx.user_data["bj_active"] = True
-            await update.message.reply_text(text, parse_mode="Markdown")
+            await update.message.reply_text(text, parse_mode="Markdown", reply_markup=_bj_keyboard())
             return BJ_PLAYING
 
         ctx.user_data.clear()
@@ -982,7 +980,14 @@ async def cmd_bj_bet(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         return ConversationHandler.END
 
 
-async def _bj_action(reply_func, tid: int, action: str, session: dict, bot=None) -> bool:
+def _bj_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([[
+        InlineKeyboardButton("🃏 Hit", callback_data="bj:hit"),
+        InlineKeyboardButton("✋ Stand", callback_data="bj:stand"),
+    ]])
+
+
+async def _bj_action(send_func, tid: int, action: str, session: dict, bot=None) -> bool:
     """Logique hit/stand partagée solo+multi. Retourne True si tour terminé."""
     players = get_blackjack_players(session["id"])
     player = next((p for p in players if p["telegram_id"] == tid), None)
@@ -993,31 +998,30 @@ async def _bj_action(reply_func, tid: int, action: str, session: dict, bot=None)
     deck = json.loads(session["deck"])
     dealer_hand = json.loads(session["dealer_hand"])
 
-    if action in ("hit", "carte"):
+    if action == "hit":
         card = deck.pop()
         hand.append(card)
         update_blackjack_session(session["id"], deck=json.dumps(deck))
         if hand_value(hand) > 21:
             update_blackjack_player(session["id"], tid, hand=json.dumps(hand), status="bust", result="lose")
-            await reply_func(
+            await send_func(
                 f"🃏 Ta main : {display_hand(hand)}\n💥 *Bust !* Tu perds {player['bet']} 🪙.",
                 parse_mode="Markdown"
             )
         else:
             update_blackjack_player(session["id"], tid, hand=json.dumps(hand))
-            await reply_func(
+            await send_func(
                 f"🃏 Ta main : {display_hand(hand)}\n"
-                f"🏠 Croupier : {display_hand(dealer_hand, hide_second=True)}\n\n"
-                f"*hit* (carte) / *stand* (rester)",
-                parse_mode="Markdown"
+                f"🏠 Croupier : {display_hand(dealer_hand, hide_second=True)}",
+                parse_mode="Markdown",
+                reply_markup=_bj_keyboard()
             )
             return False  # tour pas terminé
 
-    elif action in ("stand", "rester"):
+    elif action == "stand":
         update_blackjack_player(session["id"], tid, status="stand")
-        await reply_func("✅ Tu restes.", parse_mode="Markdown")
+        await send_func("✋ Tu restes.", parse_mode="Markdown")
     else:
-        await reply_func("Tape *hit* ou *stand*", parse_mode="Markdown")
         return False
 
     # Vérifier si tous les joueurs ont terminé leur tour
@@ -1055,7 +1059,7 @@ async def _bj_action(reply_func, tid: int, action: str, session: dict, bot=None)
             res = f"🃏 {display_hand(p_hand)}\n🏠 Croupier : {display_hand(dealer_hand)}\n\n💸 *Perdu !* -{bet} 🪙"
 
         if p["telegram_id"] == tid:
-            await reply_func(res, parse_mode="Markdown")
+            await send_func(res, parse_mode="Markdown")
         elif bot:
             try:
                 await bot.send_message(chat_id=p["telegram_id"], text=res, parse_mode="Markdown")
@@ -1064,16 +1068,36 @@ async def _bj_action(reply_func, tid: int, action: str, session: dict, bot=None)
     return True
 
 
-async def cmd_bj_play(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    """Handle hit/stand pendant la conversation solo."""
+async def handle_bj_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Gère les boutons Hit/Stand du blackjack."""
+    query = update.callback_query
+    await query.answer()
     tid = update.effective_user.id
-    action = update.message.text.strip().lower()
+    action = query.data.split(":")[1]  # "hit" ou "stand"
+
     session = get_blackjack_session_by_player(tid)
-    if not session:
-        await update.message.reply_text("❌ Aucune partie en cours.")
-        return ConversationHandler.END
-    done = await _bj_action(update.message.reply_text, tid, action, session, ctx.bot)
-    return ConversationHandler.END if done else BJ_PLAYING
+    if not session or session["status"] != "active":
+        await query.answer("❌ Aucune partie en cours.", show_alert=True)
+        return
+
+    players = get_blackjack_players(session["id"])
+    player = next((p for p in players if p["telegram_id"] == tid), None)
+    if not player or player["status"] != "playing":
+        await query.answer("C'est pas ton tour.", show_alert=True)
+        return
+
+    # Édite le message original pour retirer les boutons
+    try:
+        await query.edit_message_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+
+    await _bj_action(query.message.reply_text, tid, action, session, ctx.bot)
+
+
+async def cmd_bj_play(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Fallback texte pendant la conversation solo (normalement les boutons sont utilisés)."""
+    return BJ_PLAYING
 
 
 async def cmd_bj_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -1151,10 +1175,10 @@ async def cmd_lancer_bj(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                 text=(
                     f"🃏 *La partie commence !*\n\n"
                     f"🎴 Ta main : {display_hand(hand)}\n"
-                    f"🏠 Croupier : {display_hand(dealer_hand, hide_second=True)}\n\n"
-                    f"Joue ici : {bj_url}"
+                    f"🏠 Croupier : {display_hand(dealer_hand, hide_second=True)}"
                 ),
-                parse_mode="Markdown"
+                parse_mode="Markdown",
+                reply_markup=_bj_keyboard()
             )
         except Exception:
             pass
@@ -1244,6 +1268,7 @@ def create_application() -> Application:
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
     app.add_handler(MessageHandler(filters.LOCATION, handle_location))
     app.add_handler(CallbackQueryHandler(handle_drink_callback, pattern="^drink:"))
+    app.add_handler(CallbackQueryHandler(handle_bj_callback, pattern="^bj:"))
     return app
 
 
