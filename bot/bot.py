@@ -1184,7 +1184,7 @@ def create_application() -> Application:
     pari_conv = ConversationHandler(
         entry_points=[
             CommandHandler("pari", cmd_pari_start),
-            MessageHandler(filters.Regex(r'^(?i)pari$'), cmd_pari_start),
+            MessageHandler(filters.Regex(r'(?i)^pari$'), cmd_pari_start),
         ],
         states={
             BET_TYPE:     [MessageHandler(filters.TEXT & ~filters.COMMAND, cmd_pari_type)],
