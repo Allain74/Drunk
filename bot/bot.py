@@ -966,27 +966,36 @@ async def cmd_bj_bet(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         return ConversationHandler.END
     else:
         invited = ctx.user_data.get("bj_invited", [])
+        host = get_user(tid)
         add_blackjack_player(session_id, tid, bet)
         add_coins(tid, -bet, "Mise blackjack")
 
         names = ", ".join(u["username"] for u in invited)
-        msg = (
-            f"🃏 *{get_user(tid)['username']}* t'invite à une partie de Blackjack !\n"
-            f"Mise : {bet} 🪙\n"
-            f"Rejoins ici : {bj_url}\n\n"
-            f"Ou tape /rejoindrebj {token} <mise>"
-        )
+
+        # Invitation avec bouton Rejoindre pour chaque invité
+        join_kb = InlineKeyboardMarkup([[
+            InlineKeyboardButton(f"🃏 Rejoindre ({bet} 🪙)", callback_data=f"bj_join:{token}:{bet}")
+        ]])
         for u in invited:
             try:
-                await ctx.bot.send_message(chat_id=u["telegram_id"], text=msg, parse_mode="Markdown")
+                await ctx.bot.send_message(
+                    chat_id=u["telegram_id"],
+                    text=f"🃏 *{host['username']}* t'invite au Blackjack !\nMise : *{bet} 🪙*",
+                    parse_mode="Markdown",
+                    reply_markup=join_kb
+                )
             except Exception:
                 pass
 
+        # Bouton Lancer pour l'hôte
+        launch_kb = InlineKeyboardMarkup([[
+            InlineKeyboardButton("🚀 Lancer la partie", callback_data=f"bj_launch:{token}")
+        ]])
         await update.message.reply_text(
             f"✅ Invitations envoyées à {names} !\n"
-            f"Lien : {bj_url}\n"
-            f"Tape /lancerbj quand tout le monde est prêt.",
-            parse_mode="Markdown"
+            f"Clique sur *Lancer* quand tout le monde est prêt.",
+            parse_mode="Markdown",
+            reply_markup=launch_kb
         )
         ctx.user_data.clear()
         return ConversationHandler.END
@@ -1119,6 +1128,104 @@ async def cmd_bj_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 
 # ── /rejoindrebj & /lancerbj ──────────────────────────────────────────────────
+
+async def handle_bj_join_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Bouton 'Rejoindre' reçu par un invité."""
+    query = update.callback_query
+    await query.answer()
+    tid = update.effective_user.id
+    _, token, bet_str = query.data.split(":")
+    bet = int(bet_str)
+
+    if not get_user(tid):
+        await query.answer("❌ Configure ton profil : /p 80 h", show_alert=True)
+        return
+    session = get_blackjack_session(token)
+    if not session or session["status"] != "waiting":
+        await query.answer("❌ La partie a déjà commencé ou est introuvable.", show_alert=True)
+        return
+    existing = get_blackjack_players(session["id"])
+    if any(p["telegram_id"] == tid for p in existing):
+        await query.answer("Tu as déjà rejoint !", show_alert=True)
+        return
+    if get_coins(tid) < bet:
+        await query.answer(f"❌ Solde insuffisant ({get_coins(tid)} 🪙).", show_alert=True)
+        return
+
+    add_blackjack_player(session["id"], tid, bet)
+    add_coins(tid, -bet, "Mise blackjack")
+    user = get_user(tid)
+
+    # Retirer le bouton pour cet invité
+    try:
+        await query.edit_message_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+    await query.message.reply_text(f"✅ Tu as rejoint la partie ! Mise : {bet} 🪙")
+
+    # Notifier l'hôte
+    try:
+        await ctx.bot.send_message(
+            chat_id=session["creator_id"],
+            text=f"✅ *{user['username']}* a rejoint la partie !",
+            parse_mode="Markdown"
+        )
+    except Exception:
+        pass
+
+
+async def handle_bj_launch_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Bouton 'Lancer' cliqué par l'hôte."""
+    query = update.callback_query
+    await query.answer()
+    tid = update.effective_user.id
+    token = query.data.split(":")[1]
+
+    session = get_blackjack_session(token)
+    if not session or session["creator_id"] != tid:
+        await query.answer("❌ Réservé à l'hôte.", show_alert=True)
+        return
+    if session["status"] != "waiting":
+        await query.answer("La partie a déjà commencé.", show_alert=True)
+        return
+
+    players = get_blackjack_players(session["id"])
+    if len(players) < 2:
+        await query.answer("❌ Il faut au moins 2 joueurs.", show_alert=True)
+        return
+
+    # Retirer le bouton Lancer
+    try:
+        await query.edit_message_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+
+    # Distribuer les mains
+    deck = new_deck()
+    dealer_hand = [deck.pop(), deck.pop()]
+    for p in players:
+        hand = [deck.pop(), deck.pop()]
+        update_blackjack_player(session["id"], p["telegram_id"], hand=json.dumps(hand), status="playing")
+        try:
+            await ctx.bot.send_message(
+                chat_id=p["telegram_id"],
+                text=(
+                    f"🃏 *La partie commence !*\n\n"
+                    f"🎴 Ta main : {display_hand(hand)}\n"
+                    f"🏠 Croupier : {display_hand(dealer_hand, hide_second=True)}"
+                ),
+                parse_mode="Markdown",
+                reply_markup=_bj_keyboard()
+            )
+        except Exception:
+            pass
+
+    update_blackjack_session(session["id"],
+        status="active",
+        deck=json.dumps(deck),
+        dealer_hand=json.dumps(dealer_hand)
+    )
+
 
 async def cmd_rejoindre_bj(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     tid = update.effective_user.id
@@ -1283,8 +1390,10 @@ def create_application() -> Application:
 
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
     app.add_handler(MessageHandler(filters.LOCATION, handle_location))
-    app.add_handler(CallbackQueryHandler(handle_drink_callback, pattern="^drink:"))
-    app.add_handler(CallbackQueryHandler(handle_bj_callback, pattern="^bj:"))
+    app.add_handler(CallbackQueryHandler(handle_drink_callback,      pattern="^drink:"))
+    app.add_handler(CallbackQueryHandler(handle_bj_callback,         pattern="^bj:"))
+    app.add_handler(CallbackQueryHandler(handle_bj_join_callback,    pattern="^bj_join:"))
+    app.add_handler(CallbackQueryHandler(handle_bj_launch_callback,  pattern="^bj_launch:"))
     return app
 
 
