@@ -82,7 +82,7 @@ async def lifespan(app: FastAPI):
         BotCommand("aperol",     "🍹 Aperol spritz"),
         BotCommand("longisland", "🍹 Long Island"),
         BotCommand("ricard",     "🌿 Ricard / Pastis 2.5cl"),
-        BotCommand("perroquet",  "🦜 Perroquet 2.5cl"),
+        BotCommand("perroquet",  "🦜 Perroquet Sauvage (pastis + Get 27)"),
         BotCommand("get27",      "🍃 Get 27 4cl"),
         BotCommand("cidre",      "🍎 Cidre 25cl"),
         BotCommand("sangria",    "🍷 Sangria 20cl"),

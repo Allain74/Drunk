@@ -27,7 +27,7 @@ DRINKS: dict[str, Drink] = {
     "sangria":       Drink("Verre sangria",            200,  9.0,  ["sangria"]),
     "cidre":         Drink("Verre cidre",              250,  4.5,  ["cidre", "cider"]),
     "ricard":        Drink("Ricard / Pastis",             25, 45.0,  ["ricard", "pastis", "51"]),
-    "perroquet":     Drink("Perroquet",                  25, 45.0,  ["perroquet"]),
+    "perroquet":     Drink("Perroquet Sauvage 🦜",         45, 34.5,  ["perroquet", "sauvage"]),
     "get27":         Drink("Get 27",                     40, 21.4,  ["get27", "get"]),
     "bucket":        Drink("Bucket thaïlandais 🪣",     125, 40.0, ["bucket", "buckethai"]),
 }
