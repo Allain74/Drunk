@@ -1058,6 +1058,7 @@ async def _bj_action(send_func, tid: int, action: str, session: dict, bot=None) 
                 f"🃏 Ta main : {display_hand(hand)}\n💥 *Bust !* Tu perds {player['bet']} 🪙.",
                 parse_mode="Markdown"
             )
+            # Pas de broadcast intermédiaire — on continue pour vérifier all_done
         else:
             update_blackjack_player(session["id"], tid, hand=json.dumps(hand))
             await send_func(
@@ -1066,17 +1067,7 @@ async def _bj_action(send_func, tid: int, action: str, session: dict, bot=None) 
                 parse_mode="Markdown",
                 reply_markup=_bj_keyboard()
             )
-            # Broadcast état aux autres joueurs en multi
-            if is_multi and bot:
-                players = get_blackjack_players(session["id"])
-                state_txt = _bj_state_text(players, dealer_hand)
-                for p in players:
-                    if p["telegram_id"] != tid:
-                        try:
-                            await bot.send_message(chat_id=p["telegram_id"], text=state_txt, parse_mode="Markdown")
-                        except Exception:
-                            pass
-            return False
+            return False  # Pas encore terminé, pas de message aux autres
 
     elif action == "stand":
         update_blackjack_player(session["id"], tid, status="stand")
@@ -1084,18 +1075,8 @@ async def _bj_action(send_func, tid: int, action: str, session: dict, bot=None) 
     else:
         return False
 
-    # Broadcast état intermédiaire en multi
-    players = get_blackjack_players(session["id"])
-    if is_multi and bot:
-        state_txt = _bj_state_text(players, dealer_hand)
-        for p in players:
-            if p["telegram_id"] != tid:
-                try:
-                    await bot.send_message(chat_id=p["telegram_id"], text=state_txt, parse_mode="Markdown")
-                except Exception:
-                    pass
-
     # Vérifier si tous les joueurs ont terminé leur tour
+    players = get_blackjack_players(session["id"])
     all_done = all(p["status"] in ("stand", "bust") for p in players)
     if not all_done:
         return True
