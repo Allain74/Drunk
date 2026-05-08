@@ -9,16 +9,17 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg:     #0e1117;
-      --card:   #161b27;
-      --border: #1e2640;
-      --text:   #e8eaf6;
-      --sub:    #7986cb;
-      --muted:  #3a4060;
-      --shadow: 0 2px 16px #00000033;
-      --green:  #22c55e;
-      --red:    #ef4444;
-      --gold:   #facc15;
+      --bg:      #0d1117;
+      --card-bg: #161b27;
+      --border:  #1e2640;
+      --text:    #e8eaf6;
+      --sub:     #7986cb;
+      --muted:   #3a4060;
+      --green:   #22c55e;
+      --red:     #ef4444;
+      --gold:    #facc15;
+      --felt:    #1a6b3c;
+      --felt2:   #155c33;
     }
 
     body {
@@ -26,282 +27,224 @@
       background: var(--bg);
       color: var(--text);
       min-height: 100vh;
-      padding: 24px 16px 60px;
+      display: flex;
+      flex-direction: column;
     }
 
+    /* ─── Header ─── */
     header {
       text-align: center;
-      margin-bottom: 24px;
+      padding: 16px 16px 0;
     }
-
-    h1 {
-      font-size: clamp(1.4rem, 4vw, 2rem);
-      font-weight: 900;
-      letter-spacing: -1px;
-    }
-
-    h1 span {
-      background: linear-gradient(135deg, #6366f1, #06b6d4);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-    }
+    h1 { font-size: clamp(1.2rem, 4vw, 1.7rem); font-weight: 900; letter-spacing: -1px; }
+    h1 span { background: linear-gradient(135deg, #6366f1, #06b6d4); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
 
     #status-bar {
-      text-align: center;
-      font-size: 0.78rem;
-      color: var(--sub);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 6px;
-      margin-bottom: 24px;
+      text-align: center; font-size: 0.75rem; color: var(--sub);
+      display: flex; align-items: center; justify-content: center; gap: 6px;
+      padding: 6px 16px 0;
+    }
+    #dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); transition: background .4s; }
+    #dot.ok { background: var(--green); box-shadow: 0 0 6px #22c55e88; }
+
+    /* ─── Login prompt ─── */
+    #login-screen {
+      flex: 1; display: flex; align-items: center; justify-content: center; padding: 24px;
+    }
+    #login-box {
+      background: var(--card-bg); border: 1px solid var(--border); border-radius: 20px;
+      padding: 32px 28px; max-width: 400px; width: 100%; text-align: center;
+      box-shadow: 0 8px 32px #0008;
+    }
+    #login-box h2 { font-size: 1.2rem; margin-bottom: 8px; }
+    #login-box p  { font-size: 0.83rem; color: var(--sub); margin-bottom: 20px; }
+    .input-row { display: flex; gap: 8px; }
+    .input-row input {
+      flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: 10px;
+      color: var(--text); padding: 11px 14px; font-size: 0.95rem; outline: none;
+    }
+    .input-row input:focus { border-color: #6366f1; }
+    .btn-sm {
+      padding: 11px 18px; border-radius: 10px; border: none;
+      background: #6366f1; color: #fff; font-weight: 700; cursor: pointer; font-size: 0.9rem;
+      transition: opacity .15s;
+    }
+    .btn-sm:hover { opacity: 0.85; }
+    #login-error { margin-top: 10px; font-size: 0.8rem; color: var(--red); display: none; }
+
+    /* ─── Error screen ─── */
+    #error-screen {
+      flex: 1; display: none; align-items: center; justify-content: center;
+      text-align: center; color: var(--red); font-size: 1.1rem; font-weight: 700; padding: 24px;
     }
 
-    #dot { width:7px; height:7px; border-radius:50%; background:var(--muted); transition:background .4s; }
-    #dot.ok { background:#22c55e; box-shadow:0 0 6px #22c55e88; }
+    /* ─── Game ─── */
+    #game-screen { flex: 1; display: none; flex-direction: column; }
+    #game-screen.visible { display: flex; }
 
-    .section {
-      max-width: 700px;
-      margin: 0 auto 20px;
+    /* ─── Status banner ─── */
+    #game-banner {
+      text-align: center; font-size: 0.9rem; font-weight: 700; padding: 8px 16px;
+      display: none;
     }
+    #game-banner.waiting  { background: #6366f120; color: #818cf8; display: block; }
+    #game-banner.active   { background: #22c55e20; color: #22c55e; display: block; }
+    #game-banner.finished { background: #facc1520; color: #ca8a04; display: block; }
 
-    .section-title {
-      font-size: 0.75rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      color: var(--sub);
-      letter-spacing: 1px;
-      margin-bottom: 10px;
-    }
-
-    /* ── Dealer ── */
-    #dealer-area {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 20px;
-      box-shadow: var(--shadow);
-      text-align: center;
-      margin-bottom: 16px;
-    }
-
-    #dealer-area .dealer-label {
-      font-size: 0.8rem;
-      color: var(--sub);
-      margin-bottom: 8px;
-    }
-
-    /* ── Cards ── */
-    .hand-display {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      justify-content: center;
-      margin: 10px 0;
-    }
-
-    .playing-card {
-      background: #fff;
-      color: #111;
-      border-radius: 8px;
-      padding: 6px 12px;
-      font-weight: 700;
-      font-size: 1rem;
-      box-shadow: 0 2px 6px #0004;
-      min-width: 40px;
-      text-align: center;
-    }
-
-    .playing-card.red {
-      color: #dc2626;
-    }
-
-    .playing-card.hidden {
-      background: #6366f1;
-      color: transparent;
-      user-select: none;
-    }
-
-    .hand-value {
-      font-size: 0.85rem;
-      color: var(--sub);
-      margin-top: 4px;
-    }
-
-    /* ── Players ── */
-    #players-area {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-      gap: 14px;
-    }
-
-    .player-card {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 16px;
-      box-shadow: var(--shadow);
+    /* ─── Table felt ─── */
+    #table-wrap {
+      flex: 1; display: flex; flex-direction: column;
+      background: radial-gradient(ellipse at 50% 30%, var(--felt) 0%, var(--felt2) 60%, #0f3d22 100%);
+      padding: 20px 16px 100px; /* bottom space for action bar */
+      min-height: 0;
       position: relative;
     }
 
-    .player-card.active-player {
-      border-color: #6366f1;
-      box-shadow: 0 0 0 2px #6366f140;
+    /* Felt arc decorations */
+    #table-wrap::before {
+      content: '';
+      position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+      width: min(600px, 90vw); height: 4px;
+      background: rgba(255,255,255,0.08); border-radius: 0 0 100% 100%;
     }
 
-    .player-card.result-win { border-color: var(--green); }
-    .player-card.result-lose { border-color: var(--red); opacity: 0.7; }
-    .player-card.result-push { border-color: var(--gold); }
-    .player-card.result-blackjack { border-color: var(--gold); }
-
-    .player-name {
-      font-weight: 700;
-      font-size: 0.95rem;
-      margin-bottom: 8px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-
-    .player-status-badge {
-      font-size: 0.7rem;
-      padding: 2px 8px;
-      border-radius: 99px;
-      font-weight: 600;
-    }
-
-    .badge-playing { background: #6366f120; color: #818cf8; }
-    .badge-stand   { background: #22c55e20; color: #22c55e; }
-    .badge-bust    { background: #ef444420; color: #ef4444; }
-    .badge-done    { background: #facc1520; color: #ca8a04; }
-    .badge-waiting { background: var(--muted); color: var(--sub); }
-
-    .player-bet {
-      font-size: 0.75rem;
-      color: var(--sub);
-      margin-bottom: 8px;
-    }
-
-    .result-label {
-      font-weight: 700;
-      margin-top: 8px;
-      font-size: 0.9rem;
-    }
-
-    .result-win-label    { color: var(--green); }
-    .result-lose-label   { color: var(--red); }
-    .result-push-label   { color: var(--gold); }
-    .result-bj-label     { color: var(--gold); }
-
-    /* ── Actions ── */
-    #action-area {
-      max-width: 700px;
-      margin: 20px auto 0;
-      display: none;
-    }
-
-    #action-area.visible { display: block; }
-
-    .action-title {
+    /* ─── Dealer zone ─── */
+    #dealer-zone {
       text-align: center;
-      font-size: 0.85rem;
-      color: var(--sub);
-      margin-bottom: 12px;
+      margin-bottom: 16px;
+    }
+    .zone-label {
+      font-size: 0.7rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 2px; color: rgba(255,255,255,0.5); margin-bottom: 8px;
+    }
+    #dealer-cards { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+    #dealer-total {
+      margin-top: 6px; font-size: 0.85rem; color: rgba(255,255,255,0.6); font-weight: 600;
     }
 
-    .action-buttons {
-      display: flex;
-      gap: 12px;
-      justify-content: center;
+    /* ─── Felt divider ─── */
+    .felt-arc {
+      width: min(480px, 90vw); height: 2px; margin: 8px auto 20px;
+      background: rgba(255,255,255,0.12); border-radius: 50%;
     }
 
-    .btn {
-      padding: 14px 32px;
-      border-radius: 12px;
-      border: none;
+    /* ─── Players zone ─── */
+    #players-zone {
+      display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; align-items: flex-start;
+    }
+
+    /* ─── Player slot ─── */
+    .player-slot {
+      background: rgba(0,0,0,0.35); border: 2px solid rgba(255,255,255,0.12);
+      border-radius: 16px; padding: 14px 16px; min-width: 160px; max-width: 200px;
+      text-align: center; transition: border-color .3s, box-shadow .3s;
+      backdrop-filter: blur(4px);
+    }
+    .player-slot.is-me { border-color: #6366f1; box-shadow: 0 0 0 3px #6366f130, 0 4px 20px #0006; }
+    .player-slot.status-bust   { border-color: rgba(239,68,68,0.5); opacity: 0.7; }
+    .player-slot.status-stand  { border-color: rgba(34,197,94,0.4); }
+    .player-slot.result-win    { border-color: var(--green); box-shadow: 0 0 12px #22c55e44; }
+    .player-slot.result-lose   { border-color: rgba(239,68,68,0.4); opacity: 0.65; }
+    .player-slot.result-push   { border-color: var(--gold); }
+    .player-slot.result-blackjack { border-color: var(--gold); box-shadow: 0 0 16px #facc1566; }
+
+    .slot-name {
+      font-size: 0.82rem; font-weight: 700; margin-bottom: 4px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .slot-bet { font-size: 0.72rem; color: rgba(255,255,255,0.5); margin-bottom: 10px; }
+
+    .slot-cards { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; margin-bottom: 6px; }
+
+    .slot-total { font-size: 0.78rem; color: rgba(255,255,255,0.55); margin-bottom: 6px; }
+
+    .slot-badge {
+      display: inline-block; font-size: 0.68rem; font-weight: 700;
+      padding: 2px 9px; border-radius: 99px;
+    }
+    .badge-playing  { background: #6366f125; color: #818cf8; }
+    .badge-stand    { background: #22c55e20; color: var(--green); }
+    .badge-bust     { background: #ef444420; color: var(--red); }
+    .badge-done     { background: #facc1520; color: #ca8a04; }
+    .badge-waiting  { background: rgba(255,255,255,0.07); color: rgba(255,255,255,0.4); }
+
+    .slot-result {
+      font-size: 0.85rem; font-weight: 700; margin-top: 6px;
+    }
+    .slot-result.win       { color: var(--green); }
+    .slot-result.lose      { color: var(--red); }
+    .slot-result.push      { color: var(--gold); }
+    .slot-result.blackjack { color: var(--gold); }
+
+    /* ─── Playing Card ─── */
+    .card {
+      background: #fff;
+      color: #111;
+      border-radius: 7px;
+      padding: 4px 8px;
+      font-weight: 800;
       font-size: 1rem;
-      font-weight: 700;
-      cursor: pointer;
-      transition: transform .1s, opacity .1s;
+      box-shadow: 0 2px 8px #0005, 0 1px 0 #ddd inset;
+      min-width: 36px;
+      line-height: 1.1;
+      text-align: center;
+      user-select: none;
+      position: relative;
+    }
+    .card.suit-red { color: #dc2626; }
+    .card.hidden {
+      background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #2563eb 100%);
+      color: transparent; min-width: 36px;
+    }
+    .card.hidden::after {
+      content: '?';
+      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+      color: rgba(255,255,255,0.6); font-size: 1rem;
     }
 
-    .btn:active { transform: scale(0.97); }
-    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
-
+    /* ─── Action bar ─── */
+    #action-bar {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      background: rgba(13,17,23,0.95); backdrop-filter: blur(12px);
+      border-top: 1px solid var(--border);
+      padding: 14px 20px 20px; display: none;
+      z-index: 100;
+    }
+    #action-bar.visible { display: block; }
+    #action-bar .turn-label {
+      text-align: center; font-size: 0.8rem; color: var(--sub); margin-bottom: 10px;
+    }
+    .action-btns { display: flex; gap: 12px; max-width: 420px; margin: 0 auto; }
+    .btn-action {
+      flex: 1; padding: 15px; border-radius: 14px; border: none;
+      font-size: 1rem; font-weight: 800; cursor: pointer;
+      transition: transform .1s, opacity .15s;
+    }
+    .btn-action:active { transform: scale(0.96); }
+    .btn-action:disabled { opacity: 0.35; cursor: not-allowed; }
     .btn-hit   { background: #6366f1; color: #fff; }
-    .btn-stand { background: #64748b; color: #fff; }
+    .btn-stand { background: #334155; color: #fff; }
 
-    /* ── Status banner ── */
-    #game-status {
-      max-width: 700px;
-      margin: 0 auto 20px;
-      text-align: center;
-      font-size: 1.1rem;
-      font-weight: 700;
-      padding: 12px;
-      border-radius: 12px;
+    /* ─── Waiting overlay ─── */
+    #waiting-overlay {
+      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.5); backdrop-filter: blur(2px); border-radius: 0;
       display: none;
     }
-
-    #game-status.waiting  { background: #6366f120; color: #818cf8; display: block; }
-    #game-status.active   { background: #22c55e20; color: #22c55e; display: block; }
-    #game-status.finished { background: #facc1520; color: #ca8a04; display: block; }
-
-    /* ── Telegram ID prompt ── */
-    #id-prompt {
-      max-width: 420px;
-      margin: 60px auto;
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 28px 24px;
-      text-align: center;
-      box-shadow: var(--shadow);
+    #waiting-overlay.visible { display: flex; }
+    .waiting-card {
+      background: var(--card-bg); border: 1px solid var(--border); border-radius: 20px;
+      padding: 28px 32px; text-align: center; max-width: 320px;
     }
+    .waiting-card h3 { font-size: 1.1rem; margin-bottom: 8px; }
+    .waiting-card p { font-size: 0.83rem; color: var(--sub); }
 
-    #id-prompt h2 { font-size: 1.1rem; margin-bottom: 12px; }
-    #id-prompt p  { font-size: 0.83rem; color: var(--sub); margin-bottom: 18px; }
-
-    .input-row {
-      display: flex;
-      gap: 8px;
-    }
-
-    .input-row input {
-      flex: 1;
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      color: var(--text);
-      padding: 10px 14px;
-      font-size: 0.95rem;
-      outline: none;
-    }
-
-    .input-row input:focus { border-color: #6366f1; }
-
-    .btn-sm {
-      padding: 10px 18px;
-      border-radius: 10px;
-      border: none;
-      background: #6366f1;
-      color: #fff;
-      font-weight: 700;
-      cursor: pointer;
-      font-size: 0.9rem;
-    }
-
-    #main-content { display: none; }
-    #main-content.visible { display: block; }
-
-    #error-msg {
-      max-width: 420px;
-      margin: 80px auto;
-      text-align: center;
-      color: var(--red);
-      font-size: 1.1rem;
-      font-weight: 700;
+    /* ─── Chips display ─── */
+    .chip {
+      display: inline-block; background: #facc15; color: #78350f;
+      border-radius: 50%; width: 26px; height: 26px; line-height: 26px;
+      font-size: 0.65rem; font-weight: 900; text-align: center;
+      border: 2px dashed #78350f; vertical-align: middle;
     }
   </style>
 </head>
@@ -310,48 +253,59 @@
 <header>
   <h1>🃏 <span>Blackjack</span></h1>
 </header>
-
 <div id="status-bar">
   <div id="dot"></div>
   <span id="status-text">Connexion…</span>
 </div>
 
-<!-- Shown if session not found -->
-<div id="error-msg" style="display:none">❌ Session introuvable ou expirée.</div>
+<!-- Error -->
+<div id="error-screen">❌ Session introuvable ou expirée.</div>
 
-<!-- Player ID prompt -->
-<div id="id-prompt">
-  <h2>Qui es-tu ?</h2>
-  <p>Entre ton prénom tel qu'enregistré sur le bot.</p>
-  <div class="input-row">
-    <input type="text" id="tid-input" placeholder="Ton prénom (ex: Thomas)" autocomplete="off" autocapitalize="words"/>
-    <button class="btn-sm" onclick="confirmId()">OK</button>
+<!-- Login -->
+<div id="login-screen">
+  <div id="login-box">
+    <h2>🃏 Rejoindre la table</h2>
+    <p>Entre ton prénom tel qu'enregistré sur le bot.</p>
+    <div class="input-row">
+      <input type="text" id="name-input" placeholder="Thomas, Lucas…" autocomplete="off" autocapitalize="words"/>
+      <button class="btn-sm" id="login-btn" onclick="doLogin()">OK</button>
+    </div>
+    <div id="login-error">Prénom introuvable — vérifie l'orthographe.</div>
   </div>
-  <p id="id-error" style="margin-top:10px;font-size:0.8rem;color:var(--red);display:none">Prénom introuvable, vérifie l'orthographe.</p>
 </div>
 
-<!-- Main game UI -->
-<div id="main-content">
-  <div id="game-status" class="waiting">⏳ En attente de joueurs…</div>
+<!-- Game -->
+<div id="game-screen">
+  <div id="game-banner"></div>
 
-  <div class="section" id="dealer-section">
-    <div class="section-title">🏠 Croupier</div>
-    <div id="dealer-area">
-      <div class="hand-display" id="dealer-hand"></div>
-      <div class="hand-value" id="dealer-value"></div>
+  <div id="table-wrap">
+    <!-- Waiting overlay -->
+    <div id="waiting-overlay">
+      <div class="waiting-card">
+        <h3>⏳ En attente de joueurs</h3>
+        <p>Le créateur doit appuyer sur <strong>Lancer la partie</strong> dans Telegram.</p>
+      </div>
     </div>
+
+    <!-- Dealer -->
+    <div id="dealer-zone">
+      <div class="zone-label">🏠 Croupier</div>
+      <div id="dealer-cards"></div>
+      <div id="dealer-total"></div>
+    </div>
+
+    <div class="felt-arc"></div>
+
+    <!-- Players -->
+    <div id="players-zone"></div>
   </div>
 
-  <div class="section">
-    <div class="section-title">👥 Joueurs</div>
-    <div id="players-area"></div>
-  </div>
-
-  <div id="action-area">
-    <div class="action-title">C'est ton tour — que fais-tu ?</div>
-    <div class="action-buttons">
-      <button class="btn btn-hit" id="btn-hit" onclick="sendAction('hit')">🃏 Hit</button>
-      <button class="btn btn-stand" id="btn-stand" onclick="sendAction('stand')">✋ Stand</button>
+  <!-- Action bar -->
+  <div id="action-bar">
+    <div class="turn-label">C'est ton tour — que fais-tu ?</div>
+    <div class="action-btns">
+      <button class="btn-action btn-hit"   id="btn-hit"   onclick="sendAction('hit')">🃏 Hit</button>
+      <button class="btn-action btn-stand" id="btn-stand" onclick="sendAction('stand')">✋ Stand</button>
     </div>
   </div>
 </div>
@@ -364,195 +318,185 @@
   const params = new URLSearchParams(location.search);
   const SESSION_TOKEN = params.get('session');
 
-  let myTid = parseInt(localStorage.getItem('bj_tid') || '0');
-  let ws = null;
+  let myTid  = parseInt(localStorage.getItem('bj_tid') || '0');
+  let myName = localStorage.getItem('bj_username') || '';
+  let ws     = null;
   let lastState = null;
 
-  // ── Init ──
+  // ── Boot ──────────────────────────────────────────────────────────────────────
   if (!SESSION_TOKEN) {
-    document.getElementById('error-msg').style.display = 'block';
-    document.getElementById('id-prompt').style.display = 'none';
+    showError();
   } else if (myTid) {
-    showMain();
-  }
-
-  async function confirmId() {
-    const name = document.getElementById('tid-input').value.trim();
-    if (!name) return;
-    const btn = document.querySelector('#id-prompt .btn-sm');
-    btn.textContent = '…';
-    btn.disabled = true;
-    try {
-      const r = await fetch(`${API}/lookup?name=${encodeURIComponent(name)}`);
-      const data = await r.json();
-      if (!data.found) {
-        document.getElementById('id-error').style.display = 'block';
-        btn.textContent = 'OK';
-        btn.disabled = false;
-        return;
-      }
-      myTid = data.telegram_id;
-      localStorage.setItem('bj_tid', String(myTid));
-      showMain();
-    } catch {
-      btn.textContent = 'OK';
-      btn.disabled = false;
-    }
-  }
-
-  document.getElementById('tid-input').addEventListener('keydown', e => {
-    if (e.key === 'Enter') confirmId();
-  });
-
-  function showMain() {
-    document.getElementById('id-prompt').style.display = 'none';
-    document.getElementById('main-content').classList.add('visible');
+    showGame();
     connect();
   }
+  // else: login screen shown by default
 
-  // ── Helpers ──
-  function cardColor(card) {
-    if (card === '?' || !card) return '';
+  // ── Login ─────────────────────────────────────────────────────────────────────
+  document.getElementById('name-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') doLogin();
+  });
+
+  async function doLogin() {
+    const name = document.getElementById('name-input').value.trim();
+    if (!name) return;
+    const btn = document.getElementById('login-btn');
+    btn.textContent = '…'; btn.disabled = true;
+    document.getElementById('login-error').style.display = 'none';
+    try {
+      const r = await fetch(`${API}/lookup?name=${encodeURIComponent(name)}`);
+      const d = await r.json();
+      if (!d.found) {
+        document.getElementById('login-error').style.display = 'block';
+        btn.textContent = 'OK'; btn.disabled = false;
+        return;
+      }
+      myTid  = d.telegram_id;
+      myName = d.username;
+      localStorage.setItem('bj_tid',      String(myTid));
+      localStorage.setItem('bj_username', myName);
+      showGame();
+      connect();
+    } catch {
+      btn.textContent = 'OK'; btn.disabled = false;
+    }
+  }
+
+  // ── Screen helpers ────────────────────────────────────────────────────────────
+  function showError() {
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('error-screen').style.display = 'flex';
+  }
+  function showGame() {
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('game-screen').classList.add('visible');
+  }
+
+  // ── Card helpers ──────────────────────────────────────────────────────────────
+  function isRed(card) {
+    if (!card || card === '?') return false;
     const suit = card.slice(-1);
-    return (suit === '♥' || suit === '♦') ? 'red' : '';
+    return suit === '♥' || suit === '♦';
   }
 
-  function renderCards(hand, hideSecond) {
-    return hand.map((c, i) => {
-      if (c === '?' || (hideSecond && i === 1)) {
-        return `<div class="playing-card hidden">?</div>`;
-      }
-      return `<div class="playing-card ${cardColor(c)}">${c}</div>`;
-    }).join('');
+  function renderCard(card, hidden = false) {
+    if (hidden || card === '?') return `<div class="card hidden"></div>`;
+    return `<div class="card ${isRed(card) ? 'suit-red' : ''}">${card}</div>`;
   }
 
-  function esc(s) {
-    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  function renderCards(hand, hideSecond = false) {
+    return hand.map((c, i) => renderCard(c, hideSecond && i === 1)).join('');
   }
 
-  // ── State render ──
-  function render(state) {
-    lastState = state;
-    const statusEl = document.getElementById('game-status');
-    statusEl.className = state.status;
-
-    if (state.status === 'waiting') {
-      statusEl.textContent = '⏳ En attente de joueurs — le créateur doit taper /lancerbj';
-    } else if (state.status === 'active') {
-      statusEl.textContent = '🎮 Partie en cours !';
-    } else if (state.status === 'finished') {
-      statusEl.textContent = '🏁 Partie terminée !';
-    }
-
-    // Dealer
-    const dHand = state.dealer_hand || [];
-    document.getElementById('dealer-hand').innerHTML = renderCards(dHand, false);
-    if (state.dealer_value !== null && state.dealer_value !== undefined) {
-      document.getElementById('dealer-value').textContent = `Total : ${state.dealer_value}`;
-    } else if (dHand.length > 0) {
-      document.getElementById('dealer-value').textContent = '(carte cachée)';
-    } else {
-      document.getElementById('dealer-value').textContent = '';
-    }
-
-    // Players
-    const area = document.getElementById('players-area');
-    area.innerHTML = state.players.map(p => {
-      const isMe = p.telegram_id === myTid || (lastState && state.players.find(x => x.telegram_id === myTid && x.username === p.username));
-      const playing = p.status === 'playing';
-
-      let resultHtml = '';
-      if (p.result === 'win') resultHtml = '<div class="result-label result-win-label">🏆 Gagné !</div>';
-      else if (p.result === 'lose') resultHtml = '<div class="result-label result-lose-label">💸 Perdu</div>';
-      else if (p.result === 'push') resultHtml = '<div class="result-label result-push-label">🤝 Égalité</div>';
-      else if (p.result === 'blackjack') resultHtml = '<div class="result-label result-bj-label">🎉 BLACKJACK !</div>';
-
-      let badgeClass = 'badge-waiting';
-      if (p.status === 'playing') badgeClass = 'badge-playing';
-      else if (p.status === 'stand') badgeClass = 'badge-stand';
-      else if (p.status === 'bust') badgeClass = 'badge-bust';
-      else if (p.status === 'done') badgeClass = 'badge-done';
-
-      const statusLabels = { playing: '🎮 Joue', stand: '✋ Stand', bust: '💥 Bust', done: '✅ Done', waiting: '⏳ Attend' };
-
-      // Compute hand value for display
-      let valDisplay = '';
-      if (p.hand && p.hand.length > 0) {
-        const total = computeHandValue(p.hand);
-        valDisplay = ` = ${total}`;
-      }
-
-      return `<div class="player-card ${p.result ? 'result-' + p.result : ''}" id="pc-${esc(p.username)}">
-        <div class="player-name">
-          <span>${esc(p.username)}</span>
-          <span class="player-status-badge ${badgeClass}">${statusLabels[p.status] || p.status}</span>
-        </div>
-        <div class="player-bet">Mise : ${p.bet} 🪙</div>
-        <div class="hand-display">${renderCards(p.hand || [], false)}</div>
-        ${p.hand && p.hand.length ? `<div class="hand-value">${valDisplay}</div>` : ''}
-        ${resultHtml}
-      </div>`;
-    }).join('');
-
-    // Show action buttons if it's my turn
-    const me = state.players.find(p => p.username === myUsername());
-    const actionArea = document.getElementById('action-area');
-    if (me && me.status === 'playing' && state.status === 'active') {
-      actionArea.classList.add('visible');
-      document.getElementById('btn-hit').disabled = false;
-      document.getElementById('btn-stand').disabled = false;
-    } else {
-      actionArea.classList.remove('visible');
-    }
-  }
-
-  function myUsername() {
-    if (!lastState) return null;
-    // We don't know the username from the TID without an extra lookup.
-    // We store it after first state if we find our TID.
-    return _myUsername;
-  }
-
-  let _myUsername = localStorage.getItem('bj_username') || null;
-
-  function computeHandValue(hand) {
-    let total = 0;
-    let aces = 0;
+  function computeValue(hand) {
+    let total = 0, aces = 0;
     for (const c of hand) {
-      if (c === '?') continue;
+      if (!c || c === '?') continue;
       const r = c.slice(0, -1);
       if (r === 'A') { total += 11; aces++; }
       else if (['J','Q','K'].includes(r)) total += 10;
-      else total += parseInt(r);
+      else total += parseInt(r) || 0;
     }
     while (total > 21 && aces) { total -= 10; aces--; }
     return total;
   }
 
-  // ── WebSocket ──
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, c =>
+      ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  // ── Status ────────────────────────────────────────────────────────────────────
   function setStatus(ok, txt) {
     document.getElementById('dot').className = ok ? 'ok' : '';
     document.getElementById('status-text').textContent = txt;
   }
 
+  // ── Render ────────────────────────────────────────────────────────────────────
+  function render(state) {
+    lastState = state;
+
+    // Banner
+    const banner = document.getElementById('game-banner');
+    const bannerText = { waiting: '⏳ En attente de joueurs…', active: '🎮 Partie en cours !', finished: '🏁 Partie terminée !' };
+    banner.className = state.status;
+    banner.textContent = bannerText[state.status] || '';
+
+    // Waiting overlay
+    document.getElementById('waiting-overlay').classList.toggle('visible', state.status === 'waiting');
+
+    // Dealer
+    const dHand = state.dealer_hand || [];
+    const hideDealer = state.status === 'active';
+    document.getElementById('dealer-cards').innerHTML = renderCards(dHand, false /* already hidden server-side */);
+    if (state.dealer_value != null && !hideDealer) {
+      document.getElementById('dealer-total').textContent = `Total : ${state.dealer_value}`;
+    } else if (dHand.length > 0) {
+      const visible = dHand.filter(c => c !== '?');
+      const visVal = visible.length ? computeValue(visible) : '?';
+      document.getElementById('dealer-total').textContent = visible.length < dHand.length
+        ? `Visible : ${visVal} + ?`
+        : `Total : ${computeValue(dHand)}`;
+    } else {
+      document.getElementById('dealer-total').textContent = '';
+    }
+
+    // Players
+    const zone = document.getElementById('players-zone');
+    zone.innerHTML = state.players.map(p => {
+      const isMe = p.telegram_id === myTid;
+      const hand = p.hand || [];
+      const total = hand.length ? computeValue(hand) : 0;
+
+      const statusLabels = { playing: '🎮 Joue', stand: '✋ Stand', bust: '💥 Bust', done: '✅ Done', waiting: '⏳ Attend' };
+      const badgeClass  = { playing: 'badge-playing', stand: 'badge-stand', bust: 'badge-bust', done: 'badge-done', waiting: 'badge-waiting' }[p.status] || 'badge-waiting';
+
+      let resultHtml = '';
+      const resultLabels = { win: '🏆 Gagné !', lose: '💸 Perdu', push: '🤝 Égalité', blackjack: '🎉 BLACKJACK !' };
+      if (p.result && resultLabels[p.result]) {
+        resultHtml = `<div class="slot-result ${esc(p.result)}">${resultLabels[p.result]}</div>`;
+      }
+
+      const slotClasses = [
+        'player-slot',
+        isMe ? 'is-me' : '',
+        p.result ? `result-${p.result}` : `status-${p.status}`,
+      ].filter(Boolean).join(' ');
+
+      return `<div class="${slotClasses}" id="slot-${p.telegram_id}">
+        <div class="slot-name">${esc(p.username)}${isMe ? ' 👤' : ''}</div>
+        <div class="slot-bet"><span class="chip">🪙</span> ${p.bet} BeerCoins</div>
+        <div class="slot-cards">${renderCards(hand, false)}</div>
+        ${hand.length ? `<div class="slot-total">= ${total}</div>` : ''}
+        <span class="slot-badge ${badgeClass}">${statusLabels[p.status] || p.status}</span>
+        ${resultHtml}
+      </div>`;
+    }).join('');
+
+    // Action bar
+    const me = state.players.find(p => p.telegram_id === myTid);
+    const actionBar = document.getElementById('action-bar');
+    if (me && me.status === 'playing' && state.status === 'active') {
+      actionBar.classList.add('visible');
+      document.getElementById('btn-hit').disabled   = false;
+      document.getElementById('btn-stand').disabled = false;
+    } else {
+      actionBar.classList.remove('visible');
+    }
+  }
+
+  // ── WebSocket ─────────────────────────────────────────────────────────────────
   function connect() {
     if (!SESSION_TOKEN) return;
-    const wsUrl = API.replace('http', 'ws').replace('https', 'wss') + `/ws/blackjack/${SESSION_TOKEN}`;
+    const wsUrl = API.replace(/^http/, 'ws') + `/ws/blackjack/${SESSION_TOKEN}`;
     ws = new WebSocket(wsUrl);
 
-    ws.onopen = () => {
-      setStatus(true, 'Connecté');
-    };
+    ws.onopen = () => setStatus(true, 'Connecté');
 
     ws.onmessage = e => {
       const state = JSON.parse(e.data);
-      // Try to find our username from our TID
-      if (myTid && !_myUsername) {
-        // We can't match without telegram_id in the state payload.
-        // For now username matching is done when user sets their name.
-      }
       render(state);
-      setStatus(true, 'Mis à jour à ' + new Date().toLocaleTimeString('fr-FR'));
+      setStatus(true, 'Mis à jour · ' + new Date().toLocaleTimeString('fr-FR'));
     };
 
     ws.onclose = () => {
@@ -565,7 +509,7 @@
 
   function sendAction(action) {
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
-    document.getElementById('btn-hit').disabled = true;
+    document.getElementById('btn-hit').disabled   = true;
     document.getElementById('btn-stand').disabled = true;
     ws.send(JSON.stringify({ action, telegram_id: myTid }));
   }

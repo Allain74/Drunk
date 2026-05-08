@@ -442,6 +442,7 @@ async def blackjack_ws(ws: WebSocket, token: str):
         for p in players:
             u = get_user(p["telegram_id"])
             player_data.append({
+                "telegram_id": p["telegram_id"],
                 "username": u["username"] if u else str(p["telegram_id"]),
                 "hand": json.loads(p["hand"]),
                 "status": p["status"],

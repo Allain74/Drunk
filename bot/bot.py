@@ -22,7 +22,8 @@ from data.database import (
     is_banned, ban_user, unban_user, rename_user, get_top_drinks, update_max_bac,
     get_coins, add_coins, get_transactions, get_all_balances,
     create_bet, get_pending_bet_for, accept_bet, cancel_bet, settle_bet, get_bet,
-    create_blackjack_session, get_blackjack_session, update_blackjack_session,
+    create_blackjack_session, get_blackjack_session, get_blackjack_session_by_id,
+    update_blackjack_session,
     add_blackjack_player, get_blackjack_players, update_blackjack_player,
     get_blackjack_session_by_player, _get_waiting_session_by_creator,
 )
@@ -1129,14 +1130,21 @@ async def _bj_action(send_func, tid: int, action: str, session: dict, bot=None) 
         "bust": lambda bet: f"💥 *Bust !* -{bet} 🪙",
     }
 
+    rematch_kb = InlineKeyboardMarkup([[
+        InlineKeyboardButton("🔄 Rejouer", callback_data=f"bj_rematch:{session['id']}")
+    ]])
+
     for p in players:
         result_line = RESULT_MSGS.get(p["result"], lambda b: "")(p["bet"])
         msg = f"{state_txt}\n\n{result_line}"
+        is_creator = p["telegram_id"] == session["creator_id"]
+        kb = rematch_kb if is_creator else None
         if p["telegram_id"] == tid:
-            await send_func(msg, parse_mode="Markdown")
+            await send_func(msg, parse_mode="Markdown", reply_markup=kb)
         elif bot:
             try:
-                await bot.send_message(chat_id=p["telegram_id"], text=msg, parse_mode="Markdown")
+                await bot.send_message(chat_id=p["telegram_id"], text=msg,
+                                       parse_mode="Markdown", reply_markup=kb)
             except Exception:
                 pass
     return True
@@ -1277,6 +1285,98 @@ async def handle_bj_launch_callback(update: Update, ctx: ContextTypes.DEFAULT_TY
         status="active",
         deck=json.dumps(deck),
         dealer_hand=json.dumps(dealer_hand)
+    )
+
+
+async def handle_bj_rematch_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """🔄 Rejouer avec les mêmes joueurs et mises."""
+    query = update.callback_query
+    await query.answer()
+    tid = update.effective_user.id
+
+    old_session_id = int(query.data.split(":")[1])
+    old_session = get_blackjack_session_by_id(old_session_id)
+    if not old_session:
+        await query.answer("❌ Partie introuvable.", show_alert=True)
+        return
+    if old_session["creator_id"] != tid:
+        await query.answer("❌ Seul le créateur peut relancer la partie.", show_alert=True)
+        return
+
+    old_players = get_blackjack_players(old_session_id)
+    if not old_players:
+        await query.answer("❌ Aucun joueur trouvé.", show_alert=True)
+        return
+
+    # Vérifier les soldes
+    broke = []
+    for p in old_players:
+        if get_coins(p["telegram_id"]) < p["bet"]:
+            u = get_user(p["telegram_id"])
+            broke.append(u["username"] if u else str(p["telegram_id"]))
+    if broke:
+        await query.message.reply_text(
+            f"❌ Solde insuffisant pour : *{', '.join(broke)}*\n"
+            "Certains joueurs ne peuvent pas rejouer avec la même mise.",
+            parse_mode="Markdown"
+        )
+        return
+
+    # Créer une nouvelle session
+    token = secrets.token_urlsafe(8)
+    session_id = create_blackjack_session(tid, token)
+
+    # Distribuer les mains
+    deck = new_deck()
+    dealer_hand = [deck.pop(), deck.pop()]
+
+    for p in old_players:
+        hand = [deck.pop(), deck.pop()]
+        add_blackjack_player(session_id, p["telegram_id"], p["bet"])
+        add_coins(p["telegram_id"], -p["bet"], "Mise blackjack (revanche)")
+        update_blackjack_player(session_id, p["telegram_id"], hand=json.dumps(hand), status="playing")
+
+    update_blackjack_session(session_id,
+        status="active",
+        deck=json.dumps(deck),
+        dealer_hand=json.dumps(dealer_hand)
+    )
+
+    site = os.environ.get("SITE_URL", "https://drunk-weld.vercel.app")
+    bj_url = f"{site}/blackjack.html?session={token}"
+
+    # Envoyer mains à tous les joueurs
+    new_players = get_blackjack_players(session_id)
+    for p in new_players:
+        hand = json.loads(p["hand"])
+        msg = (
+            f"🔄 *Revanche !*\n\n"
+            f"🎴 Ta main : {display_hand(hand)}\n"
+            f"🏠 Croupier : {display_hand(dealer_hand, hide_second=True)}"
+        )
+        if is_blackjack(hand):
+            winnings = int(p["bet"] * 1.5)
+            add_coins(p["telegram_id"], p["bet"] + winnings, "Blackjack ! (×1.5)")
+            update_blackjack_player(session_id, p["telegram_id"], status="done", result="blackjack")
+            msg += f"\n\n🎉 *BLACKJACK !* Tu gagnes {winnings} 🪙 !"
+            try:
+                await ctx.bot.send_message(chat_id=p["telegram_id"], text=msg, parse_mode="Markdown")
+            except Exception:
+                pass
+        else:
+            try:
+                await ctx.bot.send_message(
+                    chat_id=p["telegram_id"],
+                    text=msg,
+                    parse_mode="Markdown",
+                    reply_markup=_bj_keyboard()
+                )
+            except Exception:
+                pass
+
+    await query.message.reply_text(
+        f"🔄 *Revanche lancée !* Tout le monde a reçu sa main.\n🌐 {bj_url}",
+        parse_mode="Markdown"
     )
 
 
@@ -1447,6 +1547,7 @@ def create_application() -> Application:
     app.add_handler(CallbackQueryHandler(handle_bj_callback,         pattern="^bj:"))
     app.add_handler(CallbackQueryHandler(handle_bj_join_callback,    pattern="^bj_join:"))
     app.add_handler(CallbackQueryHandler(handle_bj_launch_callback,  pattern="^bj_launch:"))
+    app.add_handler(CallbackQueryHandler(handle_bj_rematch_callback, pattern="^bj_rematch:"))
     return app
 
 
