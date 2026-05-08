@@ -1003,9 +1003,30 @@ async def cmd_bj_bet(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 def _bj_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([[
-        InlineKeyboardButton("🃏 Hit", callback_data="bj:hit"),
+        InlineKeyboardButton("🃏 Hit",   callback_data="bj:hit"),
         InlineKeyboardButton("✋ Stand", callback_data="bj:stand"),
     ]])
+
+
+def _bj_state_text(players: list, dealer_hand: list, game_over: bool = False) -> str:
+    """Génère un récap de l'état de la partie pour tous les joueurs."""
+    STATUS_ICONS = {"playing": "🎮", "stand": "✋", "bust": "💥", "done": "✅", "waiting": "⏳"}
+    RESULT_ICONS = {"win": "🏆", "lose": "💸", "push": "🤝", "blackjack": "🎉", "abandoned": "↩️"}
+
+    lines = ["👥 *État de la partie :*\n"]
+    for p in players:
+        u = get_user(p["telegram_id"])
+        name = u["username"] if u else "?"
+        h = json.loads(p["hand"])
+        icon = STATUS_ICONS.get(p["status"], "")
+        if game_over and p.get("result"):
+            res_icon = RESULT_ICONS.get(p["result"], "")
+            lines.append(f"{res_icon} *{name}* : {display_hand(h)}")
+        else:
+            lines.append(f"{icon} *{name}* : {display_hand(h)}")
+
+    lines.append(f"\n🏠 *Croupier* : {display_hand(dealer_hand, hide_second=not game_over)}")
+    return "\n".join(lines)
 
 
 async def _bj_action(send_func, tid: int, action: str, session: dict, bot=None) -> bool:
@@ -1018,6 +1039,7 @@ async def _bj_action(send_func, tid: int, action: str, session: dict, bot=None) 
     hand = json.loads(player["hand"])
     deck = json.loads(session["deck"])
     dealer_hand = json.loads(session["dealer_hand"])
+    is_multi = len(players) > 1
 
     if action == "hit":
         card = deck.pop()
@@ -1037,7 +1059,17 @@ async def _bj_action(send_func, tid: int, action: str, session: dict, bot=None) 
                 parse_mode="Markdown",
                 reply_markup=_bj_keyboard()
             )
-            return False  # tour pas terminé
+            # Broadcast état aux autres joueurs en multi
+            if is_multi and bot:
+                players = get_blackjack_players(session["id"])
+                state_txt = _bj_state_text(players, dealer_hand)
+                for p in players:
+                    if p["telegram_id"] != tid:
+                        try:
+                            await bot.send_message(chat_id=p["telegram_id"], text=state_txt, parse_mode="Markdown")
+                        except Exception:
+                            pass
+            return False
 
     elif action == "stand":
         update_blackjack_player(session["id"], tid, status="stand")
@@ -1045,8 +1077,18 @@ async def _bj_action(send_func, tid: int, action: str, session: dict, bot=None) 
     else:
         return False
 
-    # Vérifier si tous les joueurs ont terminé leur tour
+    # Broadcast état intermédiaire en multi
     players = get_blackjack_players(session["id"])
+    if is_multi and bot:
+        state_txt = _bj_state_text(players, dealer_hand)
+        for p in players:
+            if p["telegram_id"] != tid:
+                try:
+                    await bot.send_message(chat_id=p["telegram_id"], text=state_txt, parse_mode="Markdown")
+                except Exception:
+                    pass
+
+    # Vérifier si tous les joueurs ont terminé leur tour
     all_done = all(p["status"] in ("stand", "bust") for p in players)
     if not all_done:
         return True
@@ -1061,29 +1103,40 @@ async def _bj_action(send_func, tid: int, action: str, session: dict, bot=None) 
         status="finished"
     )
 
-    # Résultats pour chaque joueur
+    # Calculer résultats
     for p in players:
         p_hand = json.loads(p["hand"])
         bet = p["bet"]
         if p["status"] == "bust":
-            res = f"💥 *Bust !* -{bet} 🪙\n🏠 Croupier : {display_hand(dealer_hand)}"
+            update_blackjack_player(session["id"], p["telegram_id"], result="lose")
         elif dealer_val > 21 or hand_value(p_hand) > dealer_val:
             add_coins(p["telegram_id"], bet * 2, "Blackjack gagné")
             update_blackjack_player(session["id"], p["telegram_id"], result="win")
-            res = f"🃏 {display_hand(p_hand)}\n🏠 Croupier : {display_hand(dealer_hand)}\n\n🏆 *Tu gagnes !* +{bet} 🪙"
         elif hand_value(p_hand) == dealer_val:
             add_coins(p["telegram_id"], bet, "Blackjack égalité")
             update_blackjack_player(session["id"], p["telegram_id"], result="push")
-            res = f"🃏 {display_hand(p_hand)}\n🏠 Croupier : {display_hand(dealer_hand)}\n\n🤝 *Égalité !* Mise remboursée."
         else:
             update_blackjack_player(session["id"], p["telegram_id"], result="lose")
-            res = f"🃏 {display_hand(p_hand)}\n🏠 Croupier : {display_hand(dealer_hand)}\n\n💸 *Perdu !* -{bet} 🪙"
 
+    # Envoyer résultats finaux à chaque joueur
+    players = get_blackjack_players(session["id"])
+    state_txt = _bj_state_text(players, dealer_hand, game_over=True)
+
+    RESULT_MSGS = {
+        "win":  lambda bet: f"🏆 *Tu gagnes !* +{bet} 🪙",
+        "lose": lambda bet: f"💸 *Perdu !* -{bet} 🪙",
+        "push": lambda bet: "🤝 *Égalité !* Mise remboursée.",
+        "bust": lambda bet: f"💥 *Bust !* -{bet} 🪙",
+    }
+
+    for p in players:
+        result_line = RESULT_MSGS.get(p["result"], lambda b: "")(p["bet"])
+        msg = f"{state_txt}\n\n{result_line}"
         if p["telegram_id"] == tid:
-            await send_func(res, parse_mode="Markdown")
+            await send_func(msg, parse_mode="Markdown")
         elif bot:
             try:
-                await bot.send_message(chat_id=p["telegram_id"], text=res, parse_mode="Markdown")
+                await bot.send_message(chat_id=p["telegram_id"], text=msg, parse_mode="Markdown")
             except Exception:
                 pass
     return True
