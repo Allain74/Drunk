@@ -1,291 +1,387 @@
 <!DOCTYPE html>
-<html lang="fr" data-theme="dark">
+<html lang="fr">
 <head>
   <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
   <title>Blackjack 🃏</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg:      #0d1117;
-      --card-bg: #161b27;
-      --border:  #1e2640;
-      --text:    #e8eaf6;
-      --sub:     #7986cb;
-      --muted:   #3a4060;
-      --green:   #22c55e;
-      --red:     #ef4444;
-      --gold:    #facc15;
-      --felt:    #1a6b3c;
-      --felt2:   #155c33;
+      --card-w:   clamp(42px, 5.5vw, 60px);
+      --card-h:   calc(var(--card-w) * 1.43);
+      --felt:     #165a2d;
+      --felt2:    #0e3d1d;
+      --bg:       #080d14;
+      --border:   rgba(255,255,255,0.08);
+      --gold:     #facc15;
+      --win:      #22c55e;
+      --lose:     #ef4444;
+      --push:     #facc15;
+      --accent:   #6366f1;
+      --red-card: #c8181f;
     }
 
-    body {
-      font-family: 'Inter', sans-serif;
+    html, body {
+      width: 100%; height: 100%;
+      overflow: hidden;
       background: var(--bg);
-      color: var(--text);
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
+      font-family: 'Inter', sans-serif;
+      color: #fff;
+      touch-action: manipulation;
     }
 
-    /* ─── Header ─── */
-    header {
-      text-align: center;
-      padding: 16px 16px 0;
-    }
-    h1 { font-size: clamp(1.2rem, 4vw, 1.7rem); font-weight: 900; letter-spacing: -1px; }
-    h1 span { background: linear-gradient(135deg, #6366f1, #06b6d4); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
-
-    #status-bar {
-      text-align: center; font-size: 0.75rem; color: var(--sub);
-      display: flex; align-items: center; justify-content: center; gap: 6px;
-      padding: 6px 16px 0;
-    }
-    #dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); transition: background .4s; }
-    #dot.ok { background: var(--green); box-shadow: 0 0 6px #22c55e88; }
-
-    /* ─── Login prompt ─── */
-    #login-screen {
-      flex: 1; display: flex; align-items: center; justify-content: center; padding: 24px;
-    }
-    #login-box {
-      background: var(--card-bg); border: 1px solid var(--border); border-radius: 20px;
-      padding: 32px 28px; max-width: 400px; width: 100%; text-align: center;
-      box-shadow: 0 8px 32px #0008;
-    }
-    #login-box h2 { font-size: 1.2rem; margin-bottom: 8px; }
-    #login-box p  { font-size: 0.83rem; color: var(--sub); margin-bottom: 20px; }
-    .input-row { display: flex; gap: 8px; }
-    .input-row input {
-      flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: 10px;
-      color: var(--text); padding: 11px 14px; font-size: 0.95rem; outline: none;
-    }
-    .input-row input:focus { border-color: #6366f1; }
-    .btn-sm {
-      padding: 11px 18px; border-radius: 10px; border: none;
-      background: #6366f1; color: #fff; font-weight: 700; cursor: pointer; font-size: 0.9rem;
-      transition: opacity .15s;
-    }
-    .btn-sm:hover { opacity: 0.85; }
-    #login-error { margin-top: 10px; font-size: 0.8rem; color: var(--red); display: none; }
-
-    /* ─── Error screen ─── */
-    #error-screen {
-      flex: 1; display: none; align-items: center; justify-content: center;
-      text-align: center; color: var(--red); font-size: 1.1rem; font-weight: 700; padding: 24px;
-    }
-
-    /* ─── Game ─── */
-    #game-screen { flex: 1; display: none; flex-direction: column; }
-    #game-screen.visible { display: flex; }
-
-    /* ─── Status banner ─── */
-    #game-banner {
-      text-align: center; font-size: 0.9rem; font-weight: 700; padding: 8px 16px;
+    /* ──────────────────────────────── Rotate hint ── */
+    #rotate-hint {
       display: none;
+      position: fixed; inset: 0; z-index: 9999;
+      background: var(--bg);
+      flex-direction: column; align-items: center; justify-content: center;
+      gap: 20px; padding: 24px; text-align: center;
     }
-    #game-banner.waiting  { background: #6366f120; color: #818cf8; display: block; }
-    #game-banner.active   { background: #22c55e20; color: #22c55e; display: block; }
-    #game-banner.finished { background: #facc1520; color: #ca8a04; display: block; }
-
-    /* ─── Table felt ─── */
-    #table-wrap {
-      flex: 1; display: flex; flex-direction: column;
-      background: radial-gradient(ellipse at 50% 30%, var(--felt) 0%, var(--felt2) 60%, #0f3d22 100%);
-      padding: 20px 16px 100px; /* bottom space for action bar */
-      min-height: 0;
-      position: relative;
+    #rotate-hint svg { width: 60px; height: 60px; opacity: 0.5;
+      animation: rotateAnim 2s ease-in-out infinite; }
+    @keyframes rotateAnim {
+      0%,100% { transform: rotate(-90deg); }
+      50%      { transform: rotate(0deg); }
     }
-
-    /* Felt arc decorations */
-    #table-wrap::before {
-      content: '';
-      position: absolute; top: 0; left: 50%; transform: translateX(-50%);
-      width: min(600px, 90vw); height: 4px;
-      background: rgba(255,255,255,0.08); border-radius: 0 0 100% 100%;
+    #rotate-hint p { color: #7986cb; font-size: 1rem; max-width: 260px; line-height: 1.5; }
+    @media (orientation: portrait) and (max-width: 600px) {
+      #rotate-hint { display: flex; }
+      #login-screen, #error-screen, #game-screen { display: none !important; }
     }
 
-    /* ─── Dealer zone ─── */
+    /* ──────────────────────────────── Login ── */
+    #login-screen {
+      display: flex; align-items: center; justify-content: center;
+      height: 100%; padding: 24px;
+    }
+    .login-box {
+      background: #111825; border: 1px solid #1e2a40;
+      border-radius: 22px; padding: 36px 28px;
+      max-width: 380px; width: 100%; text-align: center;
+      box-shadow: 0 12px 50px #0009;
+    }
+    .login-box h2 { font-size: 1.3rem; font-weight: 900; margin-bottom: 8px; }
+    .login-box p  { font-size: 0.82rem; color: #7986cb; margin-bottom: 22px; line-height: 1.5; }
+    .inp-row { display: flex; gap: 8px; }
+    .inp-row input {
+      flex: 1; background: var(--bg); border: 1px solid #1e2a40;
+      border-radius: 10px; color: #fff; padding: 12px 14px;
+      font-size: 0.95rem; outline: none; font-family: inherit;
+    }
+    .inp-row input:focus { border-color: var(--accent); }
+    .btn-ok {
+      padding: 12px 18px; border-radius: 10px; border: none;
+      background: var(--accent); color: #fff; font-weight: 700;
+      cursor: pointer; font-family: inherit; font-size: 0.9rem;
+      transition: filter .15s;
+    }
+    .btn-ok:hover { filter: brightness(1.1); }
+    #login-err { margin-top: 10px; font-size: 0.78rem; color: var(--lose); display: none; }
+
+    /* ──────────────────────────────── Error ── */
+    #error-screen {
+      display: none; align-items: center; justify-content: center;
+      height: 100%; text-align: center; padding: 24px;
+      color: var(--lose); font-size: 1.1rem; font-weight: 700;
+    }
+
+    /* ──────────────────────────────── Game ── */
+    #game-screen {
+      display: none; flex-direction: column;
+      height: 100%; position: relative;
+    }
+    #game-screen.on { display: flex; }
+
+    /* ──────────────────────────────── Top bar ── */
+    #topbar {
+      flex-shrink: 0; z-index: 20;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 16px; height: 42px;
+      background: rgba(0,0,0,0.55); backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--border);
+    }
+    .t-title { font-size: 0.92rem; font-weight: 900; letter-spacing: -0.5px; }
+    .t-title em { color: var(--accent); font-style: normal; }
+    .t-status { display: flex; align-items: center; gap: 6px;
+      font-size: 0.68rem; color: rgba(255,255,255,0.35); }
+    #dot { width: 6px; height: 6px; border-radius: 50%; background: #2a3040; transition: all .4s; }
+    #dot.ok { background: var(--win); box-shadow: 0 0 6px #22c55e99; }
+
+    /* ──────────────────────────────── Table (felt) ── */
+    #table {
+      flex: 1; position: relative; overflow: hidden;
+      background:
+        radial-gradient(ellipse 130% 70% at 50% 35%, var(--felt) 0%, var(--felt2) 65%, #050e08 100%);
+    }
+
+    /* Felt texture */
+    #table::before {
+      content: ''; position: absolute; inset: 0; pointer-events: none;
+      background-image: radial-gradient(circle, rgba(255,255,255,0.025) 1px, transparent 1px);
+      background-size: 10px 10px;
+    }
+
+    /* Table oval rail */
+    #table::after {
+      content: ''; position: absolute;
+      top: 8%; left: 4%; right: 4%; bottom: 2%;
+      border: 2px solid rgba(255,255,255,0.055);
+      border-radius: 55% 55% 50% 50% / 35% 35% 65% 65%;
+      pointer-events: none;
+    }
+
+    /* ──────────────────────────────── Game banner ── */
+    #banner {
+      position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
+      z-index: 8; font-size: 0.72rem; font-weight: 700;
+      padding: 4px 14px; border-radius: 99px; white-space: nowrap;
+      transition: opacity .3s;
+    }
+    #banner.waiting  { background: rgba(99,102,241,0.15); color: #818cf8; }
+    #banner.active   { background: rgba(34,197,94,0.15);  color: #4ade80; }
+    #banner.finished { background: rgba(250,204,21,0.15); color: var(--gold); }
+
+    /* ──────────────────────────────── Dealer ── */
     #dealer-zone {
-      text-align: center;
-      margin-bottom: 16px;
+      position: absolute; top: clamp(28px, 6%, 48px);
+      left: 50%; transform: translateX(-50%);
+      text-align: center; z-index: 5;
     }
     .zone-label {
-      font-size: 0.7rem; font-weight: 700; text-transform: uppercase;
-      letter-spacing: 2px; color: rgba(255,255,255,0.5); margin-bottom: 8px;
+      font-size: clamp(0.58rem, 1.1vw, 0.7rem); font-weight: 700;
+      text-transform: uppercase; letter-spacing: 2px;
+      color: rgba(255,255,255,0.35); margin-bottom: 7px;
     }
-    #dealer-cards { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
-    #dealer-total {
-      margin-top: 6px; font-size: 0.85rem; color: rgba(255,255,255,0.6); font-weight: 600;
-    }
-
-    /* ─── Felt divider ─── */
-    .felt-arc {
-      width: min(480px, 90vw); height: 2px; margin: 8px auto 20px;
-      background: rgba(255,255,255,0.12); border-radius: 50%;
+    #dealer-cards { display: flex; gap: clamp(4px, 0.8vw, 8px); justify-content: center; }
+    #dealer-total  {
+      margin-top: 6px; font-size: clamp(0.65rem, 1.1vw, 0.78rem);
+      color: rgba(255,255,255,0.45); font-weight: 600;
     }
 
-    /* ─── Players zone ─── */
+    /* ──────────────────────────────── Players ── */
     #players-zone {
-      display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; align-items: flex-start;
+      position: absolute;
+      bottom: clamp(62px, 14%, 80px); /* above action bar */
+      left: 0; right: 0;
+      display: flex; justify-content: center; align-items: flex-end;
+      gap: clamp(6px, 1.5vw, 18px); padding: 0 12px;
+      flex-wrap: wrap;
     }
 
-    /* ─── Player slot ─── */
-    .player-slot {
-      background: rgba(0,0,0,0.35); border: 2px solid rgba(255,255,255,0.12);
-      border-radius: 16px; padding: 14px 16px; min-width: 160px; max-width: 200px;
-      text-align: center; transition: border-color .3s, box-shadow .3s;
-      backdrop-filter: blur(4px);
-    }
-    .player-slot.is-me { border-color: #6366f1; box-shadow: 0 0 0 3px #6366f130, 0 4px 20px #0006; }
-    .player-slot.status-bust   { border-color: rgba(239,68,68,0.5); opacity: 0.7; }
-    .player-slot.status-stand  { border-color: rgba(34,197,94,0.4); }
-    .player-slot.result-win    { border-color: var(--green); box-shadow: 0 0 12px #22c55e44; }
-    .player-slot.result-lose   { border-color: rgba(239,68,68,0.4); opacity: 0.65; }
-    .player-slot.result-push   { border-color: var(--gold); }
-    .player-slot.result-blackjack { border-color: var(--gold); box-shadow: 0 0 16px #facc1566; }
-
-    .slot-name {
-      font-size: 0.82rem; font-weight: 700; margin-bottom: 4px;
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    }
-    .slot-bet { font-size: 0.72rem; color: rgba(255,255,255,0.5); margin-bottom: 10px; }
-
-    .slot-cards { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; margin-bottom: 6px; }
-
-    .slot-total { font-size: 0.78rem; color: rgba(255,255,255,0.55); margin-bottom: 6px; }
-
-    .slot-badge {
-      display: inline-block; font-size: 0.68rem; font-weight: 700;
-      padding: 2px 9px; border-radius: 99px;
-    }
-    .badge-playing  { background: #6366f125; color: #818cf8; }
-    .badge-stand    { background: #22c55e20; color: var(--green); }
-    .badge-bust     { background: #ef444420; color: var(--red); }
-    .badge-done     { background: #facc1520; color: #ca8a04; }
-    .badge-waiting  { background: rgba(255,255,255,0.07); color: rgba(255,255,255,0.4); }
-
-    .slot-result {
-      font-size: 0.85rem; font-weight: 700; margin-top: 6px;
-    }
-    .slot-result.win       { color: var(--green); }
-    .slot-result.lose      { color: var(--red); }
-    .slot-result.push      { color: var(--gold); }
-    .slot-result.blackjack { color: var(--gold); }
-
-    /* ─── Playing Card ─── */
-    .card {
-      background: #fff;
-      color: #111;
-      border-radius: 7px;
-      padding: 4px 8px;
-      font-weight: 800;
-      font-size: 1rem;
-      box-shadow: 0 2px 8px #0005, 0 1px 0 #ddd inset;
-      min-width: 36px;
-      line-height: 1.1;
-      text-align: center;
-      user-select: none;
+    /* ──────────────────────────────── Player slot ── */
+    .pslot {
+      background: rgba(0,0,0,0.5);
+      border: 2px solid rgba(255,255,255,0.1);
+      border-radius: 14px; text-align: center;
+      padding: clamp(6px, 1.2vw, 12px) clamp(8px, 1.5vw, 16px);
+      min-width: clamp(100px, 14vw, 170px);
+      backdrop-filter: blur(10px);
+      transition: border-color .4s, box-shadow .5s;
       position: relative;
     }
-    .card.suit-red { color: #dc2626; }
-    .card.hidden {
-      background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #2563eb 100%);
-      color: transparent; min-width: 36px;
+    .pslot.is-me {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(99,102,241,0.2), 0 6px 24px rgba(0,0,0,0.6);
     }
-    .card.hidden::after {
-      content: '?';
-      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-      color: rgba(255,255,255,0.6); font-size: 1rem;
+    .pslot.result-win {
+      border-color: var(--win);
+      animation: winGlow 1.8s ease-in-out forwards;
+    }
+    .pslot.result-lose    { border-color: rgba(239,68,68,0.4); opacity: 0.7; }
+    .pslot.result-push    { border-color: var(--gold); }
+    .pslot.result-blackjack {
+      border-color: var(--gold);
+      animation: bjGlow 1.8s ease-in-out forwards;
     }
 
-    /* ─── Action bar ─── */
-    #action-bar {
-      position: fixed; bottom: 0; left: 0; right: 0;
-      background: rgba(13,17,23,0.95); backdrop-filter: blur(12px);
+    @keyframes winGlow {
+      0%   { box-shadow: 0 0 0   rgba(34,197,94,0); }
+      40%  { box-shadow: 0 0 30px rgba(34,197,94,0.7); }
+      100% { box-shadow: 0 0 16px rgba(34,197,94,0.35); }
+    }
+    @keyframes bjGlow {
+      0%   { box-shadow: 0 0 0   rgba(250,204,21,0); }
+      40%  { box-shadow: 0 0 30px rgba(250,204,21,0.7); }
+      100% { box-shadow: 0 0 16px rgba(250,204,21,0.35); }
+    }
+
+    .slot-name {
+      font-size: clamp(0.68rem, 1.1vw, 0.85rem); font-weight: 700;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      margin-bottom: 3px;
+    }
+    .slot-bet { font-size: clamp(0.58rem, 0.9vw, 0.7rem); color: rgba(255,255,255,0.4); margin-bottom: 7px; }
+    .slot-cards { display: flex; gap: clamp(3px, 0.6vw, 6px); justify-content: center; margin-bottom: 5px; }
+    .slot-total { font-size: clamp(0.62rem, 0.9vw, 0.74rem); color: rgba(255,255,255,0.45); margin-bottom: 4px; font-weight: 600; }
+    .badge {
+      display: inline-block; font-size: clamp(0.55rem, 0.85vw, 0.66rem);
+      font-weight: 700; padding: 2px 8px; border-radius: 99px;
+    }
+    .b-playing { background: rgba(99,102,241,0.18); color: #818cf8; }
+    .b-stand   { background: rgba(34,197,94,0.18);  color: #4ade80; }
+    .b-bust    { background: rgba(239,68,68,0.18);  color: #f87171; }
+    .b-done    { background: rgba(250,204,21,0.18); color: #fbbf24; }
+    .b-waiting { background: rgba(255,255,255,0.07); color: rgba(255,255,255,0.3); }
+
+    .slot-result {
+      font-size: clamp(0.66rem, 1vw, 0.8rem); font-weight: 800; margin-top: 5px;
+    }
+    .r-win       { color: var(--win); }
+    .r-lose      { color: var(--lose); }
+    .r-push      { color: var(--gold); }
+    .r-blackjack { color: var(--gold); }
+
+    /* ──────────────────────────────── Playing card ── */
+    .card {
+      width: var(--card-w); height: var(--card-h);
+      background: #fff; color: #111;
+      border-radius: clamp(4px, 0.6vw, 7px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.55), 0 1px 0 rgba(255,255,255,0.08) inset;
+      position: relative; flex-shrink: 0; overflow: hidden;
+      user-select: none;
+    }
+
+    /* Deal slide-in */
+    .card.deal {
+      animation: dealIn 0.38s cubic-bezier(0.22,0.61,0.36,1) both;
+    }
+    @keyframes dealIn {
+      from { transform: translateY(-160px) rotate(-10deg) scale(0.55); opacity: 0; }
+      to   { transform: translateY(0)      rotate(0)      scale(1);    opacity: 1; }
+    }
+
+    /* Flip reveal (dealer's hidden card) */
+    .card.flip-out { animation: flipOut 0.18s ease-in  forwards; }
+    .card.flip-in  { animation: flipIn  0.22s ease-out forwards; }
+    @keyframes flipOut { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+    @keyframes flipIn  { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+
+    .card .c-tl {
+      position: absolute; top: clamp(2px, 0.4vw, 4px); left: clamp(2px, 0.4vw, 5px);
+      font-size: calc(var(--card-w) * 0.22); font-weight: 900; line-height: 1.1; text-align: left;
+    }
+    .card .c-center {
+      position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: calc(var(--card-w) * 0.36); line-height: 1;
+    }
+    .card .c-br {
+      position: absolute; bottom: clamp(2px, 0.4vw, 4px); right: clamp(2px, 0.4vw, 5px);
+      font-size: calc(var(--card-w) * 0.22); font-weight: 900; line-height: 1.1;
+      transform: rotate(180deg); text-align: left;
+    }
+    .card.red { color: var(--red-card); }
+
+    /* Card back */
+    .card.back {
+      background: linear-gradient(145deg, #1e3a8a 0%, #1e40af 50%, #1e3a8a 100%);
+      border: 3px solid rgba(255,255,255,0.12);
+    }
+    .card.back::before {
+      content: ''; position: absolute; inset: 4px;
+      border: 1px solid rgba(255,255,255,0.18); border-radius: 3px;
+      background: repeating-linear-gradient(
+        45deg,
+        rgba(255,255,255,0.05) 0px, rgba(255,255,255,0.05) 3px,
+        transparent 3px, transparent 6px
+      );
+    }
+
+    /* ──────────────────────────────── Waiting overlay ── */
+    #wait-overlay {
+      display: none; position: absolute; inset: 0; z-index: 30;
+      background: rgba(0,0,0,0.65); backdrop-filter: blur(5px);
+      align-items: center; justify-content: center;
+    }
+    #wait-overlay.on { display: flex; }
+    .wait-box {
+      background: #111825; border: 1px solid #1e2a40;
+      border-radius: 20px; padding: 28px 32px; text-align: center; max-width: 290px;
+    }
+    .wait-box h3 { font-size: 1.05rem; margin-bottom: 8px; }
+    .wait-box p  { font-size: 0.8rem; color: #7986cb; line-height: 1.5; }
+
+    /* ──────────────────────────────── Action bar ── */
+    #action-bar, #rematch-bar {
+      position: absolute; bottom: 0; left: 0; right: 0; z-index: 20;
+      background: rgba(5,10,18,0.92); backdrop-filter: blur(14px);
       border-top: 1px solid var(--border);
-      padding: 14px 20px 20px; display: none;
-      z-index: 100;
-    }
-    #action-bar.visible { display: block; }
-    #action-bar .turn-label {
-      text-align: center; font-size: 0.8rem; color: var(--sub); margin-bottom: 10px;
-    }
-    .action-btns { display: flex; gap: 12px; max-width: 420px; margin: 0 auto; }
-    .btn-action {
-      flex: 1; padding: 15px; border-radius: 14px; border: none;
-      font-size: 1rem; font-weight: 800; cursor: pointer;
-      transition: transform .1s, opacity .15s;
-    }
-    .btn-action:active { transform: scale(0.96); }
-    .btn-action:disabled { opacity: 0.35; cursor: not-allowed; }
-    .btn-hit   { background: #6366f1; color: #fff; }
-    .btn-stand { background: #334155; color: #fff; }
-
-    /* ─── Waiting overlay ─── */
-    #waiting-overlay {
-      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-      background: rgba(0,0,0,0.5); backdrop-filter: blur(2px); border-radius: 0;
+      padding: 8px 14px 12px;
       display: none;
     }
-    #waiting-overlay.visible { display: flex; }
-    .waiting-card {
-      background: var(--card-bg); border: 1px solid var(--border); border-radius: 20px;
-      padding: 28px 32px; text-align: center; max-width: 320px;
-    }
-    .waiting-card h3 { font-size: 1.1rem; margin-bottom: 8px; }
-    .waiting-card p { font-size: 0.83rem; color: var(--sub); }
+    #action-bar.on  { display: block; }
+    #rematch-bar.on { display: block; }
 
-    /* ─── Chips display ─── */
-    .chip {
-      display: inline-block; background: #facc15; color: #78350f;
-      border-radius: 50%; width: 26px; height: 26px; line-height: 26px;
-      font-size: 0.65rem; font-weight: 900; text-align: center;
-      border: 2px dashed #78350f; vertical-align: middle;
+    .bar-lbl { text-align: center; font-size: 0.7rem; color: rgba(255,255,255,0.35); margin-bottom: 7px; }
+    .bar-btns { display: flex; gap: 10px; max-width: 360px; margin: 0 auto; }
+
+    .btn {
+      flex: 1; padding: 12px; border-radius: 12px; border: none;
+      font-size: clamp(0.82rem, 1.4vw, 0.95rem); font-weight: 800;
+      cursor: pointer; font-family: inherit;
+      transition: transform .1s, filter .15s;
     }
+    .btn:active   { transform: scale(0.96); }
+    .btn:disabled { filter: opacity(0.35); cursor: not-allowed; }
+    .btn-hit   { background: var(--accent); color: #fff; }
+    .btn-stand { background: #2d3748; color: #fff; }
+    .btn-rematch { background: var(--win); color: #fff; max-width: 360px; width: 100%; display: block; margin: 0 auto; }
   </style>
 </head>
 <body>
 
-<header>
-  <h1>🃏 <span>Blackjack</span></h1>
-</header>
-<div id="status-bar">
-  <div id="dot"></div>
-  <span id="status-text">Connexion…</span>
+<!-- Rotate hint -->
+<div id="rotate-hint">
+  <svg viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="1.5">
+    <rect x="5" y="2" width="14" height="20" rx="2"/>
+    <path d="M9 21h6" stroke-linecap="round"/>
+    <path d="M2 9l3-3 3 3" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M5 6v5" stroke-linecap="round"/>
+  </svg>
+  <p>Tourne ton téléphone en mode paysage pour une meilleure expérience</p>
+</div>
+
+<!-- Login -->
+<div id="login-screen">
+  <div class="login-box">
+    <h2>🃏 Rejoindre la table</h2>
+    <p>Entre ton prénom tel qu'enregistré sur le bot pour jouer depuis le navigateur.</p>
+    <div class="inp-row">
+      <input id="name-in" type="text" placeholder="Thomas, Lucas…" autocomplete="off" autocapitalize="words"/>
+      <button class="btn-ok" id="ok-btn" onclick="doLogin()">OK</button>
+    </div>
+    <div id="login-err">Prénom introuvable — vérifie l'orthographe.</div>
+  </div>
 </div>
 
 <!-- Error -->
 <div id="error-screen">❌ Session introuvable ou expirée.</div>
 
-<!-- Login -->
-<div id="login-screen">
-  <div id="login-box">
-    <h2>🃏 Rejoindre la table</h2>
-    <p>Entre ton prénom tel qu'enregistré sur le bot.</p>
-    <div class="input-row">
-      <input type="text" id="name-input" placeholder="Thomas, Lucas…" autocomplete="off" autocapitalize="words"/>
-      <button class="btn-sm" id="login-btn" onclick="doLogin()">OK</button>
-    </div>
-    <div id="login-error">Prénom introuvable — vérifie l'orthographe.</div>
-  </div>
-</div>
-
 <!-- Game -->
 <div id="game-screen">
-  <div id="game-banner"></div>
 
-  <div id="table-wrap">
-    <!-- Waiting overlay -->
-    <div id="waiting-overlay">
-      <div class="waiting-card">
+  <div id="topbar">
+    <span class="t-title">🃏 <em>Blackjack</em></span>
+    <div class="t-status">
+      <div id="dot"></div>
+      <span id="status-txt">…</span>
+    </div>
+  </div>
+
+  <div id="table">
+
+    <!-- Overlay waiting -->
+    <div id="wait-overlay">
+      <div class="wait-box">
         <h3>⏳ En attente de joueurs</h3>
         <p>Le créateur doit appuyer sur <strong>Lancer la partie</strong> dans Telegram.</p>
       </div>
     </div>
+
+    <div id="banner"></div>
 
     <!-- Dealer -->
     <div id="dealer-zone">
@@ -294,225 +390,292 @@
       <div id="dealer-total"></div>
     </div>
 
-    <div class="felt-arc"></div>
-
     <!-- Players -->
     <div id="players-zone"></div>
-  </div>
 
-  <!-- Action bar -->
-  <div id="action-bar">
-    <div class="turn-label">C'est ton tour — que fais-tu ?</div>
-    <div class="action-btns">
-      <button class="btn-action btn-hit"   id="btn-hit"   onclick="sendAction('hit')">🃏 Hit</button>
-      <button class="btn-action btn-stand" id="btn-stand" onclick="sendAction('stand')">✋ Stand</button>
+    <!-- Action bar -->
+    <div id="action-bar">
+      <div class="bar-lbl">C'est ton tour — que fais-tu ?</div>
+      <div class="bar-btns">
+        <button class="btn btn-hit"   id="btn-hit"   onclick="act('hit')">🃏 Hit</button>
+        <button class="btn btn-stand" id="btn-stand" onclick="act('stand')">✋ Stand</button>
+      </div>
     </div>
-  </div>
-</div>
+
+    <!-- Rematch bar -->
+    <div id="rematch-bar">
+      <div class="bar-lbl">Partie terminée — rejouer avec les mêmes joueurs et mises ?</div>
+      <div class="bar-btns">
+        <button class="btn btn-rematch" id="btn-rematch" onclick="doRematch()">🔄 Rejouer</button>
+      </div>
+    </div>
+
+  </div><!-- #table -->
+</div><!-- #game-screen -->
 
 <script>
-  const API = location.hostname === 'localhost'
-    ? 'http://localhost:8001'
-    : 'https://drunk-l34t.onrender.com';
+const API = location.hostname === 'localhost'
+  ? 'http://localhost:8001'
+  : 'https://drunk-l34t.onrender.com';
 
-  const params = new URLSearchParams(location.search);
-  const SESSION_TOKEN = params.get('session');
+const params = new URLSearchParams(location.search);
+let SESSION_TOKEN = params.get('session');
+let myTid  = parseInt(localStorage.getItem('bj_tid')  || '0');
+let myName = localStorage.getItem('bj_username') || '';
+let ws = null;
 
-  let myTid  = parseInt(localStorage.getItem('bj_tid') || '0');
-  let myName = localStorage.getItem('bj_username') || '';
-  let ws     = null;
-  let lastState = null;
+// Card counts to detect new cards (for deal animation)
+let prevDealerLen = 0;
+let prevHandLens  = {}; // telegram_id → length
+let lastState     = null;
+let dealerFlipPending = false;
 
-  // ── Boot ──────────────────────────────────────────────────────────────────────
-  if (!SESSION_TOKEN) {
-    showError();
-  } else if (myTid) {
-    showGame();
-    connect();
-  }
-  // else: login screen shown by default
+// ── Boot ─────────────────────────────────────────────────────────────────────
+if (!SESSION_TOKEN) {
+  showError();
+} else if (myTid) {
+  showGame(); connect();
+}
 
-  // ── Login ─────────────────────────────────────────────────────────────────────
-  document.getElementById('name-input').addEventListener('keydown', e => {
-    if (e.key === 'Enter') doLogin();
-  });
+// ── Login ─────────────────────────────────────────────────────────────────────
+document.getElementById('name-in').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
 
-  async function doLogin() {
-    const name = document.getElementById('name-input').value.trim();
-    if (!name) return;
-    const btn = document.getElementById('login-btn');
-    btn.textContent = '…'; btn.disabled = true;
-    document.getElementById('login-error').style.display = 'none';
-    try {
-      const r = await fetch(`${API}/lookup?name=${encodeURIComponent(name)}`);
-      const d = await r.json();
-      if (!d.found) {
-        document.getElementById('login-error').style.display = 'block';
-        btn.textContent = 'OK'; btn.disabled = false;
-        return;
-      }
-      myTid  = d.telegram_id;
-      myName = d.username;
-      localStorage.setItem('bj_tid',      String(myTid));
-      localStorage.setItem('bj_username', myName);
-      showGame();
-      connect();
-    } catch {
-      btn.textContent = 'OK'; btn.disabled = false;
+async function doLogin() {
+  const name = document.getElementById('name-in').value.trim();
+  if (!name) return;
+  const btn = document.getElementById('ok-btn');
+  btn.textContent = '…'; btn.disabled = true;
+  document.getElementById('login-err').style.display = 'none';
+  try {
+    const r = await fetch(`${API}/lookup?name=${encodeURIComponent(name)}`);
+    const d = await r.json();
+    if (!d.found) {
+      document.getElementById('login-err').style.display = 'block';
+      btn.textContent = 'OK'; btn.disabled = false; return;
     }
-  }
+    myTid = d.telegram_id; myName = d.username;
+    localStorage.setItem('bj_tid', String(myTid));
+    localStorage.setItem('bj_username', myName);
+    showGame(); connect();
+  } catch { btn.textContent = 'OK'; btn.disabled = false; }
+}
 
-  // ── Screen helpers ────────────────────────────────────────────────────────────
-  function showError() {
-    document.getElementById('login-screen').style.display = 'none';
-    document.getElementById('error-screen').style.display = 'flex';
-  }
-  function showGame() {
-    document.getElementById('login-screen').style.display = 'none';
-    document.getElementById('game-screen').classList.add('visible');
-  }
+function showError() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('error-screen').style.display = 'flex';
+}
+function showGame() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('game-screen').classList.add('on');
+}
 
-  // ── Card helpers ──────────────────────────────────────────────────────────────
-  function isRed(card) {
-    if (!card || card === '?') return false;
-    const suit = card.slice(-1);
-    return suit === '♥' || suit === '♦';
-  }
+// ── Card helpers ──────────────────────────────────────────────────────────────
+function parseCard(c) {
+  if (!c || c === '?') return null;
+  const suit = c.slice(-1), rank = c.slice(0, -1);
+  const isRed = suit === '♥' || suit === '♦';
+  return { rank, suit, isRed };
+}
 
-  function renderCard(card, hidden = false) {
-    if (hidden || card === '?') return `<div class="card hidden"></div>`;
-    return `<div class="card ${isRed(card) ? 'suit-red' : ''}">${card}</div>`;
-  }
+function makeCard(c, animate = false, extraClass = '') {
+  const p = parseCard(c);
+  const cls = ['card', extraClass, animate ? 'deal' : ''].filter(Boolean).join(' ');
+  if (!p) return `<div class="${cls} back"></div>`;
+  return `<div class="${cls}${p.isRed ? ' red' : ''}">
+    <div class="c-tl">${p.rank}<br>${p.suit}</div>
+    <div class="c-center">${p.suit}</div>
+    <div class="c-br">${p.rank}<br>${p.suit}</div>
+  </div>`;
+}
 
-  function renderCards(hand, hideSecond = false) {
-    return hand.map((c, i) => renderCard(c, hideSecond && i === 1)).join('');
+function handVal(hand) {
+  let t = 0, a = 0;
+  for (const c of (hand || [])) {
+    if (!c || c === '?') continue;
+    const r = c.slice(0, -1);
+    if (r === 'A') { t += 11; a++; }
+    else if ('JQK'.includes(r)) t += 10;
+    else t += parseInt(r) || 0;
   }
+  while (t > 21 && a) { t -= 10; a--; }
+  return t;
+}
 
-  function computeValue(hand) {
-    let total = 0, aces = 0;
-    for (const c of hand) {
-      if (!c || c === '?') continue;
-      const r = c.slice(0, -1);
-      if (r === 'A') { total += 11; aces++; }
-      else if (['J','Q','K'].includes(r)) total += 10;
-      else total += parseInt(r) || 0;
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// ── Connection status ─────────────────────────────────────────────────────────
+function setConn(ok, txt) {
+  document.getElementById('dot').className = ok ? 'ok' : '';
+  document.getElementById('status-txt').textContent = txt;
+}
+
+// ── Dealer flip animation ─────────────────────────────────────────────────────
+function animateDealerFlip(newCard) {
+  const dealerDiv = document.getElementById('dealer-cards');
+  const cards = dealerDiv.querySelectorAll('.card');
+  const hiddenCard = cards[1]; // second card was hidden
+  if (!hiddenCard) return;
+
+  hiddenCard.classList.add('flip-out');
+  setTimeout(() => {
+    const p = parseCard(newCard);
+    if (p) {
+      hiddenCard.className = 'card flip-in' + (p.isRed ? ' red' : '');
+      hiddenCard.innerHTML = `
+        <div class="c-tl">${p.rank}<br>${p.suit}</div>
+        <div class="c-center">${p.suit}</div>
+        <div class="c-br">${p.rank}<br>${p.suit}</div>`;
     }
-    while (total > 21 && aces) { total -= 10; aces--; }
-    return total;
-  }
+  }, 180);
+}
 
-  function esc(s) {
-    return String(s).replace(/[&<>"']/g, c =>
-      ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  }
+// ── Render ────────────────────────────────────────────────────────────────────
+function render(state) {
+  const prev = lastState;
+  lastState  = state;
 
-  // ── Status ────────────────────────────────────────────────────────────────────
-  function setStatus(ok, txt) {
-    document.getElementById('dot').className = ok ? 'ok' : '';
-    document.getElementById('status-text').textContent = txt;
-  }
+  // ── Banner
+  const banner = document.getElementById('banner');
+  banner.className = state.status;
+  banner.textContent = { waiting:'⏳ En attente…', active:'🎮 Partie en cours', finished:'🏁 Partie terminée' }[state.status] || '';
 
-  // ── Render ────────────────────────────────────────────────────────────────────
-  function render(state) {
-    lastState = state;
+  // ── Waiting overlay
+  document.getElementById('wait-overlay').classList.toggle('on', state.status === 'waiting');
 
-    // Banner
-    const banner = document.getElementById('game-banner');
-    const bannerText = { waiting: '⏳ En attente de joueurs…', active: '🎮 Partie en cours !', finished: '🏁 Partie terminée !' };
-    banner.className = state.status;
-    banner.textContent = bannerText[state.status] || '';
+  // ── Dealer
+  const dHand    = state.dealer_hand || [];
+  const prevDH   = prev ? (prev.dealer_hand || []) : [];
+  const dealerEl = document.getElementById('dealer-cards');
 
-    // Waiting overlay
-    document.getElementById('waiting-overlay').classList.toggle('visible', state.status === 'waiting');
+  // Detect dealer card reveal (? → real card)
+  const wasHidden = prevDH.some(c => c === '?');
+  const nowClear  = dHand.every(c => c !== '?');
+  const revealed  = wasHidden && nowClear && prev;
 
-    // Dealer
-    const dHand = state.dealer_hand || [];
-    const hideDealer = state.status === 'active';
-    document.getElementById('dealer-cards').innerHTML = renderCards(dHand, false /* already hidden server-side */);
-    if (state.dealer_value != null && !hideDealer) {
-      document.getElementById('dealer-total').textContent = `Total : ${state.dealer_value}`;
-    } else if (dHand.length > 0) {
-      const visible = dHand.filter(c => c !== '?');
-      const visVal = visible.length ? computeValue(visible) : '?';
-      document.getElementById('dealer-total').textContent = visible.length < dHand.length
-        ? `Visible : ${visVal} + ?`
-        : `Total : ${computeValue(dHand)}`;
-    } else {
-      document.getElementById('dealer-total').textContent = '';
-    }
-
-    // Players
-    const zone = document.getElementById('players-zone');
-    zone.innerHTML = state.players.map(p => {
-      const isMe = p.telegram_id === myTid;
-      const hand = p.hand || [];
-      const total = hand.length ? computeValue(hand) : 0;
-
-      const statusLabels = { playing: '🎮 Joue', stand: '✋ Stand', bust: '💥 Bust', done: '✅ Done', waiting: '⏳ Attend' };
-      const badgeClass  = { playing: 'badge-playing', stand: 'badge-stand', bust: 'badge-bust', done: 'badge-done', waiting: 'badge-waiting' }[p.status] || 'badge-waiting';
-
-      let resultHtml = '';
-      const resultLabels = { win: '🏆 Gagné !', lose: '💸 Perdu', push: '🤝 Égalité', blackjack: '🎉 BLACKJACK !' };
-      if (p.result && resultLabels[p.result]) {
-        resultHtml = `<div class="slot-result ${esc(p.result)}">${resultLabels[p.result]}</div>`;
-      }
-
-      const slotClasses = [
-        'player-slot',
-        isMe ? 'is-me' : '',
-        p.result ? `result-${p.result}` : `status-${p.status}`,
-      ].filter(Boolean).join(' ');
-
-      return `<div class="${slotClasses}" id="slot-${p.telegram_id}">
-        <div class="slot-name">${esc(p.username)}${isMe ? ' 👤' : ''}</div>
-        <div class="slot-bet"><span class="chip">🪙</span> ${p.bet} BeerCoins</div>
-        <div class="slot-cards">${renderCards(hand, false)}</div>
-        ${hand.length ? `<div class="slot-total">= ${total}</div>` : ''}
-        <span class="slot-badge ${badgeClass}">${statusLabels[p.status] || p.status}</span>
-        ${resultHtml}
-      </div>`;
+  if (revealed && dHand.length >= 2) {
+    // Animate flip on the second card only, re-render first
+    dealerEl.innerHTML = dHand.map((c, i) => {
+      if (i === 1) return `<div class="card back"></div>`; // placeholder for flip
+      return makeCard(c, i >= prevDH.length);
     }).join('');
-
-    // Action bar
-    const me = state.players.find(p => p.telegram_id === myTid);
-    const actionBar = document.getElementById('action-bar');
-    if (me && me.status === 'playing' && state.status === 'active') {
-      actionBar.classList.add('visible');
-      document.getElementById('btn-hit').disabled   = false;
-      document.getElementById('btn-stand').disabled = false;
-    } else {
-      actionBar.classList.remove('visible');
+    setTimeout(() => animateDealerFlip(dHand[1]), 50);
+    // After flip settles, render remaining new cards
+    if (dHand.length > 2) {
+      setTimeout(() => {
+        const existing = dealerEl.querySelectorAll('.card');
+        for (let i = 2; i < dHand.length; i++) {
+          const el = document.createElement('div');
+          el.outerHTML; // not used
+          dealerEl.innerHTML += makeCard(dHand[i], true);
+        }
+      }, 450);
     }
+  } else {
+    dealerEl.innerHTML = dHand.map((c, i) => makeCard(c, i >= prevDH.length)).join('');
   }
 
-  // ── WebSocket ─────────────────────────────────────────────────────────────────
-  function connect() {
-    if (!SESSION_TOKEN) return;
-    const wsUrl = API.replace(/^http/, 'ws') + `/ws/blackjack/${SESSION_TOKEN}`;
-    ws = new WebSocket(wsUrl);
-
-    ws.onopen = () => setStatus(true, 'Connecté');
-
-    ws.onmessage = e => {
-      const state = JSON.parse(e.data);
-      render(state);
-      setStatus(true, 'Mis à jour · ' + new Date().toLocaleTimeString('fr-FR'));
-    };
-
-    ws.onclose = () => {
-      setStatus(false, 'Reconnexion…');
-      setTimeout(connect, 3000);
-    };
-
-    ws.onerror = () => ws.close();
+  const dealerTotalEl = document.getElementById('dealer-total');
+  if (state.dealer_value != null) {
+    dealerTotalEl.textContent = `Total : ${state.dealer_value}`;
+  } else if (dHand.length > 0) {
+    const vis = dHand.filter(c => c !== '?');
+    dealerTotalEl.textContent = vis.length ? `Visible : ${handVal(vis)}` : '';
+  } else {
+    dealerTotalEl.textContent = '';
   }
+  prevDealerLen = dHand.length;
 
-  function sendAction(action) {
-    if (!ws || ws.readyState !== WebSocket.OPEN) return;
-    document.getElementById('btn-hit').disabled   = true;
-    document.getElementById('btn-stand').disabled = true;
-    ws.send(JSON.stringify({ action, telegram_id: myTid }));
+  // ── Players
+  const zone = document.getElementById('players-zone');
+  zone.innerHTML = state.players.map(p => {
+    const isMe  = p.telegram_id === myTid;
+    const hand  = p.hand || [];
+    const prevP = prev ? prev.players.find(x => x.telegram_id === p.telegram_id) : null;
+    const prevLen = prevP ? (prevP.hand || []).length : 0;
+    const realHand = hand.filter(c => c !== '?');
+    const total    = realHand.length ? handVal(realHand) : 0;
+
+    const badgeCls = { playing:'b-playing', stand:'b-stand', bust:'b-bust', done:'b-done', waiting:'b-waiting' }[p.status] || 'b-waiting';
+    const badgeTxt = { playing:'🎮 Joue', stand:'✋ Stand', bust:'💥 Bust!', done:'✅', waiting:'⏳' }[p.status] || p.status;
+    const resultHTML = { win:'<div class="slot-result r-win">🏆 Gagné !</div>', lose:'<div class="slot-result r-lose">💸 Perdu</div>', push:'<div class="slot-result r-push">🤝 Égalité</div>', blackjack:'<div class="slot-result r-blackjack">🎉 BLACKJACK !</div>' }[p.result] || '';
+
+    const slotCls = ['pslot', isMe?'is-me':'', p.result?`result-${p.result}`:`status-${p.status}`].filter(Boolean).join(' ');
+
+    return `<div class="${slotCls}">
+      <div class="slot-name">${esc(p.username)}${isMe?' 👤':''}</div>
+      <div class="slot-bet">🪙 ${p.bet}</div>
+      <div class="slot-cards">${hand.map((c,i) => makeCard(c, i >= prevLen)).join('')}</div>
+      ${total ? `<div class="slot-total">= ${total}</div>` : ''}
+      <span class="badge ${badgeCls}">${badgeTxt}</span>
+      ${resultHTML}
+    </div>`;
+  }).join('');
+
+  // ── Action / Rematch bars
+  const me         = state.players.find(p => p.telegram_id === myTid);
+  const actionBar  = document.getElementById('action-bar');
+  const rematchBar = document.getElementById('rematch-bar');
+  const isCreator  = myTid === state.creator_id;
+
+  if (me && me.status === 'playing' && state.status === 'active') {
+    actionBar.classList.add('on'); rematchBar.classList.remove('on');
+    document.getElementById('btn-hit').disabled = document.getElementById('btn-stand').disabled = false;
+  } else if (state.status === 'finished' && isCreator) {
+    actionBar.classList.remove('on'); rematchBar.classList.add('on');
+    document.getElementById('btn-rematch').disabled = false;
+  } else {
+    actionBar.classList.remove('on'); rematchBar.classList.remove('on');
   }
+}
+
+// ── WebSocket ─────────────────────────────────────────────────────────────────
+function connect() {
+  if (!SESSION_TOKEN) return;
+  const url = API.replace(/^http/, 'ws') + `/ws/blackjack/${SESSION_TOKEN}`;
+  ws = new WebSocket(url);
+  ws.onopen    = () => setConn(true, 'Connecté');
+  ws.onmessage = e => { render(JSON.parse(e.data)); setConn(true, new Date().toLocaleTimeString('fr-FR')); };
+  ws.onclose   = () => { setConn(false, 'Reconnexion…'); setTimeout(connect, 3000); };
+  ws.onerror   = () => ws.close();
+}
+
+// ── Actions ───────────────────────────────────────────────────────────────────
+function act(action) {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  document.getElementById('btn-hit').disabled = document.getElementById('btn-stand').disabled = true;
+  ws.send(JSON.stringify({ action, telegram_id: myTid }));
+}
+
+async function doRematch() {
+  const btn = document.getElementById('btn-rematch');
+  btn.textContent = '⏳ …'; btn.disabled = true;
+  try {
+    const r = await fetch(`${API}/blackjack/${SESSION_TOKEN}/rematch`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ telegram_id: myTid }),
+    });
+    const d = await r.json();
+    if (d.ok && d.token) {
+      SESSION_TOKEN = d.token;
+      history.replaceState({}, '', `?session=${d.token}`);
+      lastState = null; prevDealerLen = 0; prevHandLens = {};
+      document.getElementById('rematch-bar').classList.remove('on');
+      document.getElementById('dealer-cards').innerHTML = '';
+      document.getElementById('players-zone').innerHTML = '';
+      if (ws) ws.close();
+      connect();
+    } else {
+      alert(d.error || 'Erreur lors du rejouer.');
+      btn.textContent = '🔄 Rejouer'; btn.disabled = false;
+    }
+  } catch {
+    btn.textContent = '🔄 Rejouer'; btn.disabled = false;
+  }
+}
 </script>
 </body>
 </html>

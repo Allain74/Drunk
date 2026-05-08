@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import secrets
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
@@ -8,20 +9,20 @@ from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.middleware.cors import CORSMiddleware
-from telegram import Update
+from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 
 from data.database import (
     init_db, get_all_users, get_all_active_drinks, get_active_session,
     get_drinks_by_session, get_all_time_stats, get_last_drink_time,
     set_last_inactivity_notif, get_last_inactivity_notif,
-    get_active_bets, settle_bet, get_bet, get_user, add_coins,
+    get_active_bets, settle_bet, get_bet, get_user, add_coins, get_coins,
     get_all_balances, get_transactions,
     get_blackjack_session, get_blackjack_players, update_blackjack_session,
-    update_blackjack_player,
+    update_blackjack_player, create_blackjack_session, add_blackjack_player,
 )
 from core.recap import build_weekly_recap
 from core.widmark import total_bac, bac_label, sober_in_hours
-from core.blackjack import new_deck, hand_value, display_hand
+from core.blackjack import new_deck, hand_value, display_hand, is_blackjack
 
 load_dotenv()
 
@@ -452,6 +453,7 @@ async def blackjack_ws(ws: WebSocket, token: str):
 
         state = {
             "status": sess["status"],
+            "creator_id": sess["creator_id"],
             "dealer_hand": (
                 ([dealer_hand[0], "?"] if dealer_hand else []) if hide_dealer else dealer_hand
             ),
@@ -535,3 +537,97 @@ async def blackjack_ws(ws: WebSocket, token: str):
         pass
     finally:
         _bj_clients.get(token, set()).discard(ws)
+
+
+@app.post("/blackjack/{token}/rematch")
+async def blackjack_rematch(token: str, request: Request):
+    body = await request.json()
+    caller_id = body.get("telegram_id")
+
+    session = get_blackjack_session(token)
+    if not session:
+        return {"ok": False, "error": "Session introuvable"}
+    if session["creator_id"] != caller_id:
+        return {"ok": False, "error": "Seul le créateur peut relancer la partie"}
+    if session["status"] != "finished":
+        return {"ok": False, "error": "La partie n'est pas encore terminée"}
+
+    old_players = get_blackjack_players(session["id"])
+    if not old_players:
+        return {"ok": False, "error": "Aucun joueur trouvé"}
+
+    # Vérifier les soldes
+    for p in old_players:
+        if get_coins(p["telegram_id"]) < p["bet"]:
+            u = get_user(p["telegram_id"])
+            name = u["username"] if u else str(p["telegram_id"])
+            return {"ok": False, "error": f"Solde insuffisant pour {name}"}
+
+    # Nouvelle session
+    new_token = secrets.token_urlsafe(8)
+    new_sid = create_blackjack_session(caller_id, new_token)
+
+    deck = new_deck()
+    dealer_hand = [deck.pop(), deck.pop()]
+    hands: dict[int, list] = {}
+
+    for p in old_players:
+        hand = [deck.pop(), deck.pop()]
+        hands[p["telegram_id"]] = hand
+        add_blackjack_player(new_sid, p["telegram_id"], p["bet"])
+        add_coins(p["telegram_id"], -p["bet"], "Mise blackjack (revanche)")
+        update_blackjack_player(new_sid, p["telegram_id"], hand=json.dumps(hand), status="playing")
+
+    update_blackjack_session(new_sid,
+        status="active",
+        deck=json.dumps(deck),
+        dealer_hand=json.dumps(dealer_hand)
+    )
+
+    site = os.environ.get("SITE_URL", "https://drunk-weld.vercel.app")
+    bj_url = f"{site}/blackjack.html?session={new_token}"
+
+    # Texte état global
+    all_players = get_blackjack_players(new_sid)
+    state_lines = ["👥 *Mains de tout le monde :*\n"]
+    for p in all_players:
+        u = get_user(p["telegram_id"])
+        name = u["username"] if u else "?"
+        h = json.loads(p["hand"])
+        state_lines.append(f"🎮 *{name}* : {display_hand(h)}")
+    state_lines.append(f"\n🏠 *Croupier* : {display_hand(dealer_hand, hide_second=True)}")
+    state_txt = "\n".join(state_lines)
+
+    bj_kb = InlineKeyboardMarkup([[
+        InlineKeyboardButton("🃏 Hit",   callback_data="bj:hit"),
+        InlineKeyboardButton("✋ Stand", callback_data="bj:stand"),
+    ]])
+
+    for p in all_players:
+        hand = json.loads(p["hand"])
+        msg = (
+            f"🔄 *Revanche !*\n\n"
+            f"🎴 Ta main : {display_hand(hand)}\n\n"
+            f"{state_txt}\n\n"
+            f"🌐 {bj_url}"
+        )
+        if is_blackjack(hand):
+            bet = p["bet"]
+            winnings = int(bet * 1.5)
+            add_coins(p["telegram_id"], bet + winnings, "Blackjack ! (×1.5)")
+            update_blackjack_player(new_sid, p["telegram_id"], status="done", result="blackjack")
+            msg += f"\n\n🎉 *BLACKJACK !* Tu gagnes {winnings} 🪙 !"
+            try:
+                await _bot_app.bot.send_message(chat_id=p["telegram_id"], text=msg, parse_mode="Markdown")
+            except Exception:
+                pass
+        else:
+            try:
+                await _bot_app.bot.send_message(
+                    chat_id=p["telegram_id"], text=msg,
+                    parse_mode="Markdown", reply_markup=bj_kb
+                )
+            except Exception:
+                pass
+
+    return {"ok": True, "token": new_token}
