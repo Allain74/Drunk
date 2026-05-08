@@ -322,12 +322,12 @@
 <!-- Player ID prompt -->
 <div id="id-prompt">
   <h2>Qui es-tu ?</h2>
-  <p>Entre ton ID Telegram pour jouer.<br>Tu le trouves en envoyant <code>/solde</code> au bot — l'ID est visible dans les logs ou demande à un admin.</p>
+  <p>Entre ton prénom tel qu'enregistré sur le bot.</p>
   <div class="input-row">
-    <input type="number" id="tid-input" placeholder="Ton ID Telegram" autocomplete="off"/>
+    <input type="text" id="tid-input" placeholder="Ton prénom (ex: Thomas)" autocomplete="off" autocapitalize="words"/>
     <button class="btn-sm" onclick="confirmId()">OK</button>
   </div>
-  <p style="margin-top:12px;font-size:0.75rem;color:var(--muted)">Ton ID reste dans ce navigateur uniquement.</p>
+  <p id="id-error" style="margin-top:10px;font-size:0.8rem;color:var(--red);display:none">Prénom introuvable, vérifie l'orthographe.</p>
 </div>
 
 <!-- Main game UI -->
@@ -376,16 +376,33 @@
     showMain();
   }
 
-  function confirmId() {
-    const val = parseInt(document.getElementById('tid-input').value.trim());
-    if (!val || val < 1000) {
-      alert('ID invalide.');
-      return;
+  async function confirmId() {
+    const name = document.getElementById('tid-input').value.trim();
+    if (!name) return;
+    const btn = document.querySelector('#id-prompt .btn-sm');
+    btn.textContent = '…';
+    btn.disabled = true;
+    try {
+      const r = await fetch(`${API}/lookup?name=${encodeURIComponent(name)}`);
+      const data = await r.json();
+      if (!data.found) {
+        document.getElementById('id-error').style.display = 'block';
+        btn.textContent = 'OK';
+        btn.disabled = false;
+        return;
+      }
+      myTid = data.telegram_id;
+      localStorage.setItem('bj_tid', String(myTid));
+      showMain();
+    } catch {
+      btn.textContent = 'OK';
+      btn.disabled = false;
     }
-    myTid = val;
-    localStorage.setItem('bj_tid', String(myTid));
-    showMain();
   }
+
+  document.getElementById('tid-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') confirmId();
+  });
 
   function showMain() {
     document.getElementById('id-prompt').style.display = 'none';

@@ -314,6 +314,15 @@ def get_alltime():
     return get_all_time_stats()
 
 
+@app.get("/lookup")
+def lookup_user(name: str):
+    from data.database import get_user_by_username
+    user = get_user_by_username(name)
+    if not user:
+        return {"found": False}
+    return {"found": True, "telegram_id": user["telegram_id"], "username": user["username"]}
+
+
 async def _bet_settlement_loop():
     while True:
         await asyncio.sleep(60)

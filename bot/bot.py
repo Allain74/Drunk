@@ -586,6 +586,16 @@ async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if text in ("defi", "défi", "classement"):
         await cmd_defi(update, ctx); return
 
+    # Blackjack multi-player : hit/stand hors ConversationHandler
+    if text in ("hit", "carte", "stand", "rester"):
+        session = get_blackjack_session_by_player(tid)
+        if session and session["status"] == "active":
+            players = get_blackjack_players(session["id"])
+            player = next((p for p in players if p["telegram_id"] == tid), None)
+            if player and player["status"] == "playing":
+                await _bj_action(update.message.reply_text, tid, text, session, ctx.bot)
+                return
+
     drink_key = ALIAS_MAP.get(text)
     if drink_key:
         await _do_drink(update, ctx, drink_key)
@@ -972,86 +982,98 @@ async def cmd_bj_bet(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         return ConversationHandler.END
 
 
-async def cmd_bj_play(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    """Handle hit/stand during solo play via Telegram."""
-    tid = update.effective_user.id
-    action = update.message.text.strip().lower()
-
-    session = get_blackjack_session_by_player(tid)
-    if not session:
-        await update.message.reply_text("❌ Aucune partie en cours.")
-        return ConversationHandler.END
-
+async def _bj_action(reply_func, tid: int, action: str, session: dict, bot=None) -> bool:
+    """Logique hit/stand partagée solo+multi. Retourne True si tour terminé."""
     players = get_blackjack_players(session["id"])
     player = next((p for p in players if p["telegram_id"] == tid), None)
     if not player or player["status"] != "playing":
-        return ConversationHandler.END
+        return True
 
     hand = json.loads(player["hand"])
     deck = json.loads(session["deck"])
     dealer_hand = json.loads(session["dealer_hand"])
 
-    if action in ("hit", "carte", "h"):
+    if action in ("hit", "carte"):
         card = deck.pop()
         hand.append(card)
         update_blackjack_session(session["id"], deck=json.dumps(deck))
-        val = hand_value(hand)
-
-        if val > 21:
+        if hand_value(hand) > 21:
             update_blackjack_player(session["id"], tid, hand=json.dumps(hand), status="bust", result="lose")
-            update_blackjack_session(session["id"], status="finished")
-            bet = player["bet"]
-            await update.message.reply_text(
-                f"🃏 Ta main : {display_hand(hand)}\n💥 *Bust !* Tu perds {bet} 🪙.",
+            await reply_func(
+                f"🃏 Ta main : {display_hand(hand)}\n💥 *Bust !* Tu perds {player['bet']} 🪙.",
                 parse_mode="Markdown"
             )
-            return ConversationHandler.END
         else:
             update_blackjack_player(session["id"], tid, hand=json.dumps(hand))
-            await update.message.reply_text(
+            await reply_func(
                 f"🃏 Ta main : {display_hand(hand)}\n"
                 f"🏠 Croupier : {display_hand(dealer_hand, hide_second=True)}\n\n"
                 f"*hit* (carte) / *stand* (rester)",
                 parse_mode="Markdown"
             )
-            return BJ_PLAYING
+            return False  # tour pas terminé
 
-    elif action in ("stand", "rester", "s"):
-        update_blackjack_player(session["id"], tid, hand=json.dumps(hand), status="stand")
-
-        while hand_value(dealer_hand) < 17:
-            dealer_hand.append(deck.pop())
-
-        update_blackjack_session(session["id"],
-            dealer_hand=json.dumps(dealer_hand),
-            deck=json.dumps(deck),
-            status="finished"
-        )
-
-        player_val = hand_value(hand)
-        dealer_val = hand_value(dealer_hand)
-        bet = player["bet"]
-
-        result_text = f"🃏 Ta main : {display_hand(hand)}\n🏠 Croupier : {display_hand(dealer_hand)}\n\n"
-
-        if dealer_val > 21 or player_val > dealer_val:
-            add_coins(tid, bet * 2, f"Blackjack gagné (vs croupier {dealer_val})")
-            update_blackjack_player(session["id"], tid, result="win")
-            result_text += f"🏆 *Tu gagnes !* +{bet} 🪙"
-        elif player_val == dealer_val:
-            add_coins(tid, bet, "Blackjack égalité")
-            update_blackjack_player(session["id"], tid, result="push")
-            result_text += "🤝 *Égalité !* Mise remboursée."
-        else:
-            update_blackjack_player(session["id"], tid, result="lose")
-            result_text += f"💸 *Perdu !* -{bet} 🪙"
-
-        await update.message.reply_text(result_text, parse_mode="Markdown")
-        return ConversationHandler.END
-
+    elif action in ("stand", "rester"):
+        update_blackjack_player(session["id"], tid, status="stand")
+        await reply_func("✅ Tu restes.", parse_mode="Markdown")
     else:
-        await update.message.reply_text("Tape *hit* ou *stand*", parse_mode="Markdown")
-        return BJ_PLAYING
+        await reply_func("Tape *hit* ou *stand*", parse_mode="Markdown")
+        return False
+
+    # Vérifier si tous les joueurs ont terminé leur tour
+    players = get_blackjack_players(session["id"])
+    all_done = all(p["status"] in ("stand", "bust") for p in players)
+    if not all_done:
+        return True
+
+    # Dealer joue
+    while hand_value(dealer_hand) < 17:
+        dealer_hand.append(deck.pop())
+    dealer_val = hand_value(dealer_hand)
+    update_blackjack_session(session["id"],
+        dealer_hand=json.dumps(dealer_hand),
+        deck=json.dumps(deck),
+        status="finished"
+    )
+
+    # Résultats pour chaque joueur
+    for p in players:
+        p_hand = json.loads(p["hand"])
+        bet = p["bet"]
+        if p["status"] == "bust":
+            res = f"💥 *Bust !* -{bet} 🪙\n🏠 Croupier : {display_hand(dealer_hand)}"
+        elif dealer_val > 21 or hand_value(p_hand) > dealer_val:
+            add_coins(p["telegram_id"], bet * 2, "Blackjack gagné")
+            update_blackjack_player(session["id"], p["telegram_id"], result="win")
+            res = f"🃏 {display_hand(p_hand)}\n🏠 Croupier : {display_hand(dealer_hand)}\n\n🏆 *Tu gagnes !* +{bet} 🪙"
+        elif hand_value(p_hand) == dealer_val:
+            add_coins(p["telegram_id"], bet, "Blackjack égalité")
+            update_blackjack_player(session["id"], p["telegram_id"], result="push")
+            res = f"🃏 {display_hand(p_hand)}\n🏠 Croupier : {display_hand(dealer_hand)}\n\n🤝 *Égalité !* Mise remboursée."
+        else:
+            update_blackjack_player(session["id"], p["telegram_id"], result="lose")
+            res = f"🃏 {display_hand(p_hand)}\n🏠 Croupier : {display_hand(dealer_hand)}\n\n💸 *Perdu !* -{bet} 🪙"
+
+        if p["telegram_id"] == tid:
+            await reply_func(res, parse_mode="Markdown")
+        elif bot:
+            try:
+                await bot.send_message(chat_id=p["telegram_id"], text=res, parse_mode="Markdown")
+            except Exception:
+                pass
+    return True
+
+
+async def cmd_bj_play(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Handle hit/stand pendant la conversation solo."""
+    tid = update.effective_user.id
+    action = update.message.text.strip().lower()
+    session = get_blackjack_session_by_player(tid)
+    if not session:
+        await update.message.reply_text("❌ Aucune partie en cours.")
+        return ConversationHandler.END
+    done = await _bj_action(update.message.reply_text, tid, action, session, ctx.bot)
+    return ConversationHandler.END if done else BJ_PLAYING
 
 
 async def cmd_bj_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
