@@ -28,6 +28,7 @@ DRINKS: dict[str, Drink] = {
     "sangria":       Drink("Verre sangria",            200,  9.0,  ["sangria"]),
     "cidre":         Drink("Verre cidre",              250,  4.5,  ["cidre", "cider"]),
     "pastis":        Drink("Pastis",                    25, 45.0,  ["pastis", "ricard", "51"]),
+    "bucket":        Drink("Bucket thaïlandais 🪣",     375, 40.0, ["bucket", "buckethai"]),
 }
 
 def find_drink(query: str) -> Drink | None:

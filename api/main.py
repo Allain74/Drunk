@@ -85,6 +85,7 @@ async def lifespan(app: FastAPI):
         BotCommand("pastis",     "🌿 Pastis 2.5cl"),
         BotCommand("cidre",      "🍎 Cidre 25cl"),
         BotCommand("sangria",    "🍷 Sangria 20cl"),
+        BotCommand("bucket",     "🪣 Bucket thaïlandais (375ml, 40°)"),
         BotCommand("solde",      "🪙 Voir ton solde de BeerCoins"),
         BotCommand("offrir",     "🎁 Offrir des coins  →  /offrir Prénom 50"),
         BotCommand("pari",       "🎰 Lancer un pari"),
