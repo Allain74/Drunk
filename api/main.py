@@ -2,7 +2,8 @@ import asyncio
 import json
 import os
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
@@ -10,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from telegram import Update
 
 from data.database import init_db, get_all_users, get_all_active_drinks, get_active_session, get_drinks_by_session, get_all_time_stats, get_last_drink_time, set_last_inactivity_notif, get_last_inactivity_notif
+from core.recap import build_weekly_recap
 from core.widmark import total_bac, bac_label, sober_in_hours
 
 load_dotenv()
@@ -17,6 +19,8 @@ load_dotenv()
 _ws_clients: set[WebSocket] = set()
 _bot_app = None
 _danger_notified: dict[int, datetime] = {}
+_last_weekly_recap_date: str = ""  # "YYYY-MM-DD" du dernier lundi envoyé
+PARIS = ZoneInfo("Europe/Paris")
 
 RENDER_URL = os.environ.get("RENDER_URL", "https://drunk-l34t.onrender.com")
 
@@ -80,6 +84,7 @@ async def lifespan(app: FastAPI):
         BotCommand("ban",        "🚫 Bannir un utilisateur  →  /ban Prénom"),
         BotCommand("unban",      "✅ Débannir  →  /unban Prénom"),
         BotCommand("rename",     "✏️ Renommer  →  /rename Ancien Nouveau"),
+        BotCommand("recap",      "📊 Recap de la semaine  →  /recap [send]"),
     ]
 
     await _bot_app.bot.set_my_commands(user_commands, scope=BotCommandScopeDefault())
@@ -93,6 +98,7 @@ async def lifespan(app: FastAPI):
 
     asyncio.create_task(_broadcast_loop())
     asyncio.create_task(_danger_loop())
+    asyncio.create_task(_weekly_recap_loop())
 
     yield
 
@@ -223,6 +229,30 @@ async def _danger_loop():
                         await _bot_app.bot.send_message(
                             chat_id=uid,
                             text=msg_template.format(name=user["username"]),
+                            parse_mode="Markdown"
+                        )
+                    except Exception:
+                        pass
+
+
+async def _weekly_recap_loop():
+    global _last_weekly_recap_date
+    while True:
+        await asyncio.sleep(60)
+        now_paris = datetime.now(PARIS)
+        # Lundi à 9h00
+        if now_paris.weekday() == 0 and now_paris.hour == 9:
+            today_str = now_paris.strftime("%Y-%m-%d")
+            if _last_weekly_recap_date != today_str:
+                _last_weekly_recap_date = today_str
+                until = datetime.now(timezone.utc)
+                since = until - timedelta(days=7)
+                msg = build_weekly_recap(since, until)
+                for user in get_all_users():
+                    try:
+                        await _bot_app.bot.send_message(
+                            chat_id=user["telegram_id"],
+                            text=msg,
                             parse_mode="Markdown"
                         )
                     except Exception:

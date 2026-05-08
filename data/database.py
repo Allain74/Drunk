@@ -316,6 +316,16 @@ def get_last_drink_time(telegram_id: int) -> datetime | None:
     return datetime.fromisoformat(row["logged_at"]).replace(tzinfo=timezone.utc)
 
 
+def get_weekly_drink_logs(since: datetime) -> list[dict]:
+    return _fetchall("""
+        SELECT dl.telegram_id, u.username, dl.drink_key, dl.alc_grams, dl.logged_at
+        FROM drink_logs dl
+        JOIN users u ON dl.telegram_id = u.telegram_id
+        WHERE dl.logged_at >= ?
+        ORDER BY dl.telegram_id, dl.logged_at
+    """, [since.isoformat()])
+
+
 def get_top_drinks(telegram_id: int, n: int = 5) -> list[str]:
     rows = _fetchall("""
         SELECT drink_key, COUNT(*) as cnt

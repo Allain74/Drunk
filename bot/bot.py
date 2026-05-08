@@ -11,6 +11,7 @@ from telegram.ext import (
 )
 from core.drinks import DRINKS, list_drinks_text
 from core.widmark import alcohol_grams, total_bac, bac_label, sober_in_hours
+from core.recap import build_weekly_recap
 from data.database import (
     init_db, upsert_user, get_user, get_user_by_username, get_all_users,
     start_session, get_active_session, log_drink, get_session_drinks,
@@ -506,6 +507,24 @@ async def cmd_delverre(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     await _refresh_api()
 
 
+# ── /recap (admin) ────────────────────────────────────────────────────────────
+
+async def cmd_recap(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    tid = update.effective_user.id
+    if not _is_admin(tid):
+        await update.message.reply_text("❌ Réservé à l'admin.")
+        return
+    now = datetime.now(timezone.utc)
+    since = now - timedelta(days=7)
+    msg = build_weekly_recap(since, now)
+    # Prévisualisation pour l'admin seulement
+    await update.message.reply_text(msg, parse_mode="Markdown")
+    # Si arg "send" → envoie à tout le monde
+    if ctx.args and ctx.args[0].lower() == "send":
+        await _notify_everyone(ctx, msg)
+        await update.message.reply_text("✅ Recap envoyé à tous !")
+
+
 # ── /site ─────────────────────────────────────────────────────────────────────
 
 async def cmd_site(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -583,6 +602,7 @@ def create_application() -> Application:
     app.add_handler(CommandHandler("notifmaj",                    cmd_notifmaj))
     app.add_handler(CommandHandler("add",                         cmd_addverre))
     app.add_handler(CommandHandler("del",                         cmd_delverre))
+    app.add_handler(CommandHandler("recap",                       cmd_recap))
     app.add_handler(CommandHandler(["liste", "l"],                lambda u, c: u.message.reply_text(list_drinks_text(), parse_mode="Markdown")))
 
     registered = set()
