@@ -26,6 +26,7 @@ from data.database import (
     update_blackjack_session,
     add_blackjack_player, get_blackjack_players, update_blackjack_player,
     get_blackjack_session_by_player, _get_waiting_session_by_creator,
+    is_following, follow_user, unfollow_user, get_following,
 )
 
 load_dotenv()
@@ -80,9 +81,9 @@ def ensure_session(telegram_id: int):
 
 
 async def _notify_all(ctx, sender_id: int, message: str):
-    """Envoie un message à tous les utilisateurs sauf l'expéditeur."""
+    """Envoie un message à tous les utilisateurs qui suivent l'expéditeur."""
     for user in get_all_users():
-        if user["telegram_id"] != sender_id:
+        if user["telegram_id"] != sender_id and is_following(user["telegram_id"], sender_id):
             try:
                 await ctx.bot.send_message(chat_id=user["telegram_id"], text=message, parse_mode="Markdown")
             except Exception:
@@ -434,20 +435,29 @@ async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 
 async def cmd_rename(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    """Usage : /rename <ancien> <nouveau>"""
-    if not _is_admin(update.effective_user.id):
-        return
-    if len(ctx.args) < 2:
-        await update.message.reply_text("Usage : /rename <ancien_prénom> <nouveau_prénom>")
-        return
-    target = get_user_by_username(ctx.args[0])
-    if not target:
-        await update.message.reply_text(f"❌ Utilisateur '{ctx.args[0]}' introuvable.")
-        return
-    new_name = ctx.args[1]
-    rename_user(target["telegram_id"], new_name)
-    await update.message.reply_text(f"✅ Renommé : *{target['username']}* → *{new_name}*", parse_mode="Markdown")
-    await _refresh_api()
+    """Usage : /rename <nouveau> (soi-même) ou /rename <ancien> <nouveau> (admin)"""
+    tid = update.effective_user.id
+    if len(ctx.args) == 1:
+        # Tous les utilisateurs peuvent changer leur propre pseudo
+        if not get_user(tid):
+            await update.message.reply_text("❌ Configure ton profil d'abord : /p 80 h")
+            return
+        new_name = ctx.args[0]
+        rename_user(tid, new_name)
+        await update.message.reply_text(f"✅ Pseudo changé en *{new_name}* !", parse_mode="Markdown")
+        await _refresh_api()
+    elif len(ctx.args) == 2 and _is_admin(tid):
+        # Admin peut renommer quelqu'un d'autre
+        target = get_user_by_username(ctx.args[0])
+        if not target:
+            await update.message.reply_text(f"❌ Utilisateur '{ctx.args[0]}' introuvable.")
+            return
+        new_name = ctx.args[1]
+        rename_user(target["telegram_id"], new_name)
+        await update.message.reply_text(f"✅ Renommé : *{target['username']}* → *{new_name}*", parse_mode="Markdown")
+        await _refresh_api()
+    else:
+        await update.message.reply_text("Usage : /rename <nouveau_pseudo>")
 
 
 # ── /notifmaj ─────────────────────────────────────────────────────────────────

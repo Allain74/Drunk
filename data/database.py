@@ -156,6 +156,22 @@ def init_db():
             result     TEXT
         )""", []),
     ])
+    # Follows table
+    _execute("""CREATE TABLE IF NOT EXISTS follows (
+        follower_id  INTEGER NOT NULL,
+        following_id INTEGER NOT NULL,
+        PRIMARY KEY (follower_id, following_id)
+    )""")
+    # Populate: everyone follows everyone by default (idempotent)
+    _all = get_all_users()
+    _pairs = [
+        ("INSERT OR IGNORE INTO follows (follower_id, following_id) VALUES (?, ?)",
+         [u1["telegram_id"], u2["telegram_id"]])
+        for u1 in _all for u2 in _all
+        if u1["telegram_id"] != u2["telegram_id"]
+    ]
+    if _pairs:
+        _pipeline(_pairs)
 
 
 def upsert_user(telegram_id: int, username: str, weight_kg: float, gender: str):
@@ -501,3 +517,22 @@ def _get_waiting_session_by_creator(telegram_id: int) -> dict | None:
         "SELECT * FROM blackjack_sessions WHERE creator_id=? AND status='waiting' ORDER BY created_at DESC LIMIT 1",
         [telegram_id]
     )
+
+
+# ── Follows ───────────────────────────────────────────────────────────────────
+
+def follow_user(follower_id: int, following_id: int):
+    _execute("INSERT OR IGNORE INTO follows (follower_id, following_id) VALUES (?, ?)",
+             [follower_id, following_id])
+
+def unfollow_user(follower_id: int, following_id: int):
+    _execute("DELETE FROM follows WHERE follower_id=? AND following_id=?",
+             [follower_id, following_id])
+
+def is_following(follower_id: int, following_id: int) -> bool:
+    return _fetchone("SELECT 1 FROM follows WHERE follower_id=? AND following_id=?",
+                     [follower_id, following_id]) is not None
+
+def get_following(follower_id: int) -> list[int]:
+    rows = _fetchall("SELECT following_id FROM follows WHERE follower_id=?", [follower_id])
+    return [r["following_id"] for r in rows]

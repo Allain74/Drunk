@@ -19,6 +19,7 @@ from data.database import (
     get_all_balances, get_transactions,
     get_blackjack_session, get_blackjack_players, update_blackjack_session,
     update_blackjack_player, create_blackjack_session, add_blackjack_player,
+    follow_user, unfollow_user, is_following, get_following,
 )
 from core.recap import build_weekly_recap
 from core.widmark import total_bac, bac_label, sober_in_hours
@@ -95,6 +96,7 @@ async def lifespan(app: FastAPI):
         BotCommand("blackjack",  "🃏 Jouer au blackjack"),
         BotCommand("rejoindrebj","🃏 Rejoindre une partie  →  /rejoindrebj token mise"),
         BotCommand("lancerbj",   "🚀 Lancer une partie multi"),
+        BotCommand("rename",     "✏️ Changer ton pseudo  →  /rename NouveauNom"),
     ]
 
     admin_commands = user_commands + [
@@ -104,7 +106,6 @@ async def lifespan(app: FastAPI):
         BotCommand("del",        "➖ Supprimer un verre  →  /del Prénom"),
         BotCommand("ban",        "🚫 Bannir un utilisateur  →  /ban Prénom"),
         BotCommand("unban",      "✅ Débannir  →  /unban Prénom"),
-        BotCommand("rename",     "✏️ Renommer  →  /rename Ancien Nouveau"),
         BotCommand("recap",      "📊 Recap de la semaine  →  /recap [send]"),
     ]
 
@@ -424,6 +425,44 @@ def get_coins_endpoint():
             ],
         })
     return result
+
+
+@app.get("/users")
+def get_all_users_endpoint():
+    admin_id = int(os.environ.get("ADMIN_ID", "0"))
+    users = get_all_users()
+    return [
+        {
+            "telegram_id": u["telegram_id"],
+            "username": u["username"],
+            "is_admin": u["telegram_id"] == admin_id,
+        }
+        for u in users
+    ]
+
+@app.get("/following/{telegram_id}")
+def get_following_endpoint(telegram_id: int):
+    return {"following": get_following(telegram_id)}
+
+@app.post("/follow")
+async def follow_endpoint(request: Request):
+    body = await request.json()
+    follower_id  = body.get("follower_id")
+    following_id = body.get("following_id")
+    if not follower_id or not following_id:
+        return {"ok": False, "error": "Missing IDs"}
+    follow_user(follower_id, following_id)
+    return {"ok": True}
+
+@app.post("/unfollow")
+async def unfollow_endpoint(request: Request):
+    body = await request.json()
+    follower_id  = body.get("follower_id")
+    following_id = body.get("following_id")
+    if not follower_id or not following_id:
+        return {"ok": False, "error": "Missing IDs"}
+    unfollow_user(follower_id, following_id)
+    return {"ok": True}
 
 
 @app.websocket("/ws/blackjack/{token}")

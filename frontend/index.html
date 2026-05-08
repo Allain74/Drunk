@@ -63,9 +63,31 @@
       background-clip: text;
     }
 
-    #theme-btn {
+    #header-right {
       position: absolute;
       right: 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    #identity-btn {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 6px 10px;
+      cursor: pointer;
+      font-size: 0.82rem;
+      color: var(--text);
+      font-weight: 600;
+      transition: background .2s;
+      white-space: nowrap;
+      max-width: 140px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    #theme-btn {
       background: var(--card);
       border: 1px solid var(--border);
       border-radius: 8px;
@@ -90,12 +112,16 @@
     #dot { width:7px; height:7px; border-radius:50%; background:var(--muted); transition:background .4s; }
     #dot.ok { background:#22c55e; box-shadow:0 0 6px #22c55e88; }
 
+    /* ── Admin name ── */
+    .admin-name { color: #facc15; font-weight: 900; }
+
     /* ── Tabs ── */
     .tabs {
       display: flex;
       gap: 8px;
       max-width: 1000px;
       margin: 0 auto 24px;
+      flex-wrap: wrap;
     }
 
     .tab {
@@ -297,13 +323,70 @@
     .tx-pos { color:#22c55e; font-weight:700; }
     .tx-neg { color:#ef4444; font-weight:700; }
     .tx-time { color:var(--sub); font-size:0.72rem; }
+
+    /* ── Modal profile ── */
+    .modal-bg4 { display:none; position:fixed; inset:0; background:#0007; z-index:100; align-items:center; justify-content:center; padding:16px; }
+    .modal-bg4.open { display:flex; }
+    .modal4 { background:var(--card); border-radius:20px; padding:24px; width:100%; max-width:420px; position:relative; }
+    .modal4-close { position:absolute; top:16px; right:16px; background:none; border:none; font-size:1.4rem; cursor:pointer; color:var(--sub); }
+    .profile-name { font-size:1.5rem; font-weight:900; margin-bottom:4px; }
+    .profile-badge { display:inline-block; font-size:0.72rem; font-weight:700; border-radius:6px; padding:2px 8px; margin-bottom:12px; }
+    .profile-badge.admin { background:#facc15; color:#78350f; }
+    .profile-badge.self  { background:#6366f1; color:#fff; }
+    .profile-stats { display:flex; gap:10px; margin-bottom:16px; }
+    .profile-stat { flex:1; background:var(--bg); border-radius:12px; padding:10px; text-align:center; }
+    .profile-stat-val { font-size:1.2rem; font-weight:800; }
+    .profile-stat-lbl { font-size:0.6rem; color:var(--sub); margin-top:2px; }
+    .profile-actions { display:flex; gap:10px; margin-top:8px; }
+    .btn-follow { flex:1; padding:10px; border-radius:10px; font-weight:700; font-size:0.9rem; cursor:pointer; border:none; transition:background .2s; }
+    .btn-follow.following { background:#ef4444; color:#fff; }
+    .btn-follow.not-following { background:#22c55e; color:#fff; }
+    .btn-follow.locked { background:var(--border); color:var(--sub); cursor:not-allowed; }
+    .btn-history { flex:1; padding:10px; border-radius:10px; font-weight:700; font-size:0.9rem; cursor:pointer; border:1px solid var(--border); background:var(--card); color:var(--text); transition:background .2s; }
+    .btn-history:hover { background:var(--bg); }
+
+    /* ── Modal identité ── */
+    .modal-bg-id { display:none; position:fixed; inset:0; background:#0007; z-index:200; align-items:center; justify-content:center; padding:16px; }
+    .modal-bg-id.open { display:flex; }
+    .modal-id { background:var(--card); border-radius:20px; padding:28px; width:100%; max-width:360px; position:relative; }
+    .modal-id h3 { font-size:1.1rem; font-weight:700; margin-bottom:8px; }
+    .modal-id p  { font-size:0.82rem; color:var(--sub); margin-bottom:16px; }
+    .modal-id input { width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-size:0.95rem; font-family:inherit; margin-bottom:10px; }
+    .modal-id input:focus { outline:none; border-color:#6366f1; }
+    .modal-id-close { position:absolute; top:16px; right:16px; background:none; border:none; font-size:1.4rem; cursor:pointer; color:var(--sub); }
+    .btn-primary { width:100%; padding:10px; border-radius:10px; background:#6366f1; color:#fff; font-weight:700; font-size:0.95rem; border:none; cursor:pointer; transition:background .2s; }
+    .btn-primary:hover { background:#4f46e5; }
+    .modal-id-err { color:#ef4444; font-size:0.8rem; margin-top:4px; display:none; }
+
+    /* ── Abonnements panel ── */
+    #abonnements-panel { max-width:640px; margin:0 auto; }
+    .abo-empty-state { text-align:center; padding:60px 20px; color:var(--sub); }
+    .abo-empty-state .abo-icon { font-size:3rem; margin-bottom:12px; }
+    .abo-empty-state p { margin-bottom:16px; font-size:0.9rem; }
+    .abo-search { width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--card); color:var(--text); font-size:0.9rem; font-family:inherit; margin-bottom:16px; }
+    .abo-search:focus { outline:none; border-color:#6366f1; }
+    .abo-list { display:flex; flex-direction:column; gap:8px; }
+    .abo-row { display:flex; align-items:center; gap:12px; background:var(--card); border:1px solid var(--border); border-radius:12px; padding:12px 16px; }
+    .abo-row-name { flex:1; font-weight:600; font-size:0.95rem; }
+    .abo-status { font-size:0.72rem; font-weight:700; border-radius:6px; padding:2px 8px; }
+    .abo-status.following { background:#dcfce7; color:#166534; }
+    .abo-status.not-following { background:#fee2e2; color:#991b1b; }
+    [data-theme="dark"] .abo-status.following { background:#14532d; color:#86efac; }
+    [data-theme="dark"] .abo-status.not-following { background:#7f1d1d; color:#fca5a5; }
+    .abo-btn { padding:6px 14px; border-radius:8px; font-weight:700; font-size:0.8rem; cursor:pointer; border:none; transition:background .2s; }
+    .abo-btn.follow-btn { background:#22c55e; color:#fff; }
+    .abo-btn.unfollow-btn { background:#ef4444; color:#fff; }
+    .abo-btn.locked-btn { background:var(--border); color:var(--sub); cursor:not-allowed; font-size:0.85rem; }
   </style>
 </head>
 <body>
 
 <header>
   <h1>🍺 <span>AlcooTracker</span></h1>
-  <button id="theme-btn" onclick="toggleTheme()">🌙</button>
+  <div id="header-right">
+    <button id="identity-btn" onclick="openIdentityModal()">👤 Connexion</button>
+    <button id="theme-btn" onclick="toggleTheme()">🌙</button>
+  </div>
 </header>
 
 <div id="status">
@@ -316,6 +399,7 @@
   <button class="tab" onclick="showTab('defi')">🏆 Défi</button>
   <button class="tab" onclick="showTab('palmares')">🏅 Palmarès</button>
   <button class="tab" onclick="showTab('thune')">💰 Ma thune</button>
+  <button class="tab" onclick="showTab('abonnements')">👥 Abonnements</button>
 </div>
 
 <!-- Live -->
@@ -353,6 +437,11 @@
   </table>
 </div>
 
+<!-- Abonnements -->
+<div id="abonnements-panel" class="panel">
+  <div id="abo-content"></div>
+</div>
+
 <!-- Modal thune détail -->
 <div class="modal-bg3" id="modal-bg3" onclick="closeModal3(event)">
   <div class="modal3">
@@ -381,6 +470,31 @@
   </div>
 </div>
 
+<!-- Modal profile -->
+<div class="modal-bg4" id="modal-bg4" onclick="closeModal4(event)">
+  <div class="modal4">
+    <button class="modal4-close" onclick="closeModal4()">✕</button>
+    <div id="modal4-content"></div>
+  </div>
+</div>
+
+<!-- Modal identité -->
+<div class="modal-bg-id" id="modal-bg-id" onclick="closeIdentityModal(event)">
+  <div class="modal-id">
+    <button class="modal-id-close" onclick="closeIdentityModal()">✕</button>
+    <h3>👤 Qui es-tu ?</h3>
+    <p>Entre ton prénom tel qu'il apparaît sur le dashboard.</p>
+    <input type="text" id="identity-input" placeholder="Ton prénom…" autocomplete="off"
+           onkeydown="if(event.key==='Enter') submitIdentity()"/>
+    <div class="modal-id-err" id="identity-err">Prénom introuvable. Vérifie l'orthographe.</div>
+    <button class="btn-primary" onclick="submitIdentity()">Confirmer</button>
+    <div style="margin-top:10px;text-align:center">
+      <button style="background:none;border:none;color:var(--sub);font-size:0.8rem;cursor:pointer"
+              onclick="logout()">Se déconnecter</button>
+    </div>
+  </div>
+</div>
+
 <script>
   const API = location.hostname === "localhost"
     ? "http://localhost:8001"
@@ -400,6 +514,56 @@
     return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
 
+  // ── Identity & follow state ──
+  let myTid = parseInt(localStorage.getItem('myTid') || '0') || 0;
+  let myName = localStorage.getItem('myName') || '';
+  let allUsers = [];   // [{telegram_id, username, is_admin}]
+  let adminId = 0;
+  let followingSet = new Set(); // set of telegram_id's that I follow
+
+  function isAdmin(tid) { return tid === adminId; }
+  function nameClass(tid) { return isAdmin(tid) ? ' class="admin-name"' : ''; }
+
+  async function loadUsers() {
+    try {
+      allUsers = await fetch(`${API}/users`).then(r => r.json());
+      const adminUser = allUsers.find(u => u.is_admin);
+      if (adminUser) adminId = adminUser.telegram_id;
+    } catch(e) { allUsers = []; }
+  }
+
+  async function loadFollowing() {
+    if (!myTid) { followingSet = new Set(); return; }
+    try {
+      const data = await fetch(`${API}/following/${myTid}`).then(r => r.json());
+      followingSet = new Set(data.following || []);
+    } catch(e) { followingSet = new Set(); }
+  }
+
+  function getTidByName(username) {
+    const u = allUsers.find(u => u.username.toLowerCase() === username.toLowerCase());
+    return u ? u.telegram_id : null;
+  }
+
+  function updateIdentityBtn() {
+    const btn = document.getElementById('identity-btn');
+    if (myTid && myName) {
+      btn.textContent = `👤 ${myName}`;
+    } else {
+      btn.textContent = '👤 Connexion';
+    }
+  }
+
+  // Filter snapshot by following (if identified)
+  function filterSnapshot(data) {
+    if (!myTid) return data;
+    return data.filter(u => {
+      const tid = getTidByName(u.username);
+      if (!tid) return true; // unknown user, show anyway
+      return tid === myTid || followingSet.has(tid);
+    });
+  }
+
   // ── Thème ──
   function toggleTheme() {
     const html = document.documentElement;
@@ -417,14 +581,14 @@
 
   // ── Tabs ──
   function showTab(name) {
-    const tabs = ['live','defi','palmares','thune'];
+    const tabs = ['live','defi','palmares','thune','abonnements'];
     document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', tabs[i]===name));
-    document.getElementById('live-panel').classList.toggle('active', name==='live');
-    document.getElementById('defi-panel').classList.toggle('active', name==='defi');
-    document.getElementById('palmares-panel').classList.toggle('active', name==='palmares');
-    document.getElementById('thune-panel').classList.toggle('active', name==='thune');
+    tabs.forEach(tab => {
+      document.getElementById(tab+'-panel').classList.toggle('active', tab===name);
+    });
     if (name === 'palmares') loadPalmares();
     if (name === 'thune') loadThune();
+    if (name === 'abonnements') loadAbonnements();
   }
 
   // ── Cards ──
@@ -432,11 +596,13 @@
     const lvl = level(u.bac);
     const color = COLORS[lvl];
     const pct = Math.min(100,(u.bac/2)*100).toFixed(1);
+    const tid = getTidByName(u.username);
+    const adminClass = (tid && isAdmin(tid)) ? ' admin-name' : '';
     return `
-    <div class="card ${!u.has_session?'no-session':''}" onclick="openChart('${esc(u.username)}')">
+    <div class="card ${!u.has_session?'no-session':''}" onclick="openProfile('${esc(u.username)}')">
       <div class="card-stripe" style="background:${color}"></div>
       <div class="card-head">
-        <div class="card-name">${esc(u.username)}</div>
+        <div class="card-name${adminClass}">${esc(u.username)}</div>
         <div class="card-emoji">${EMOJIS[lvl]}</div>
       </div>
       <div class="bac-block">
@@ -459,6 +625,156 @@
     </div>`;
   }
 
+  // ── Profile modal ──
+  let _profileUsername = '';
+
+  async function openProfile(username) {
+    _profileUsername = username;
+    const tid = getTidByName(username);
+    const snapshotUser = lastData.find(u => u.username === username);
+
+    const isAdminUser = tid && isAdmin(tid);
+    const isSelf = tid && tid === myTid;
+    const following = tid ? followingSet.has(tid) : false;
+
+    const nameHtml = isAdminUser
+      ? `<span class="admin-name">${esc(username)}</span>`
+      : esc(username);
+
+    let badgeHtml = '';
+    if (isAdminUser) badgeHtml = '<span class="profile-badge admin">⭐ Admin</span>';
+    else if (isSelf) badgeHtml = '<span class="profile-badge self">C\'est toi</span>';
+
+    const bac = snapshotUser ? snapshotUser.bac.toFixed(2) : '—';
+    const nb  = snapshotUser ? snapshotUser.nb_drinks : '—';
+    const lvl = snapshotUser ? level(snapshotUser.bac) : 0;
+    const color = COLORS[lvl];
+
+    let followBtn = '';
+    if (!myTid) {
+      // Not identified — show nothing
+      followBtn = '';
+    } else if (isSelf) {
+      followBtn = ''; // no button for yourself
+    } else if (isAdminUser) {
+      followBtn = `<button class="btn-follow locked" disabled>🔒 Admin</button>`;
+    } else if (following) {
+      followBtn = `<button class="btn-follow following" onclick="toggleFollow(${tid}, false)">➖ Ne plus suivre</button>`;
+    } else {
+      followBtn = `<button class="btn-follow not-following" onclick="toggleFollow(${tid}, true)">➕ Suivre</button>`;
+    }
+
+    document.getElementById('modal4-content').innerHTML = `
+      <div class="profile-name">${nameHtml}</div>
+      ${badgeHtml}
+      <div class="profile-stats">
+        <div class="profile-stat">
+          <div class="profile-stat-val" style="color:${color}">${bac}</div>
+          <div class="profile-stat-lbl">g/L TAC</div>
+        </div>
+        <div class="profile-stat">
+          <div class="profile-stat-val">${nb}</div>
+          <div class="profile-stat-lbl">verre(s)</div>
+        </div>
+        ${snapshotUser && snapshotUser.max_bac > 0 ? `
+        <div class="profile-stat">
+          <div class="profile-stat-val" style="color:#f97316">${snapshotUser.max_bac}</div>
+          <div class="profile-stat-lbl">record</div>
+        </div>` : ''}
+      </div>
+      <div class="profile-actions">
+        <button class="btn-history" onclick="openChartFromProfile('${esc(username)}')">📈 Historique</button>
+        ${followBtn}
+      </div>
+    `;
+    document.getElementById('modal-bg4').classList.add('open');
+  }
+
+  async function toggleFollow(tid, doFollow) {
+    if (!myTid) return;
+    const endpoint = doFollow ? '/follow' : '/unfollow';
+    await fetch(`${API}${endpoint}`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({follower_id: myTid, following_id: tid})
+    });
+    if (doFollow) followingSet.add(tid);
+    else followingSet.delete(tid);
+    // Re-render profile modal
+    openProfile(_profileUsername);
+    // Re-render live grid if filtered
+    if (myTid) render(lastData);
+    // Refresh abonnements if open
+    const aboPanel = document.getElementById('abonnements-panel');
+    if (aboPanel.classList.contains('active')) loadAbonnements();
+  }
+
+  function openChartFromProfile(username) {
+    closeModal4();
+    openChart(username);
+  }
+
+  function closeModal4(e) {
+    if (!e || e.target === document.getElementById('modal-bg4')) {
+      document.getElementById('modal-bg4').classList.remove('open');
+    }
+  }
+
+  // ── Identity modal ──
+  function openIdentityModal() {
+    document.getElementById('identity-input').value = myName || '';
+    document.getElementById('identity-err').style.display = 'none';
+    document.getElementById('modal-bg-id').classList.add('open');
+    setTimeout(() => document.getElementById('identity-input').focus(), 100);
+  }
+
+  function closeIdentityModal(e) {
+    if (!e || e.target === document.getElementById('modal-bg-id')) {
+      document.getElementById('modal-bg-id').classList.remove('open');
+    }
+  }
+
+  async function submitIdentity() {
+    const name = document.getElementById('identity-input').value.trim();
+    if (!name) return;
+    const err = document.getElementById('identity-err');
+    err.style.display = 'none';
+    try {
+      const data = await fetch(`${API}/lookup?name=${encodeURIComponent(name)}`).then(r => r.json());
+      if (!data.found) {
+        err.style.display = 'block';
+        return;
+      }
+      myTid = data.telegram_id;
+      myName = data.username;
+      localStorage.setItem('myTid', String(myTid));
+      localStorage.setItem('myName', myName);
+      await loadFollowing();
+      updateIdentityBtn();
+      closeIdentityModal();
+      render(lastData);
+      // If abonnements tab is open, refresh it
+      const aboPanel = document.getElementById('abonnements-panel');
+      if (aboPanel.classList.contains('active')) loadAbonnements();
+    } catch(e) {
+      err.textContent = 'Erreur réseau. Réessaie.';
+      err.style.display = 'block';
+    }
+  }
+
+  function logout() {
+    myTid = 0;
+    myName = '';
+    localStorage.removeItem('myTid');
+    localStorage.removeItem('myName');
+    followingSet = new Set();
+    updateIdentityBtn();
+    closeIdentityModal();
+    render(lastData);
+    const aboPanel = document.getElementById('abonnements-panel');
+    if (aboPanel.classList.contains('active')) loadAbonnements();
+  }
+
   // ── Défi ──
   function renderDefi(data) {
     const sorted = [...data].sort((a,b) => b.bac - a.bac);
@@ -468,9 +784,14 @@
 
     podium.innerHTML = sorted.slice(0,3).map((u,i) => {
       const color = COLORS[level(u.bac)];
+      const tid = getTidByName(u.username);
+      const isAdm = tid && isAdmin(tid);
+      const nameHtml = isAdm
+        ? `<span class="admin-name">${esc(u.username)}</span>`
+        : esc(u.username);
       return `<div class="podium-item">
         <div class="podium-medal">${medals[i]||''}</div>
-        <div class="podium-name">${esc(u.username)}</div>
+        <div class="podium-name">${nameHtml}</div>
         <div class="podium-bac" style="color:${color}">${u.bac.toFixed(2)}</div>
         <div class="podium-lbl">g/L — ${LABELS[level(u.bac)]}</div>
       </div>`;
@@ -478,9 +799,14 @@
 
     tbody.innerHTML = sorted.map((u,i) => {
       const color = COLORS[level(u.bac)];
+      const tid = getTidByName(u.username);
+      const isAdm = tid && isAdmin(tid);
+      const nameHtml = isAdm
+        ? `<span class="admin-name">${esc(u.username)}</span>`
+        : `<strong>${esc(u.username)}</strong>`;
       return `<tr>
         <td>${medals[i]||i+1}</td>
-        <td><strong>${esc(u.username)}</strong></td>
+        <td>${nameHtml}</td>
         <td style="color:${color};font-weight:700">${u.bac.toFixed(2)} g/L</td>
         <td style="color:#f97316;font-weight:700">${u.peak_24h > 0 ? u.peak_24h + ' g/L' : '—'}</td>
         <td>${u.nb_drinks}</td>
@@ -520,11 +846,16 @@
   // ── Noms boissons ──
   const DRINK_NAMES = {
     demi:'🍺 Demi 25cl', pinte:'🍺 Pinte 50cl', demif:'🍺 Demi forte', pintef:'🍺 Pinte forte',
-    biere_bouteille:'🍺 Bouteille 33cl', vin_rouge:'🍷 Vin rouge', vin_blanc:'🥂 Vin blanc',
+    biere_bouteille:'🍺 Bouteille 33cl',
+    // New keys
+    vin:'🍷 Vin', ricard:'🌿 Ricard/Pastis', perroquet:'🦜 Perroquet Sauvage',
+    get27:'🍃 Get 27', bucket:'🪣 Bucket thaïlandais',
+    // Old keys for compatibility
+    vin_rouge:'🍷 Vin rouge', vin_blanc:'🥂 Vin blanc', pastis:'🌿 Pastis',
     champagne:'🥂 Champagne', shot_vodka:'🥃 Vodka', shot_tequila:'🥃 Tequila',
     shot_whisky:'🥃 Whisky', shot_rhum:'🥃 Rhum', shot_96:'💥 Shot 96°',
     mojito:'🍹 Mojito', gin_tonic:'🍹 Gin tonic', aperol:'🍹 Aperol spritz',
-    long_island:'🍹 Long Island', sangria:'🍷 Sangria', cidre:'🍎 Cidre', pastis:'🌿 Pastis',
+    long_island:'🍹 Long Island', sangria:'🍷 Sangria', cidre:'🍎 Cidre',
   };
 
   // ── Graphique ──
@@ -616,16 +947,23 @@
     _palmares = await fetch(`${API}/alltime`).then(r=>r.json());
     const medals = ['🥇','🥈','🥉'];
     const tbody = document.getElementById('palmares-tbody');
-    tbody.innerHTML = _palmares.map((u,i) => `
+    tbody.innerHTML = _palmares.map((u,i) => {
+      const tid = getTidByName(u.username);
+      const isAdm = tid && isAdmin(tid);
+      const nameHtml = isAdm
+        ? `<span class="admin-name">${esc(u.username)}</span>`
+        : `<strong>${esc(u.username)}</strong>`;
+      return `
       <tr onclick="openModal2('${esc(u.username)}')">
         <td>${medals[i]||i+1}</td>
-        <td><strong>${esc(u.username)}</strong></td>
+        <td>${nameHtml}</td>
         <td>${(u.total_alc_g/10).toFixed(1)}</td>
         <td>${u.avg_doses_per_day}</td>
         <td style="color:#f97316;font-weight:700">${u.max_bac > 0 ? u.max_bac + ' g/L' : '—'}</td>
         <td>${u.total_drinks}</td>
         <td>${u.total_alc_g.toFixed(0)}g</td>
-      </tr>`).join('');
+      </tr>`;
+    }).join('');
   }
 
   function openModal2(username) {
@@ -657,13 +995,14 @@
 
   function render(data) {
     lastData = data;
+    const filtered = filterSnapshot(data);
     const grid  = document.getElementById('grid');
     const empty = document.getElementById('empty');
-    if (!data.length) { grid.innerHTML=''; empty.style.display='block'; return; }
+    if (!filtered.length) { grid.innerHTML=''; empty.style.display='block'; return; }
     empty.style.display = 'none';
-    grid.innerHTML = data.map(renderCard).join('');
-    renderDefi(data);
-    updateMap(data);
+    grid.innerHTML = filtered.map(renderCard).join('');
+    renderDefi(filtered);
+    updateMap(filtered);
   }
 
   // ── WebSocket ──
@@ -689,8 +1028,6 @@
     ws.onerror = () => ws.close();
   }
 
-  connect();
-
   // ── Thune ──
   let _thune = [];
 
@@ -698,12 +1035,19 @@
     _thune = await fetch(`${API}/coins`).then(r => r.json());
     const medals = ['🥇','🥈','🥉'];
     const tbody = document.getElementById('thune-tbody');
-    tbody.innerHTML = _thune.map((u, i) => `
+    tbody.innerHTML = _thune.map((u, i) => {
+      const tid = getTidByName(u.username);
+      const isAdm = tid && isAdmin(tid);
+      const nameHtml = isAdm
+        ? `<span class="admin-name">${esc(u.username)}</span>`
+        : `<strong>${esc(u.username)}</strong>`;
+      return `
       <tr onclick="openModal3('${esc(u.username)}')">
         <td>${medals[i] || i+1}</td>
-        <td><strong>${esc(u.username)}</strong></td>
+        <td>${nameHtml}</td>
         <td><span class="coin-badge">🪙 ${u.coins}</span></td>
-      </tr>`).join('');
+      </tr>`;
+    }).join('');
   }
 
   function openModal3(username) {
@@ -737,6 +1081,91 @@
       document.getElementById('modal-bg3').classList.remove('open');
     }
   }
+
+  // ── Abonnements ──
+  let _aboSearch = '';
+
+  async function loadAbonnements() {
+    const content = document.getElementById('abo-content');
+    if (!myTid) {
+      content.innerHTML = `
+        <div class="abo-empty-state">
+          <div class="abo-icon">👥</div>
+          <p>Identifie-toi pour gérer tes abonnements</p>
+          <button class="btn-primary" style="max-width:220px;margin:0 auto;display:block"
+                  onclick="openIdentityModal()">Se connecter</button>
+        </div>`;
+      return;
+    }
+    // Render search + list
+    const searchVal = _aboSearch || '';
+    const filtered = allUsers.filter(u =>
+      u.username.toLowerCase().includes(searchVal.toLowerCase()) && u.telegram_id !== myTid
+    );
+
+    const rowsHtml = filtered.map(u => {
+      const isAdm = isAdmin(u.telegram_id);
+      const following = followingSet.has(u.telegram_id);
+      const nameHtml = isAdm
+        ? `<span class="admin-name">${esc(u.username)}</span>`
+        : esc(u.username);
+
+      let statusBadge, actionBtn;
+      if (isAdm) {
+        statusBadge = `<span class="abo-status following">Suivi</span>`;
+        actionBtn = `<button class="abo-btn locked-btn" disabled>🔒</button>`;
+      } else if (following) {
+        statusBadge = `<span class="abo-status following">Suivi</span>`;
+        actionBtn = `<button class="abo-btn unfollow-btn" onclick="aboToggle(${u.telegram_id}, false)">Ne plus suivre</button>`;
+      } else {
+        statusBadge = `<span class="abo-status not-following">Non suivi</span>`;
+        actionBtn = `<button class="abo-btn follow-btn" onclick="aboToggle(${u.telegram_id}, true)">Suivre</button>`;
+      }
+
+      return `<div class="abo-row">
+        <div class="abo-row-name">${nameHtml}</div>
+        ${statusBadge}
+        ${actionBtn}
+      </div>`;
+    }).join('');
+
+    content.innerHTML = `
+      <input class="abo-search" type="text" placeholder="🔍 Rechercher un utilisateur…"
+             value="${esc(searchVal)}" oninput="aboSearch(this.value)" />
+      <div class="abo-list">${rowsHtml || '<p style="color:var(--sub);text-align:center;padding:20px">Aucun utilisateur trouvé.</p>'}</div>
+    `;
+  }
+
+  function aboSearch(val) {
+    _aboSearch = val;
+    loadAbonnements();
+  }
+
+  async function aboToggle(tid, doFollow) {
+    if (!myTid) return;
+    const endpoint = doFollow ? '/follow' : '/unfollow';
+    await fetch(`${API}${endpoint}`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({follower_id: myTid, following_id: tid})
+    });
+    if (doFollow) followingSet.add(tid);
+    else followingSet.delete(tid);
+    loadAbonnements();
+    // Also re-filter live grid
+    if (lastData.length) render(lastData);
+  }
+
+  // ── Init ──
+  async function init() {
+    updateIdentityBtn();
+    await loadUsers();
+    if (myTid) await loadFollowing();
+    updateIdentityBtn();
+    connect();
+  }
+
+  init();
 </script>
 </body>
 </html>
