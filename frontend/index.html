@@ -396,6 +396,120 @@
     .abo-btn.follow-btn { background:#22c55e; color:#fff; }
     .abo-btn.unfollow-btn { background:#ef4444; color:#fff; }
     .abo-btn.locked-btn { background:var(--border); color:var(--sub); cursor:not-allowed; font-size:0.85rem; }
+
+    /* ── Scroll wrapper pour les tableaux ── */
+    .table-scroll {
+      width: 100%;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      border-radius: 16px;
+    }
+    .table-scroll table { min-width: 480px; }
+
+    /* ── Safe area iOS (notch + home indicator) ── */
+    body {
+      padding-bottom: max(80px, calc(60px + env(safe-area-inset-bottom)));
+      padding-left:  max(16px, env(safe-area-inset-left));
+      padding-right: max(16px, env(safe-area-inset-right));
+    }
+
+    /* ════════════════════════════════════════════════════════════════════════
+       MOBILE  ≤ 640px
+    ════════════════════════════════════════════════════════════════════════ */
+    @media (max-width: 640px) {
+
+      /* Corps */
+      body { padding-top: 20px; }
+
+      /* Header : titre centré, boutons en ligne en dessous */
+      header {
+        flex-direction: column;
+        gap: 10px;
+        margin-bottom: 20px;
+        align-items: center;
+      }
+      h1 { font-size: 1.6rem; }
+      #header-right {
+        position: static;
+        width: 100%;
+        justify-content: center;
+      }
+      #identity-btn { max-width: 180px; font-size: 0.8rem; }
+
+      /* Status */
+      #status { margin-bottom: 16px; font-size: 0.72rem; }
+
+      /* Tabs : scrollables horizontalement sur mobile */
+      .tabs {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        margin-bottom: 16px;
+        padding-bottom: 4px;
+        gap: 6px;
+      }
+      .tabs::-webkit-scrollbar { display: none; }
+      .tab {
+        flex-shrink: 0;
+        padding: 8px 14px;
+        font-size: 0.78rem;
+        /* Cible tactile minimum 44px */
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+      }
+
+      /* Grid : 1 colonne sur très petit écran */
+      #grid {
+        grid-template-columns: 1fr;
+        gap: 12px;
+      }
+
+      /* Cards */
+      .card { padding: 16px; }
+      .bac-number { font-size: 2.2rem; }
+
+      /* Podium : empilé sur mobile */
+      .podium { flex-direction: column; align-items: center; }
+      .podium-item { width: 100%; max-width: 320px; padding: 12px 20px; }
+
+      /* Carte map plus petite */
+      #map { height: 220px; }
+
+      /* Modaux : pleine largeur sur mobile */
+      .modal, .modal2, .modal3, .modal4, .modal-id {
+        max-width: 100%;
+        border-radius: 20px 20px 0 0;
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        margin: 0;
+        max-height: 90vh;
+        overflow-y: auto;
+      }
+      .modal-bg, .modal-bg2, .modal-bg3, .modal-bg4, .modal-bg-id {
+        align-items: flex-end;
+        padding: 0;
+      }
+
+      /* Profil stats : 2 colonnes */
+      .profile-stats { flex-wrap: wrap; }
+      .profile-stat { min-width: calc(50% - 5px); }
+
+      /* Abonnements */
+      .abo-row { flex-wrap: wrap; gap: 8px; }
+      .abo-row-name { width: 100%; }
+    }
+
+    /* ════════════════════════════════════════════════════════════════════════
+       MOBILE moyen  641–768px
+    ════════════════════════════════════════════════════════════════════════ */
+    @media (min-width: 641px) and (max-width: 768px) {
+      #grid { grid-template-columns: repeat(2, 1fr); }
+      .tab { padding: 8px 16px; font-size: 0.82rem; }
+    }
   </style>
 </head>
 <body>
@@ -434,26 +548,32 @@
 <!-- Défi -->
 <div id="defi-panel" class="panel">
   <div class="podium" id="podium"></div>
-  <table class="defi-table">
-    <thead><tr><th>#</th><th>Joueur</th><th>TAC</th><th>Record</th><th>Verres</th><th>Sobre dans</th></tr></thead>
-    <tbody id="defi-tbody"></tbody>
-  </table>
+  <div class="table-scroll">
+    <table class="defi-table">
+      <thead><tr><th>#</th><th>Joueur</th><th>TAC</th><th>Record</th><th>Verres</th><th>Sobre dans</th></tr></thead>
+      <tbody id="defi-tbody"></tbody>
+    </table>
+  </div>
 </div>
 
 <!-- Palmarès -->
 <div id="palmares-panel" class="panel">
-  <table class="palmares-table">
-    <thead><tr><th>#</th><th>Joueur</th><th>Doses total</th><th>Moy./jour conso</th><th>Record ever</th><th>Verres</th><th>Alcool pur</th></tr></thead>
-    <tbody id="palmares-tbody"></tbody>
-  </table>
+  <div class="table-scroll">
+    <table class="palmares-table">
+      <thead><tr><th>#</th><th>Joueur</th><th>Doses total</th><th>Moy./jour conso</th><th>Record ever</th><th>Verres</th><th>Alcool pur</th></tr></thead>
+      <tbody id="palmares-tbody"></tbody>
+    </table>
+  </div>
 </div>
 
 <!-- Ma thune -->
 <div id="thune-panel" class="panel">
-  <table class="thune-table">
-    <thead><tr><th>#</th><th>Joueur</th><th>BeerCoins</th></tr></thead>
-    <tbody id="thune-tbody"></tbody>
-  </table>
+  <div class="table-scroll">
+    <table class="thune-table">
+      <thead><tr><th>#</th><th>Joueur</th><th>BeerCoins</th></tr></thead>
+      <tbody id="thune-tbody"></tbody>
+    </table>
+  </div>
 </div>
 
 <!-- Abonnements -->
