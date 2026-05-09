@@ -58,7 +58,8 @@ async def lifespan(app: FastAPI):
 
     user_commands = [
         BotCommand("topo",       "ℹ️ Comment utiliser le bot"),
-        BotCommand("p",          "Configurer ton profil  →  /p 80 h"),
+        BotCommand("profil",     "🧾 Configurer ton profil (sexe, poids, pseudo, mdp)"),
+        BotCommand("password",   "🔑 Changer ton mot de passe site web"),
         BotCommand("tac",        "Voir ton taux d'alcool actuel"),
         BotCommand("h",          "Historique des verres de la session"),
         BotCommand("annuler",    "↩️ Annuler le dernier verre"),
@@ -88,7 +89,7 @@ async def lifespan(app: FastAPI):
         BotCommand("get27",      "🍃 Get 27 4cl"),
         BotCommand("cidre",      "🍎 Cidre 25cl"),
         BotCommand("sangria",    "🍷 Sangria 20cl"),
-        BotCommand("bucket",     "🪣 Bucket thaïlandais (375ml, 40°)"),
+        BotCommand("bucket",     "🪣 Bucket thaïlandais (125ml, 40°)"),
         BotCommand("solde",      "🪙 Voir ton solde de BeerCoins"),
         BotCommand("offrir",     "🎁 Offrir des coins  →  /offrir Prénom 50"),
         BotCommand("pari",       "🎰 Lancer un pari"),

@@ -351,7 +351,7 @@
     .modal-id { background:var(--card); border-radius:20px; padding:28px; width:100%; max-width:360px; position:relative; }
     .modal-id h3 { font-size:1.1rem; font-weight:700; margin-bottom:8px; }
     .modal-id p  { font-size:0.82rem; color:var(--sub); margin-bottom:16px; }
-    .modal-id input { width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-size:0.95rem; font-family:inherit; margin-bottom:10px; }
+    .modal-id input { width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-size:0.95rem; font-family:inherit; margin-bottom:10px; box-sizing:border-box; }
     .modal-id input:focus { outline:none; border-color:#6366f1; }
     .modal-id-close { position:absolute; top:16px; right:16px; background:none; border:none; font-size:1.4rem; cursor:pointer; color:var(--sub); }
     .btn-primary { width:100%; padding:10px; border-radius:10px; background:#6366f1; color:#fff; font-weight:700; font-size:0.95rem; border:none; cursor:pointer; transition:background .2s; }
@@ -517,6 +517,12 @@
   }
 
   // ── Identity & follow state ──
+  // v2 = authentifié avec mot de passe → on force une reconnexion si ancienne session
+  if (localStorage.getItem('authV') !== '2') {
+    localStorage.removeItem('myTid');
+    localStorage.removeItem('myName');
+    localStorage.setItem('authV', '2');
+  }
   let myTid = parseInt(localStorage.getItem('myTid') || '0') || 0;
   let myName = localStorage.getItem('myName') || '';
   let allUsers = [];   // [{telegram_id, username, is_admin}]
@@ -651,13 +657,13 @@
     const nb  = snapshotUser ? snapshotUser.nb_drinks : '—';
     const lvl = snapshotUser ? level(snapshotUser.bac) : 0;
     const color = COLORS[lvl];
+    const soberIn = snapshotUser && snapshotUser.bac > 0 ? snapshotUser.sober_in_h + 'h' : '—';
 
     let followBtn = '';
     if (!myTid) {
-      // Not identified — show nothing
       followBtn = '';
     } else if (isSelf) {
-      followBtn = ''; // no button for yourself
+      followBtn = '';
     } else if (isAdminUser) {
       followBtn = `<button class="btn-follow locked" disabled>🔒 Admin</button>`;
     } else if (following) {
@@ -666,30 +672,51 @@
       followBtn = `<button class="btn-follow not-following" onclick="toggleFollow(${tid}, true)">➕ Suivre</button>`;
     }
 
-    document.getElementById('modal4-content').innerHTML = `
-      <div class="profile-name">${nameHtml}</div>
-      ${badgeHtml}
-      <div class="profile-stats">
-        <div class="profile-stat">
-          <div class="profile-stat-val" style="color:${color}">${bac}</div>
-          <div class="profile-stat-lbl">g/L TAC</div>
+    // Affichage provisoire avant fetch des coins
+    const renderModal = (coins) => {
+      document.getElementById('modal4-content').innerHTML = `
+        <div class="profile-name">${nameHtml}</div>
+        ${badgeHtml}
+        <div class="profile-stats">
+          <div class="profile-stat">
+            <div class="profile-stat-val" style="color:${color}">${bac}</div>
+            <div class="profile-stat-lbl">g/L TAC</div>
+          </div>
+          <div class="profile-stat">
+            <div class="profile-stat-val">${nb}</div>
+            <div class="profile-stat-lbl">verre(s)</div>
+          </div>
+          <div class="profile-stat">
+            <div class="profile-stat-val">${soberIn}</div>
+            <div class="profile-stat-lbl">sobre dans</div>
+          </div>
+          ${snapshotUser && snapshotUser.max_bac > 0 ? `
+          <div class="profile-stat">
+            <div class="profile-stat-val" style="color:#f97316">${snapshotUser.max_bac}</div>
+            <div class="profile-stat-lbl">record</div>
+          </div>` : ''}
+          ${coins !== null ? `
+          <div class="profile-stat">
+            <div class="profile-stat-val" style="color:#facc15">${coins}</div>
+            <div class="profile-stat-lbl">🪙 BeerCoins</div>
+          </div>` : ''}
         </div>
-        <div class="profile-stat">
-          <div class="profile-stat-val">${nb}</div>
-          <div class="profile-stat-lbl">verre(s)</div>
+        <div class="profile-actions">
+          <button class="btn-history" onclick="openChartFromProfile('${esc(username)}')">📈 Historique</button>
+          ${followBtn}
         </div>
-        ${snapshotUser && snapshotUser.max_bac > 0 ? `
-        <div class="profile-stat">
-          <div class="profile-stat-val" style="color:#f97316">${snapshotUser.max_bac}</div>
-          <div class="profile-stat-lbl">record</div>
-        </div>` : ''}
-      </div>
-      <div class="profile-actions">
-        <button class="btn-history" onclick="openChartFromProfile('${esc(username)}')">📈 Historique</button>
-        ${followBtn}
-      </div>
-    `;
+      `;
+    };
+
+    renderModal(null);
     document.getElementById('modal-bg4').classList.add('open');
+
+    // Fetch coins en arrière-plan
+    try {
+      const coinsData = await fetch(`${API}/coins`).then(r => r.json());
+      const userCoins = coinsData.find(c => c.username.toLowerCase() === username.toLowerCase());
+      if (userCoins !== undefined) renderModal(userCoins.coins);
+    } catch(e) {}
   }
 
   async function toggleFollow(tid, doFollow) {
@@ -758,6 +785,7 @@
       myName = data.username;
       localStorage.setItem('myTid', String(myTid));
       localStorage.setItem('myName', myName);
+      localStorage.setItem('authV', '2');
       await loadFollowing();
       updateIdentityBtn();
       closeIdentityModal();
@@ -776,6 +804,7 @@
     myName = '';
     localStorage.removeItem('myTid');
     localStorage.removeItem('myName');
+    localStorage.setItem('authV', '2'); // garder la version, juste déco
     followingSet = new Set();
     updateIdentityBtn();
     closeIdentityModal();

@@ -38,8 +38,8 @@ ADMIN_ID = int(os.environ.get("ADMIN_ID", "0"))
 # ── Conversation states ───────────────────────────────────────────────────────
 BET_TYPE, BET_OPPONENT, BET_TIME, BET_AMOUNT = range(4)
 BJ_MODE, BJ_PLAYERS, BJ_BET, BJ_PLAYING = range(4, 8)
-PROFIL_SEXE, PROFIL_POIDS, PROFIL_PSEUDO, PROFIL_PASSWORD = range(8, 12)
-PWD_NEW = 12
+PROFIL_SEXE, PROFIL_POIDS, PROFIL_PSEUDO, PROFIL_PASSWORD, PROFIL_CONFIRM = range(8, 13)
+PWD_NEW, PWD_CONFIRM = range(13, 15)
 
 ALIAS_MAP: dict[str, str] = {}
 for key, drink in DRINKS.items():
@@ -202,20 +202,29 @@ async def cmd_profil_password(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if len(password) < 4:
         await update.message.reply_text("❌ Mot de passe trop court (min. 4 caractères)")
         return PROFIL_PASSWORD
+    ctx.user_data["profil_password"] = password
+    await update.message.reply_text("4️⃣ Confirme ton mot de passe :")
+    return PROFIL_CONFIRM
+
+async def cmd_profil_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    confirm = update.message.text.strip()
+    if confirm != ctx.user_data.get("profil_password"):
+        await update.message.reply_text("❌ Les mots de passe ne correspondent pas. Réessaie :")
+        return PROFIL_PASSWORD
     user = update.effective_user
     gender = ctx.user_data["profil_gender"]
     weight = ctx.user_data["profil_weight"]
     pseudo = ctx.user_data["profil_pseudo"]
+    password = ctx.user_data["profil_password"]
     upsert_user(user.id, pseudo, weight, gender)
     set_password(user.id, password)
     ensure_session(user.id)
-    # seed follows for new user
-    from data.database import get_all_users as _gau, follow_user as _fu
-    all_users = _gau()
+    # seed follows for new user (idempotent)
+    all_users = get_all_users()
     for u in all_users:
         if u["telegram_id"] != user.id:
-            _fu(user.id, u["telegram_id"])
-            _fu(u["telegram_id"], user.id)
+            follow_user(user.id, u["telegram_id"])
+            follow_user(u["telegram_id"], user.id)
     await update.message.reply_text(
         f"✅ Profil créé, *{pseudo}* ! ({weight}kg — {gender})\n"
         f"Tu peux maintenant te connecter sur le site avec ton pseudo et ton mot de passe.\n\n"
@@ -247,8 +256,18 @@ async def cmd_password_new(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if len(password) < 4:
         await update.message.reply_text("❌ Mot de passe trop court (min. 4 caractères)")
         return PWD_NEW
-    set_password(update.effective_user.id, password)
-    await update.message.reply_text("✅ Mot de passe mis à jour !")
+    ctx.user_data["new_password"] = password
+    await update.message.reply_text("🔑 Confirme ton nouveau mot de passe :")
+    return PWD_CONFIRM
+
+async def cmd_password_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    confirm = update.message.text.strip()
+    if confirm != ctx.user_data.get("new_password"):
+        await update.message.reply_text("❌ Les mots de passe ne correspondent pas. Entre à nouveau le nouveau mot de passe :")
+        return PWD_NEW
+    set_password(update.effective_user.id, ctx.user_data["new_password"])
+    ctx.user_data.clear()
+    await update.message.reply_text("✅ Mot de passe mis à jour ! Tu peux te reconnecter sur le site.")
     return ConversationHandler.END
 
 async def cmd_password_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -1675,6 +1694,7 @@ def create_application() -> Application:
             PROFIL_POIDS:    [MessageHandler(filters.TEXT & ~filters.COMMAND, cmd_profil_poids)],
             PROFIL_PSEUDO:   [MessageHandler(filters.TEXT & ~filters.COMMAND, cmd_profil_pseudo)],
             PROFIL_PASSWORD: [MessageHandler(filters.TEXT & ~filters.COMMAND, cmd_profil_password)],
+            PROFIL_CONFIRM:  [MessageHandler(filters.TEXT & ~filters.COMMAND, cmd_profil_confirm)],
         },
         fallbacks=[CommandHandler("annuler", cmd_profil_cancel)],
         allow_reentry=True,
@@ -1684,7 +1704,8 @@ def create_application() -> Application:
     password_conv = ConversationHandler(
         entry_points=[CommandHandler("password", cmd_password_start)],
         states={
-            PWD_NEW: [MessageHandler(filters.TEXT & ~filters.COMMAND, cmd_password_new)],
+            PWD_NEW:     [MessageHandler(filters.TEXT & ~filters.COMMAND, cmd_password_new)],
+            PWD_CONFIRM: [MessageHandler(filters.TEXT & ~filters.COMMAND, cmd_password_confirm)],
         },
         fallbacks=[CommandHandler("annuler", cmd_password_cancel)],
         per_user=True,
