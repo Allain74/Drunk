@@ -27,7 +27,7 @@ from data.database import (
     add_blackjack_player, get_blackjack_players, update_blackjack_player,
     get_blackjack_session_by_player, _get_waiting_session_by_creator,
     is_following, follow_user, unfollow_user, get_following,
-    set_password,
+    set_password, is_username_taken,
 )
 
 load_dotenv()
@@ -189,6 +189,9 @@ async def cmd_profil_pseudo(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     pseudo = update.message.text.strip()
     if len(pseudo) < 2 or len(pseudo) > 30:
         await update.message.reply_text("❌ Pseudo trop court ou trop long (2–30 caractères)")
+        return PROFIL_PSEUDO
+    if is_username_taken(pseudo, update.effective_user.id):
+        await update.message.reply_text(f"❌ Le pseudo *{pseudo}* est déjà pris. Choisis-en un autre :", parse_mode="Markdown")
         return PROFIL_PSEUDO
     ctx.user_data["profil_pseudo"] = pseudo
     await update.message.reply_text(
@@ -416,10 +419,17 @@ async def cmd_historique(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 # ── /defi ─────────────────────────────────────────────────────────────────────
 
 async def cmd_defi(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    users = get_all_users()
-    if not users:
+    tid = update.effective_user.id
+    all_users = get_all_users()
+    if not all_users:
         await update.message.reply_text("Aucun joueur enregistré.")
         return
+
+    # Filtre : soi-même + les gens qu'on suit
+    visible = set(get_following(tid)) | {tid}
+    users = [u for u in all_users if u["telegram_id"] in visible]
+    if not users:
+        users = [u for u in all_users if u["telegram_id"] == tid]  # fallback : au moins soi-même
 
     scores = []
     for u in users:
@@ -553,6 +563,9 @@ async def cmd_rename(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("❌ Configure ton profil d'abord : /p 80 h")
             return
         new_name = ctx.args[0]
+        if is_username_taken(new_name, tid):
+            await update.message.reply_text(f"❌ Le pseudo *{new_name}* est déjà pris.", parse_mode="Markdown")
+            return
         rename_user(tid, new_name)
         await update.message.reply_text(f"✅ Pseudo changé en *{new_name}* !", parse_mode="Markdown")
         await _refresh_api()
@@ -563,6 +576,9 @@ async def cmd_rename(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(f"❌ Utilisateur '{ctx.args[0]}' introuvable.")
             return
         new_name = ctx.args[1]
+        if is_username_taken(new_name, target["telegram_id"]):
+            await update.message.reply_text(f"❌ Le pseudo *{new_name}* est déjà pris.", parse_mode="Markdown")
+            return
         rename_user(target["telegram_id"], new_name)
         await update.message.reply_text(f"✅ Renommé : *{target['username']}* → *{new_name}*", parse_mode="Markdown")
         await _refresh_api()

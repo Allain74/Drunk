@@ -1122,9 +1122,17 @@
 
   async function loadPalmares() {
     _palmares = await fetch(`${API}/alltime`).then(r=>r.json());
+    // Filtre par follows (comme le Live et le Défi)
+    const visible = myTid
+      ? _palmares.filter(u => {
+          const tid = getTidByName(u.username);
+          if (!tid) return true;
+          return tid === myTid || followingSet.has(tid) || isAdmin(tid);
+        })
+      : _palmares;
     const medals = ['🥇','🥈','🥉'];
     const tbody = document.getElementById('palmares-tbody');
-    tbody.innerHTML = _palmares.map((u,i) => {
+    tbody.innerHTML = visible.map((u,i) => {
       const tid = getTidByName(u.username);
       const isAdm = tid && isAdmin(tid);
       const nameHtml = isAdm

@@ -243,6 +243,14 @@ def get_user_by_username(username: str) -> dict | None:
     return _fetchone("SELECT * FROM users WHERE LOWER(username)=LOWER(?)", [username])
 
 
+def is_username_taken(username: str, exclude_telegram_id: int) -> bool:
+    row = _fetchone(
+        "SELECT telegram_id FROM users WHERE LOWER(username)=LOWER(?) AND telegram_id != ?",
+        [username, exclude_telegram_id]
+    )
+    return row is not None
+
+
 def get_all_users() -> list[dict]:
     return _fetchall("SELECT * FROM users")
 
