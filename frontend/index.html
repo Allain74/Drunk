@@ -2,8 +2,27 @@
 <html lang="fr" data-theme="light">
 <head>
   <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>AlcooTracker 🍺</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+  <title>Drunk 🍺</title>
+
+  <!-- ── PWA ───────────────────────────────────────────────────────────────── -->
+  <link rel="manifest" href="/manifest.json"/>
+
+  <!-- iOS : affichage plein écran sans barre Safari -->
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="Drunk"/>
+  <link rel="apple-touch-icon" href="/icons/icon-192.png"/>
+
+  <!-- Android / navigateurs -->
+  <meta name="theme-color" content="#111111"/>
+  <meta name="mobile-web-app-capable" content="yes"/>
+
+  <!-- Icônes favicon -->
+  <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png"/>
+  <link rel="icon" type="image/png" sizes="512x512" href="/icons/icon-512.png"/>
+
+  <!-- ── Bibliothèques ──────────────────────────────────────────────────────── -->
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -1203,7 +1222,19 @@
     connect();
   }
 
+  // Ouvre le bon onglet si ?tab= dans l'URL (shortcuts PWA)
+  const _startTab = new URLSearchParams(location.search).get('tab');
+  if (_startTab) showTab(_startTab);
+
   init();
+
+  // ── Service Worker (PWA) ──────────────────────────────────────────────────
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js')
+        .catch(err => console.warn('SW non enregistré :', err));
+    });
+  }
 </script>
 </body>
 </html>

@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Fond sombre arrondi -->
+  <rect width="512" height="512" rx="100" fill="#111111"/>
+
+  <!-- Bière (chope) centrée -->
+  <!-- Corps de la chope -->
+  <rect x="140" y="180" width="200" height="240" rx="20" fill="#f59e0b"/>
+  <!-- Mousse -->
+  <ellipse cx="240" cy="175" rx="105" ry="35" fill="#fef3c7"/>
+  <ellipse cx="200" cy="165" rx="40" ry="20" fill="white" opacity="0.8"/>
+  <ellipse cx="265" cy="160" rx="30" ry="16" fill="white" opacity="0.7"/>
+  <!-- Anse -->
+  <path d="M340 230 Q400 230 400 280 Q400 330 340 330"
+        fill="none" stroke="#f59e0b" stroke-width="28" stroke-linecap="round"/>
+  <!-- Reflet -->
+  <rect x="170" y="200" width="25" height="180" rx="12" fill="white" opacity="0.15"/>
+  <!-- Texte D -->
+  <text x="240" y="310"
+        font-family="Arial Black, Arial, sans-serif"
+        font-weight="900"
+        font-size="100"
+        fill="white"
+        opacity="0.25"
+        text-anchor="middle">D</text>
+</svg>
