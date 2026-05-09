@@ -318,8 +318,14 @@ def get_session_drinks_detail(telegram_id: int) -> list[dict]:
 def get_session_drinks(telegram_id: int) -> list[tuple[float, datetime]]:
     session = get_active_session(telegram_id)
     if not session:
+        # Cherche la session la plus récente même fermée (< 48h) pour afficher le bon TAC
+        session = _fetchone(
+            "SELECT * FROM sessions WHERE telegram_id=? AND started_at >= datetime('now', '-48 hours') ORDER BY id DESC LIMIT 1",
+            [telegram_id]
+        )
+    if not session:
         return []
-    cutoff = datetime.now(timezone.utc).timestamp() - 86400
+    cutoff = datetime.now(timezone.utc).timestamp() - 172800  # 48h
     rows = _fetchall(
         "SELECT alc_grams, logged_at FROM drink_logs WHERE session_id=? ORDER BY logged_at",
         [session["id"]]
@@ -332,11 +338,14 @@ def get_session_drinks(telegram_id: int) -> list[tuple[float, datetime]]:
 
 
 def get_all_active_drinks() -> dict[int, list[tuple[float, datetime]]]:
-    cutoff = datetime.now(timezone.utc).timestamp() - 86400
+    # Cutoff 48h — évite qu'une longue soirée ou une session fermée trop tôt fasse tomber le TAC à 0
+    cutoff = datetime.now(timezone.utc).timestamp() - 172800
     rows = _fetchall("""
         SELECT dl.telegram_id, dl.alc_grams, dl.logged_at
         FROM drink_logs dl JOIN sessions s ON dl.session_id=s.id
-        WHERE s.active=1 ORDER BY dl.logged_at
+        WHERE s.active=1
+           OR (s.active=0 AND s.started_at >= datetime('now', '-48 hours'))
+        ORDER BY dl.logged_at
     """)
     result: dict[int, list] = {}
     for r in rows:
