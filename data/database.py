@@ -1,4 +1,5 @@
 import os
+import hashlib
 import httpx
 from datetime import datetime, timezone
 
@@ -81,6 +82,36 @@ def _fetchone(sql: str, args=None) -> dict | None:
     return rows[0] if rows else None
 
 
+def _hash_password(password: str) -> str:
+    salt = os.urandom(16).hex()
+    dk = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt.encode(), 100_000)
+    return f"{salt}:{dk.hex()}"
+
+def _check_password(password: str, stored: str) -> bool:
+    try:
+        salt, dk_hex = stored.split(":", 1)
+        dk = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt.encode(), 100_000)
+        return dk.hex() == dk_hex
+    except Exception:
+        return False
+
+def set_password(telegram_id: int, password: str):
+    _execute("UPDATE users SET password_hash=? WHERE telegram_id=?",
+             [_hash_password(password), telegram_id])
+
+def verify_password(username: str, password: str) -> dict | None:
+    """Retourne le user si le pseudo+password est correct, sinon None."""
+    user = _fetchone("SELECT * FROM users WHERE LOWER(username)=LOWER(?)", [username])
+    if not user:
+        return None
+    stored = user.get("password_hash") or ""
+    if not stored:
+        return None  # password non configuré
+    if _check_password(password, stored):
+        return user
+    return None
+
+
 def init_db():
     try:
         _execute("ALTER TABLE users ADD COLUMN max_bac REAL DEFAULT 0")
@@ -92,6 +123,10 @@ def init_db():
         pass
     try:
         _execute("ALTER TABLE users ADD COLUMN coins INTEGER DEFAULT 100")
+    except Exception:
+        pass
+    try:
+        _execute("ALTER TABLE users ADD COLUMN password_hash TEXT DEFAULT ''")
     except Exception:
         pass
     _pipeline([

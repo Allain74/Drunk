@@ -27,6 +27,7 @@ from data.database import (
     add_blackjack_player, get_blackjack_players, update_blackjack_player,
     get_blackjack_session_by_player, _get_waiting_session_by_creator,
     is_following, follow_user, unfollow_user, get_following,
+    set_password,
 )
 
 load_dotenv()
@@ -37,6 +38,8 @@ ADMIN_ID = int(os.environ.get("ADMIN_ID", "0"))
 # ── Conversation states ───────────────────────────────────────────────────────
 BET_TYPE, BET_OPPONENT, BET_TIME, BET_AMOUNT = range(4)
 BJ_MODE, BJ_PLAYERS, BJ_BET, BJ_PLAYING = range(4, 8)
+PROFIL_SEXE, PROFIL_POIDS, PROFIL_PSEUDO, PROFIL_PASSWORD = range(8, 12)
+PWD_NEW = 12
 
 ALIAS_MAP: dict[str, str] = {}
 for key, drink in DRINKS.items():
@@ -113,7 +116,7 @@ TOPO_MSG = (
     "Ce bot te permet de suivre ton taux d'alcool en temps réel avec tes potes.\n\n"
     "*Comment ça marche ?*\n\n"
     "1️⃣ Configure ton profil une seule fois :\n"
-    "`/p 80 h` _(poids en kg + h pour homme, f pour femme)_\n\n"
+    "`/profil` _(sexe, poids, pseudo, mot de passe site web)_\n\n"
     "2️⃣ À chaque verre, tape juste le nom :\n"
     "`pinte` `demi` `vodka` `vin` `mojito`...\n\n"
     "3️⃣ Le bot calcule ton TAC en temps réel et te dit à quelle heure tu seras sobre.\n\n"
@@ -121,7 +124,8 @@ TOPO_MSG = (
     "• `/site` — voir le dashboard en temps réel\n"
     "• `/tac` — voir ton taux d'alcool actuel\n"
     "• `/annuler` — supprimer le dernier verre\n"
-    "• `/liste` — toutes les boissons disponibles\n\n"
+    "• `/liste` — toutes les boissons disponibles\n"
+    "• `/password` — changer ton mot de passe\n\n"
     "_Tape `/` pour voir toutes les commandes disponibles_ 🎉"
 )
 
@@ -138,31 +142,118 @@ async def cmd_topo(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(TOPO_MSG, parse_mode="Markdown")
 
 
-# ── /profil ───────────────────────────────────────────────────────────────────
+# ── /profil — ConversationHandler ────────────────────────────────────────────
 
-async def cmd_profil(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    args = ctx.args
-    if len(args) != 2:
-        await update.message.reply_text("❌ Usage : /p 80 h ou /p 60 f")
-        return
+_SEXE_KB = ReplyKeyboardMarkup(
+    [["👨 Homme", "👩 Femme"]],
+    one_time_keyboard=True, resize_keyboard=True
+)
+
+async def cmd_profil_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "🧾 *Configuration du profil*\n\n"
+        "1️⃣ Quel est ton sexe ?",
+        parse_mode="Markdown",
+        reply_markup=_SEXE_KB,
+    )
+    return PROFIL_SEXE
+
+async def cmd_profil_sexe(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text.strip().lower()
+    if "homme" in text or text in ("h", "m"):
+        ctx.user_data["profil_gender"] = "homme"
+    elif "femme" in text or text in ("f",):
+        ctx.user_data["profil_gender"] = "femme"
+    else:
+        await update.message.reply_text("❌ Réponds avec les boutons ⬆️", reply_markup=_SEXE_KB)
+        return PROFIL_SEXE
+    await update.message.reply_text(
+        "2️⃣ Quel est ton poids *(en kg)* ?",
+        parse_mode="Markdown",
+        reply_markup=ReplyKeyboardRemove(),
+    )
+    return PROFIL_POIDS
+
+async def cmd_profil_poids(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     try:
-        weight = float(args[0].replace(",", "."))
-        gender = args[1].lower()
-        gender = {"h": "homme", "f": "femme"}.get(gender, gender)
-        assert gender in ("homme", "femme")
+        weight = float(update.message.text.strip().replace(",", "."))
         assert 30 < weight < 250
     except (ValueError, AssertionError):
-        await update.message.reply_text("❌ Exemple : /p 80 h ou /p 60 f")
-        return
-    name = user.first_name or user.username or str(user.id)
-    upsert_user(user.id, name, weight, gender)
-    ensure_session(user.id)
+        await update.message.reply_text("❌ Entre un poids valide (ex : 75)")
+        return PROFIL_POIDS
+    ctx.user_data["profil_weight"] = weight
+    await update.message.reply_text("3️⃣ Choisis ton *pseudo* (affiché sur le site) :", parse_mode="Markdown")
+    return PROFIL_PSEUDO
+
+async def cmd_profil_pseudo(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    pseudo = update.message.text.strip()
+    if len(pseudo) < 2 or len(pseudo) > 30:
+        await update.message.reply_text("❌ Pseudo trop court ou trop long (2–30 caractères)")
+        return PROFIL_PSEUDO
+    ctx.user_data["profil_pseudo"] = pseudo
     await update.message.reply_text(
-        f"✅ Profil enregistré, *{name}* ! ({weight}kg — {gender})\n"
-        f"Envoie `pinte`, `demi`, `vodka`... pour commencer.",
-        parse_mode="Markdown"
+        "4️⃣ Choisis un *mot de passe* pour te connecter sur le site web :",
+        parse_mode="Markdown",
     )
+    return PROFIL_PASSWORD
+
+async def cmd_profil_password(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    password = update.message.text.strip()
+    if len(password) < 4:
+        await update.message.reply_text("❌ Mot de passe trop court (min. 4 caractères)")
+        return PROFIL_PASSWORD
+    user = update.effective_user
+    gender = ctx.user_data["profil_gender"]
+    weight = ctx.user_data["profil_weight"]
+    pseudo = ctx.user_data["profil_pseudo"]
+    upsert_user(user.id, pseudo, weight, gender)
+    set_password(user.id, password)
+    ensure_session(user.id)
+    # seed follows for new user
+    from data.database import get_all_users as _gau, follow_user as _fu
+    all_users = _gau()
+    for u in all_users:
+        if u["telegram_id"] != user.id:
+            _fu(user.id, u["telegram_id"])
+            _fu(u["telegram_id"], user.id)
+    await update.message.reply_text(
+        f"✅ Profil créé, *{pseudo}* ! ({weight}kg — {gender})\n"
+        f"Tu peux maintenant te connecter sur le site avec ton pseudo et ton mot de passe.\n\n"
+        f"Envoie `pinte`, `demi`, `vodka`... pour commencer 🍺",
+        parse_mode="Markdown",
+        reply_markup=ReplyKeyboardRemove(),
+    )
+    ctx.user_data.clear()
+    return ConversationHandler.END
+
+async def cmd_profil_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("❌ Configuration annulée.", reply_markup=ReplyKeyboardRemove())
+    ctx.user_data.clear()
+    return ConversationHandler.END
+
+
+# ── /password ─────────────────────────────────────────────────────────────────
+
+async def cmd_password_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    if not get_user(user.id):
+        await update.message.reply_text("❌ Configure ton profil d'abord : /profil")
+        return ConversationHandler.END
+    await update.message.reply_text("🔑 Entre ton *nouveau mot de passe* :", parse_mode="Markdown")
+    return PWD_NEW
+
+async def cmd_password_new(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    password = update.message.text.strip()
+    if len(password) < 4:
+        await update.message.reply_text("❌ Mot de passe trop court (min. 4 caractères)")
+        return PWD_NEW
+    set_password(update.effective_user.id, password)
+    await update.message.reply_text("✅ Mot de passe mis à jour !")
+    return ConversationHandler.END
+
+async def cmd_password_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("❌ Annulé.")
+    return ConversationHandler.END
 
 
 # ── Clavier rapide ────────────────────────────────────────────────────────────
@@ -1519,7 +1610,6 @@ def create_application() -> Application:
 
     app.add_handler(CommandHandler("start",                       cmd_start))
     app.add_handler(CommandHandler("topo",                        cmd_topo))
-    app.add_handler(CommandHandler(["profil", "p"],               cmd_profil))
     app.add_handler(CommandHandler(["tac", "t"],                  cmd_tac))
     app.add_handler(CommandHandler(["historique", "h", "histo"],  cmd_historique))
     app.add_handler(CommandHandler(["annuler", "a"],              cmd_annuler))
@@ -1578,6 +1668,30 @@ def create_application() -> Application:
         per_user=True,
     )
 
+    profil_conv = ConversationHandler(
+        entry_points=[CommandHandler(["profil", "p"], cmd_profil_start)],
+        states={
+            PROFIL_SEXE:     [MessageHandler(filters.TEXT & ~filters.COMMAND, cmd_profil_sexe)],
+            PROFIL_POIDS:    [MessageHandler(filters.TEXT & ~filters.COMMAND, cmd_profil_poids)],
+            PROFIL_PSEUDO:   [MessageHandler(filters.TEXT & ~filters.COMMAND, cmd_profil_pseudo)],
+            PROFIL_PASSWORD: [MessageHandler(filters.TEXT & ~filters.COMMAND, cmd_profil_password)],
+        },
+        fallbacks=[CommandHandler("annuler", cmd_profil_cancel)],
+        allow_reentry=True,
+        per_user=True,
+    )
+
+    password_conv = ConversationHandler(
+        entry_points=[CommandHandler("password", cmd_password_start)],
+        states={
+            PWD_NEW: [MessageHandler(filters.TEXT & ~filters.COMMAND, cmd_password_new)],
+        },
+        fallbacks=[CommandHandler("annuler", cmd_password_cancel)],
+        per_user=True,
+    )
+
+    app.add_handler(profil_conv)
+    app.add_handler(password_conv)
     app.add_handler(pari_conv)
     app.add_handler(bj_conv)
 

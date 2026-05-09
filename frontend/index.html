@@ -482,12 +482,14 @@
 <div class="modal-bg-id" id="modal-bg-id" onclick="closeIdentityModal(event)">
   <div class="modal-id">
     <button class="modal-id-close" onclick="closeIdentityModal()">✕</button>
-    <h3>👤 Qui es-tu ?</h3>
-    <p>Entre ton prénom tel qu'il apparaît sur le dashboard.</p>
-    <input type="text" id="identity-input" placeholder="Ton prénom…" autocomplete="off"
-           onkeydown="if(event.key==='Enter') submitIdentity()"/>
-    <div class="modal-id-err" id="identity-err">Prénom introuvable. Vérifie l'orthographe.</div>
-    <button class="btn-primary" onclick="submitIdentity()">Confirmer</button>
+    <h3>👤 Connexion</h3>
+    <p>Entre ton pseudo et ton mot de passe configurés via <code>/profil</code> sur Telegram.</p>
+    <input type="text" id="identity-input" placeholder="Pseudo…" autocomplete="off"
+           onkeydown="if(event.key==='Enter') document.getElementById('identity-pwd').focus()"/>
+    <input type="password" id="identity-pwd" placeholder="Mot de passe…" autocomplete="current-password"
+           onkeydown="if(event.key==='Enter') submitIdentity()" style="margin-top:8px"/>
+    <div class="modal-id-err" id="identity-err">Pseudo ou mot de passe incorrect.</div>
+    <button class="btn-primary" onclick="submitIdentity()">Se connecter</button>
     <div style="margin-top:10px;text-align:center">
       <button style="background:none;border:none;color:var(--sub);font-size:0.8rem;cursor:pointer"
               onclick="logout()">Se déconnecter</button>
@@ -723,6 +725,7 @@
   // ── Identity modal ──
   function openIdentityModal() {
     document.getElementById('identity-input').value = myName || '';
+    document.getElementById('identity-pwd').value = '';
     document.getElementById('identity-err').style.display = 'none';
     document.getElementById('modal-bg-id').classList.add('open');
     setTimeout(() => document.getElementById('identity-input').focus(), 100);
@@ -735,13 +738,19 @@
   }
 
   async function submitIdentity() {
-    const name = document.getElementById('identity-input').value.trim();
-    if (!name) return;
+    const username = document.getElementById('identity-input').value.trim();
+    const password = document.getElementById('identity-pwd').value.trim();
+    if (!username || !password) return;
     const err = document.getElementById('identity-err');
     err.style.display = 'none';
     try {
-      const data = await fetch(`${API}/lookup?name=${encodeURIComponent(name)}`).then(r => r.json());
-      if (!data.found) {
+      const data = await fetch(`${API}/login`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({username, password}),
+      }).then(r => r.json());
+      if (!data.ok) {
+        err.textContent = data.error || 'Pseudo ou mot de passe incorrect.';
         err.style.display = 'block';
         return;
       }

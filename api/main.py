@@ -20,6 +20,7 @@ from data.database import (
     get_blackjack_session, get_blackjack_players, update_blackjack_session,
     update_blackjack_player, create_blackjack_session, add_blackjack_player,
     follow_user, unfollow_user, is_following, get_following,
+    verify_password,
 )
 from core.recap import build_weekly_recap
 from core.widmark import total_bac, bac_label, sober_in_hours
@@ -463,6 +464,25 @@ async def unfollow_endpoint(request: Request):
         return {"ok": False, "error": "Missing IDs"}
     unfollow_user(follower_id, following_id)
     return {"ok": True}
+
+
+@app.post("/login")
+async def login_endpoint(request: Request):
+    body = await request.json()
+    username = body.get("username", "").strip()
+    password = body.get("password", "").strip()
+    if not username or not password:
+        return {"ok": False, "error": "Pseudo et mot de passe requis"}
+    user = verify_password(username, password)
+    if not user:
+        return {"ok": False, "error": "Pseudo ou mot de passe incorrect"}
+    admin_id = int(os.environ.get("ADMIN_ID", "0"))
+    return {
+        "ok": True,
+        "telegram_id": user["telegram_id"],
+        "username": user["username"],
+        "is_admin": user["telegram_id"] == admin_id,
+    }
 
 
 @app.websocket("/ws/blackjack/{token}")
