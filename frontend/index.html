@@ -433,7 +433,18 @@
     .profile-stat { flex:1; background:var(--bg); border-radius:12px; padding:10px; text-align:center; }
     .profile-stat-val { font-size:1.2rem; font-weight:800; }
     .profile-stat-lbl { font-size:0.6rem; color:var(--sub); margin-top:2px; }
+    .profile-stat.clickable { cursor:pointer; transition:opacity .15s; }
+    .profile-stat.clickable:hover { opacity:.75; }
     .profile-actions { display:flex; gap:10px; margin-top:8px; }
+    /* Overlay liste sociale (abonnés / suivis d'un profil) */
+    .social-list-overlay { position:fixed; inset:0; z-index:2200; background:#00000070; display:flex; align-items:flex-end; }
+    .social-list-box { background:var(--card); border-radius:24px 24px 0 0; padding:20px 20px 32px; width:100%; max-height:75vh; overflow-y:auto; }
+    .social-list-hd { display:flex; align-items:center; gap:10px; margin-bottom:16px; }
+    .social-list-title { font-weight:900; font-size:1.05rem; flex:1; }
+    .social-list-row { display:flex; align-items:center; gap:12px; padding:10px 0; border-bottom:1px solid var(--border); }
+    .social-list-row:last-child { border-bottom:none; }
+    .social-list-name { flex:1; font-weight:700; font-size:0.92rem; cursor:pointer; }
+    .social-list-name:hover { text-decoration:underline; }
     .btn-follow { flex:1; padding:10px; border-radius:10px; font-weight:700; font-size:0.9rem; cursor:pointer; border:none; transition:background .2s; }
     .btn-follow.following { background:#ef4444; color:#fff; }
     .btn-follow.not-following { background:#22c55e; color:#fff; }
@@ -869,7 +880,7 @@
       .profile-stats { flex-wrap: wrap; }
       .profile-stat { min-width: calc(50% - 5px); }
 
-      /* Abonnements */
+      /* Suivis */
       .abo-row { flex-wrap: wrap; gap: 8px; }
       .abo-row-name { width: 100%; }
     }
@@ -1040,7 +1051,7 @@
 </div>
 
 <!-- ══════════════════════════════════════════════════════════════
-     4. AMIS — Abonnements
+     4. AMIS — Suivis
 ═══════════════════════════════════════════════════════════════ -->
 <div id="amis-panel" class="panel">
   <div class="page-hd">
@@ -1460,8 +1471,12 @@
       followBtn = `<button class="btn-follow not-following" onclick="toggleFollow(${tid}, true)">➕ Suivre</button>`;
     }
 
-    // Affichage provisoire avant fetch des coins
-    const renderModal = (coins) => {
+    // Affichage (re-appelé quand coins/social arrivent)
+    const renderModal = (coins, socialInfo) => {
+      const nbFollowers = socialInfo ? socialInfo.followers.length : '…';
+      const nbFollowing = socialInfo ? socialInfo.following.length : '…';
+      const followersIds = socialInfo ? socialInfo.followers : [];
+      const followingIds = socialInfo ? socialInfo.following : [];
       document.getElementById('modal4-content').innerHTML = `
         <div style="text-align:center;margin-bottom:8px">${avatarHtml}</div>
         <div class="profile-name">${nameHtml}</div>
@@ -1489,6 +1504,14 @@
             <div class="profile-stat-val" style="color:#facc15">${coins}</div>
             <div class="profile-stat-lbl">🪙 pièces</div>
           </div>` : ''}
+          <div class="profile-stat clickable" onclick="openSocialList('followers', ${JSON.stringify(followersIds)}, 'Abonnés de ${esc(username)}')">
+            <div class="profile-stat-val">${nbFollowers}</div>
+            <div class="profile-stat-lbl">abonnés</div>
+          </div>
+          <div class="profile-stat clickable" onclick="openSocialList('following', ${JSON.stringify(followingIds)}, '${esc(username)} suit')">
+            <div class="profile-stat-val">${nbFollowing}</div>
+            <div class="profile-stat-lbl">suivis</div>
+          </div>
         </div>
         <div class="profile-actions">
           <button class="btn-history" onclick="openChartFromProfile('${esc(username)}')">📈 Historique</button>
@@ -1501,15 +1524,76 @@
       `;
     };
 
-    renderModal(null);
+    renderModal(null, null);
     document.getElementById('modal-bg4').classList.add('open');
 
-    // Fetch coins en arrière-plan
-    try {
-      const coinsData = await fetch(`${API}/coins`).then(r => r.json());
-      const userCoins = coinsData.find(c => c.username.toLowerCase() === username.toLowerCase());
-      if (userCoins !== undefined) renderModal(userCoins.coins);
-    } catch(e) {}
+    // Fetch coins + social en parallèle
+    const [coinsData, followingData, followersData] = await Promise.allSettled([
+      fetch(`${API}/coins`).then(r => r.json()),
+      tid ? fetch(`${API}/following/${tid}`).then(r => r.json()) : Promise.resolve({ following: [] }),
+      tid ? fetch(`${API}/followers/${tid}`).then(r => r.json()) : Promise.resolve({ followers: [] }),
+    ]);
+    const userCoins = coinsData.status === 'fulfilled'
+      ? (coinsData.value.find(c => c.username.toLowerCase() === username.toLowerCase())?.coins ?? null)
+      : null;
+    const socialInfo = {
+      following: followingData.status === 'fulfilled' ? (followingData.value.following || []) : [],
+      followers: followersData.status === 'fulfilled' ? (followersData.value.followers || []) : [],
+    };
+    renderModal(userCoins, socialInfo);
+  }
+
+  function openSocialList(type, ids, title) {
+    // Récupère les infos utilisateur pour chaque ID
+    const users = ids.map(id => allUsers.find(u => u.telegram_id === id)).filter(Boolean);
+    const rows = users.map(u => {
+      const isSelf = u.telegram_id === myTid;
+      const isAlreadyFollowing = followingSet.has(u.telegram_id);
+      const isAdm = isAdmin(u.telegram_id);
+      const avHtml = _avatarEl(u.telegram_id, 36, (u.username||'?')[0].toUpperCase(), u.gender || 'homme', 'flex-shrink:0;');
+      let btn = '';
+      if (!myTid || isSelf || isAdm) btn = '';
+      else if (isAlreadyFollowing) btn = `<button class="admin-action-btn danger" style="padding:5px 10px" onclick="socialListToggleFollow(${u.telegram_id},false)">➖ Ne plus suivre</button>`;
+      else btn = `<button class="admin-action-btn primary" style="padding:5px 10px" onclick="socialListToggleFollow(${u.telegram_id},true)">➕ Suivre</button>`;
+      return `<div class="social-list-row">
+        ${avHtml}
+        <div class="social-list-name" onclick="closeSocialList();openProfile('${esc(u.username)}')">${esc(u.username)}</div>
+        ${btn}
+      </div>`;
+    }).join('') || '<div style="color:var(--sub);text-align:center;padding:20px">Aucun utilisateur</div>';
+
+    const overlay = document.createElement('div');
+    overlay.id = 'social-list-overlay';
+    overlay.className = 'social-list-overlay';
+    overlay.onclick = e => { if (e.target === overlay) closeSocialList(); };
+    overlay.innerHTML = `
+      <div class="social-list-box">
+        <div class="social-list-hd">
+          <button onclick="closeSocialList()" style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:var(--sub);padding:0">←</button>
+          <div class="social-list-title">${esc(title)}</div>
+          <div style="font-size:0.78rem;color:var(--sub)">${ids.length}</div>
+        </div>
+        ${rows}
+      </div>`;
+    document.body.appendChild(overlay);
+  }
+
+  function closeSocialList() {
+    document.getElementById('social-list-overlay')?.remove();
+  }
+
+  async function socialListToggleFollow(tid, doFollow) {
+    if (!myTid) return;
+    const endpoint = doFollow ? '/follow' : '/unfollow';
+    await fetch(`${API}${endpoint}`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ follower_id: myTid, following_id: tid }),
+    });
+    if (doFollow) followingSet.add(tid);
+    else followingSet.delete(tid);
+    // Rafraîchit le profil ouvert (re-fetch social)
+    openProfile(_profileUsername);
+    if (lastData.length) render(lastData);
   }
 
   async function toggleFollow(tid, doFollow) {
@@ -2674,10 +2758,10 @@
           </div>
           <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px;text-align:center">
             <div style="font-size:1.8rem;font-weight:900">${data.following_count}</div>
-            <div style="font-size:0.72rem;color:var(--sub);margin-top:4px">Abonnements</div>
+            <div style="font-size:0.72rem;color:var(--sub);margin-top:4px">Suivis</div>
           </div>
         </div>
-        <div style="font-size:0.68rem;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#6366f1;margin-bottom:12px">Abonnements</div>
+        <div style="font-size:0.68rem;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#6366f1;margin-bottom:12px">Suivis</div>
         <div class="amis-list">${followingList}</div>
       `;
     } catch(e) {

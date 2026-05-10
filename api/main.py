@@ -813,6 +813,10 @@ def get_all_users_endpoint():
 def get_following_endpoint(telegram_id: int):
     return {"following": get_following(telegram_id)}
 
+@app.get("/followers/{telegram_id}")
+def get_followers_endpoint(telegram_id: int):
+    return {"followers": get_followers(telegram_id)}
+
 @app.post("/follow")
 async def follow_endpoint(request: Request):
     body = await request.json()
