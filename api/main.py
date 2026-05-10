@@ -22,6 +22,7 @@ from data.database import (
     get_active_blackjack_sessions, get_blackjack_players, update_blackjack_session,
     update_blackjack_player, create_blackjack_session, add_blackjack_player,
     follow_user, unfollow_user, is_following, get_following, get_followers,
+    ban_user, unban_user, is_banned,
     verify_password,
     log_drink as db_log_drink, start_session, end_session,
     upsert_user, set_password, get_user_by_username, rename_user,
@@ -32,6 +33,7 @@ from data.database import (
     get_blackjack_stats, get_profile_follows,
     set_avatar, get_all_avatars,
     get_all_follows,
+    clear_password, delete_n_drinks,
 )
 from core.recap import build_weekly_recap, build_weekly_recap_for_user
 from core.widmark import total_bac, bac_label, sober_in_hours, alcohol_grams
@@ -91,6 +93,9 @@ async def _notify_followers(actor_id: int, title: str, body: str, url: str = "/"
     followers = get_followers(actor_id)
     for fid in followers:
         loop.run_in_executor(None, _send_push, fid, title, body, url)
+
+# ── Notifs Telegram : mettre à False pour ne pas spammer par Telegram ─────────
+_TG_NOTIFS = False
 
 _ws_clients: set[WebSocket] = set()
 _bj_clients: dict[str, set[WebSocket]] = {}
@@ -246,6 +251,7 @@ def build_snapshot() -> list[dict]:
             "lon":         user["longitude"],
             "max_bac":     round(user.get("max_bac") or 0, 2),
             "peak_24h":    round(peak_24h, 2),
+            "gender":      user.get("gender", "homme"),
         })
     result.sort(key=lambda x: x["bac"], reverse=True)
     return result
@@ -303,14 +309,15 @@ async def _danger_loop():
                     last_notif = _danger_notified.get(uid)
                     if not last_notif or (now - last_notif).total_seconds() >= 3600:
                         _danger_notified[uid] = now
-                        try:
-                            await _bot_app.bot.send_message(
-                                chat_id=uid,
-                                text=f"👀 *{user['username']}*, t'es encore vivant ? {bac:.2f} g/L depuis un moment...",
-                                parse_mode="Markdown"
-                            )
-                        except Exception:
-                            pass
+                        if _TG_NOTIFS:
+                            try:
+                                await _bot_app.bot.send_message(
+                                    chat_id=uid,
+                                    text=f"👀 *{user['username']}*, t'es encore vivant ? {bac:.2f} g/L depuis un moment...",
+                                    parse_mode="Markdown"
+                                )
+                            except Exception:
+                                pass
 
             # ── Notif PUSH aux abonnés : "ami en charge" (seuil 1.5 g/L) ────
             if bac >= 1.5:
@@ -356,14 +363,15 @@ async def _danger_loop():
                     idx   = min(weeks - 1, len(_INACTIVITY_MSGS) - 1)
                     tg_tpl, push_tpl = _INACTIVITY_MSGS[idx]
                     name = user["username"]
-                    try:
-                        await _bot_app.bot.send_message(
-                            chat_id=uid,
-                            text=tg_tpl.format(name=name),
-                            parse_mode="Markdown"
-                        )
-                    except Exception:
-                        pass
+                    if _TG_NOTIFS:
+                        try:
+                            await _bot_app.bot.send_message(
+                                chat_id=uid,
+                                text=tg_tpl.format(name=name),
+                                parse_mode="Markdown"
+                            )
+                        except Exception:
+                            pass
                     loop.run_in_executor(
                         None, _send_push, uid,
                         "🍺 Drunk",
@@ -404,14 +412,15 @@ async def _weekly_recap_loop():
                         tg_msg    = build_weekly_recap(since, until)
                         push_body = "Clique pour voir le recap de la semaine 📊"
 
-                    try:
-                        await _bot_app.bot.send_message(
-                            chat_id=uid,
-                            text=tg_msg,
-                            parse_mode="Markdown"
-                        )
-                    except Exception:
-                        pass
+                    if _TG_NOTIFS:
+                        try:
+                            await _bot_app.bot.send_message(
+                                chat_id=uid,
+                                text=tg_msg,
+                                parse_mode="Markdown"
+                            )
+                        except Exception:
+                            pass
 
                     loop.run_in_executor(
                         None, _send_push, uid,
@@ -462,6 +471,154 @@ async def admin_set_coins(request: Request):
     if delta != 0:
         add_coins(user["telegram_id"], delta, f"Admin set-coins → {amount}")
     return {"ok": True, "username": user["username"], "before": current, "after": int(amount)}
+
+
+# ── Admin helpers ──────────────────────────────────────────────────────────────
+
+def _check_admin(caller_id) -> bool:
+    aid = int(os.environ.get("ADMIN_ID", "0"))
+    return bool(aid and int(caller_id or 0) == aid)
+
+
+@app.get("/admin/users")
+def admin_get_users(caller_id: int = 0):
+    if not _check_admin(caller_id):
+        return {"ok": False, "error": "Non autorisé"}
+    admin_id = int(os.environ.get("ADMIN_ID", "0"))
+    users    = get_all_users()
+    drinks_by_user = get_all_active_drinks()
+    now = datetime.now(timezone.utc)
+    banned = {u["telegram_id"] for u in _get_banned_list()}
+    result = []
+    for u in users:
+        uid    = u["telegram_id"]
+        drinks = drinks_by_user.get(uid, [])
+        bac    = round(total_bac(drinks, u["weight_kg"], u["gender"], now), 2)
+        result.append({
+            "telegram_id": uid,
+            "username":    u["username"],
+            "gender":      u.get("gender", "homme"),
+            "is_admin":    uid == admin_id,
+            "is_banned":   uid in banned,
+            "coins":       get_coins(uid),
+            "bac":         bac,
+            "nb_drinks":   len(drinks),
+        })
+    result.sort(key=lambda x: x["username"].lower())
+    return {"ok": True, "users": result}
+
+
+def _get_banned_list():
+    from data.database import _fetchall as _fa
+    return _fa("SELECT telegram_id FROM banned_users")
+
+
+@app.post("/admin/ban")
+async def admin_ban(request: Request):
+    body = await request.json()
+    if not _check_admin(body.get("caller_id")):
+        return {"ok": False, "error": "Non autorisé"}
+    target_id = body.get("target_id")
+    if not target_id:
+        return {"ok": False, "error": "target_id requis"}
+    ban_user(int(target_id))
+    return {"ok": True}
+
+
+@app.post("/admin/unban")
+async def admin_unban(request: Request):
+    body = await request.json()
+    if not _check_admin(body.get("caller_id")):
+        return {"ok": False, "error": "Non autorisé"}
+    target_id = body.get("target_id")
+    unban_user(int(target_id))
+    return {"ok": True}
+
+
+@app.post("/admin/rename")
+async def admin_rename(request: Request):
+    body = await request.json()
+    if not _check_admin(body.get("caller_id")):
+        return {"ok": False, "error": "Non autorisé"}
+    target_id = body.get("target_id")
+    new_name  = (body.get("new_name") or "").strip()
+    if not target_id or not new_name:
+        return {"ok": False, "error": "target_id et new_name requis"}
+    if is_username_taken(new_name, int(target_id)):
+        return {"ok": False, "error": "Pseudo déjà utilisé"}
+    rename_user(int(target_id), new_name)
+    await _broadcast(build_snapshot())
+    return {"ok": True}
+
+
+@app.post("/admin/remove-drinks")
+async def admin_remove_drinks(request: Request):
+    body = await request.json()
+    if not _check_admin(body.get("caller_id")):
+        return {"ok": False, "error": "Non autorisé"}
+    target_id = body.get("target_id")
+    n         = int(body.get("n", 1))
+    if not target_id:
+        return {"ok": False, "error": "target_id requis"}
+    removed = delete_n_drinks(int(target_id), n)
+    await _broadcast(build_snapshot())
+    return {"ok": True, "removed": removed}
+
+
+@app.post("/admin/end-session")
+async def admin_end_session(request: Request):
+    body = await request.json()
+    if not _check_admin(body.get("caller_id")):
+        return {"ok": False, "error": "Non autorisé"}
+    target_id = body.get("target_id")
+    if not target_id:
+        return {"ok": False, "error": "target_id requis"}
+    end_session(int(target_id))
+    await _broadcast(build_snapshot())
+    return {"ok": True}
+
+
+@app.post("/admin/reset-password")
+async def admin_reset_password(request: Request):
+    body = await request.json()
+    if not _check_admin(body.get("caller_id")):
+        return {"ok": False, "error": "Non autorisé"}
+    target_id = body.get("target_id")
+    if not target_id:
+        return {"ok": False, "error": "target_id requis"}
+    clear_password(int(target_id))
+    return {"ok": True}
+
+
+@app.post("/admin/give-coins")
+async def admin_give_coins(request: Request):
+    body = await request.json()
+    if not _check_admin(body.get("caller_id")):
+        return {"ok": False, "error": "Non autorisé"}
+    target_id = body.get("target_id")
+    amount    = body.get("amount")
+    if not target_id or amount is None:
+        return {"ok": False, "error": "target_id et amount requis"}
+    add_coins(int(target_id), int(amount), "Admin")
+    return {"ok": True, "new_coins": get_coins(int(target_id))}
+
+
+@app.post("/admin/broadcast-push")
+async def admin_broadcast_push(request: Request):
+    body = await request.json()
+    if not _check_admin(body.get("caller_id")):
+        return {"ok": False, "error": "Non autorisé"}
+    title   = (body.get("title") or "").strip()
+    message = (body.get("message") or "").strip()
+    url     = body.get("url", "/")
+    if not title or not message:
+        return {"ok": False, "error": "title et message requis"}
+    import asyncio
+    loop = asyncio.get_event_loop()
+    users = get_all_users()
+    for u in users:
+        loop.run_in_executor(None, _send_push, u["telegram_id"], title, message, url)
+    return {"ok": True, "sent_to": len(users)}
 
 
 @app.get("/snapshot")
@@ -556,11 +713,12 @@ async def _bet_settlement_loop():
                 f"💸 Perdant : *{loser['username']}* -{amount} 🪙"
             )
 
-            for uid in [uid1, uid2]:
-                try:
-                    await _bot_app.bot.send_message(chat_id=uid, text=msg, parse_mode="Markdown")
-                except Exception:
-                    pass
+            if _TG_NOTIFS:
+                for uid in [uid1, uid2]:
+                    try:
+                        await _bot_app.bot.send_message(chat_id=uid, text=msg, parse_mode="Markdown")
+                    except Exception:
+                        pass
 
 
 @app.get("/history")
@@ -609,8 +767,9 @@ def get_all_users_endpoint():
     return [
         {
             "telegram_id": u["telegram_id"],
-            "username": u["username"],
-            "is_admin": u["telegram_id"] == admin_id,
+            "username":    u["username"],
+            "gender":      u.get("gender", "homme"),
+            "is_admin":    u["telegram_id"] == admin_id,
         }
         for u in users
     ]
@@ -1546,18 +1705,20 @@ async def blackjack_rematch(token: str, request: Request):
             add_coins(p["telegram_id"], bet + winnings, "Blackjack ! (×1.5)")
             update_blackjack_player(new_sid, p["telegram_id"], status="done", result="blackjack")
             msg += f"\n\n🎉 *BLACKJACK !* Tu gagnes {winnings} 🪙 !"
-            try:
-                await _bot_app.bot.send_message(chat_id=p["telegram_id"], text=msg, parse_mode="Markdown")
-            except Exception:
-                pass
+            if _TG_NOTIFS:
+                try:
+                    await _bot_app.bot.send_message(chat_id=p["telegram_id"], text=msg, parse_mode="Markdown")
+                except Exception:
+                    pass
         else:
-            try:
-                await _bot_app.bot.send_message(
-                    chat_id=p["telegram_id"], text=msg,
-                    parse_mode="Markdown", reply_markup=bj_kb
-                )
-            except Exception:
-                pass
+            if _TG_NOTIFS:
+                try:
+                    await _bot_app.bot.send_message(
+                        chat_id=p["telegram_id"], text=msg,
+                        parse_mode="Markdown", reply_markup=bj_kb
+                    )
+                except Exception:
+                    pass
 
     # Notifier tous les clients sur la nouvelle session
     await _bj_broadcast(new_token)

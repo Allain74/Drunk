@@ -251,6 +251,23 @@ def unban_user(telegram_id: int):
 def rename_user(telegram_id: int, new_name: str):
     _execute("UPDATE users SET username=? WHERE telegram_id=?", [new_name, telegram_id])
 
+def clear_password(telegram_id: int):
+    """Remet le mot de passe à vide (aucun mot de passe requis)."""
+    _execute("UPDATE users SET password_hash='' WHERE telegram_id=?", [telegram_id])
+
+def delete_n_drinks(telegram_id: int, n: int) -> int:
+    """Supprime les n derniers verres de la session active. Retourne le nb supprimé."""
+    session = get_active_session(telegram_id)
+    if not session or n <= 0:
+        return 0
+    rows = _fetchall(
+        "SELECT id FROM drink_logs WHERE session_id=? ORDER BY logged_at DESC LIMIT ?",
+        [session["id"], n]
+    )
+    for row in rows:
+        _execute("DELETE FROM drink_logs WHERE id=?", [row["id"]])
+    return len(rows)
+
 def get_user_by_username(username: str) -> dict | None:
     return _fetchone("SELECT * FROM users WHERE LOWER(username)=LOWER(?)", [username])
 

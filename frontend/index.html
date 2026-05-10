@@ -189,6 +189,25 @@
     .p-action-btn:last-child { margin-bottom: 0; }
     .p-action-btn.danger { color: #ef4444; border-color: #ef444430; }
 
+    /* ── Admin panel ── */
+    .admin-user-row { display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid var(--border); }
+    .admin-user-row:last-child { border-bottom:none; }
+    .admin-user-info { flex:1; min-width:0; }
+    .admin-user-name { font-weight:700; font-size:0.9rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .admin-user-sub  { font-size:0.7rem; color:var(--sub); margin-top:2px; }
+    .admin-action-btn { padding:5px 10px; border-radius:8px; border:1.5px solid var(--border); background:var(--bg); color:var(--text); font-size:0.75rem; font-weight:700; cursor:pointer; font-family:inherit; flex-shrink:0; }
+    .admin-action-btn.danger { border-color:#ef444440; color:#ef4444; }
+    .admin-action-btn.primary { border-color:#6366f1; color:#6366f1; }
+    .admin-modal-overlay { position:fixed; inset:0; z-index:3000; background:#00000080; display:flex; align-items:flex-end; }
+    .admin-modal-box { background:var(--card); border-radius:24px 24px 0 0; padding:24px; width:100%; max-height:90vh; overflow-y:auto; }
+    .admin-modal-title { font-size:1.1rem; font-weight:900; margin-bottom:16px; }
+    .admin-modal-input { width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-size:0.92rem; font-family:inherit; box-sizing:border-box; margin-bottom:8px; }
+    .admin-modal-actions { display:flex; flex-direction:column; gap:8px; }
+    .admin-modal-section { border-top:1px solid var(--border); margin-top:12px; padding-top:12px; }
+    .admin-modal-label { font-size:0.72rem; font-weight:700; color:var(--sub); text-transform:uppercase; letter-spacing:.5px; margin-bottom:6px; }
+    .admin-modal-row { display:flex; gap:8px; margin-bottom:8px; }
+    .admin-modal-row .admin-modal-input { margin-bottom:0; }
+
     /* ── Sub-nav ── */
     .sub-nav { display: flex; gap: 4px; background: var(--border); border-radius: 14px; padding: 4px; margin-bottom: 20px; }
     .sub-nav-btn { flex: 1; padding: 9px; border-radius: 11px; border: none; background: none; color: var(--sub); font-weight: 700; font-size: 0.85rem; cursor: pointer; font-family: inherit; transition: all .2s; }
@@ -1369,7 +1388,7 @@
     const pct = Math.min(100,(u.bac/2)*100).toFixed(1);
     const tid = getTidByName(u.username);
     const adminClass = (tid && isAdmin(tid)) ? ' admin-name' : '';
-    const avHtml = _avatarEl(tid, 32, (u.username||'?')[0].toUpperCase(), 'flex-shrink:0;');
+    const avHtml = _avatarEl(tid, 32, (u.username||'?')[0].toUpperCase(), u.gender || 'homme', 'flex-shrink:0;');
     return `
     <div class="card ${!u.has_session?'no-session':''}" onclick="openProfile('${esc(u.username)}')">
       <div class="card-stripe" style="background:${color}"></div>
@@ -1424,8 +1443,9 @@
     const soberIn = snapshotUser && snapshotUser.bac > 0 ? snapshotUser.sober_in_h + 'h' : '—';
 
     await loadAvatars();
-    const initLetter = (username || '?')[0].toUpperCase();
-    const avatarHtml = _avatarEl(tid, 64, initLetter, 'margin:0 auto 10px;display:block;');
+    const initLetter    = (username || '?')[0].toUpperCase();
+    const profileGender = allUsers.find(x => x.telegram_id === tid)?.gender || 'homme';
+    const avatarHtml    = _avatarEl(tid, 64, initLetter, profileGender, 'margin:0 auto 10px;display:block;');
 
     let followBtn = '';
     if (!myTid) {
@@ -1803,14 +1823,17 @@
     } catch(e) {}
   }
 
-  /** Génère le HTML d'un avatar : photo si dispo, sinon initiale sur gradient */
-  function _avatarEl(telegramId, sizePx, initLetter, extraStyle = '') {
+  /** Génère le HTML d'un avatar : photo si dispo, sinon initiale sur gradient (bleu=homme, rose=femme) */
+  function _avatarEl(telegramId, sizePx, initLetter, gender, extraStyle = '') {
     const av = telegramId ? _avatarCache[String(telegramId)] : null;
     if (av) {
-      return `<img src="${av}" style="width:${sizePx}px;height:${sizePx}px;border-radius:50%;object-fit:cover;${extraStyle}">`;
+      return `<img src="${av}" style="width:${sizePx}px;height:${sizePx}px;border-radius:50%;object-fit:cover;flex-shrink:0;${extraStyle}">`;
     }
     const fs = Math.round(sizePx * 0.38);
-    return `<div style="width:${sizePx}px;height:${sizePx}px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#06b6d4);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:${fs}px;color:#fff;flex-shrink:0;${extraStyle}">${initLetter}</div>`;
+    const gradient = (gender === 'femme')
+      ? 'linear-gradient(135deg,#ec4899,#f97316)'
+      : 'linear-gradient(135deg,#6366f1,#06b6d4)';
+    return `<div style="width:${sizePx}px;height:${sizePx}px;border-radius:50%;background:${gradient};display:flex;align-items:center;justify-content:center;font-weight:800;font-size:${fs}px;color:#fff;flex-shrink:0;${extraStyle}">${initLetter}</div>`;
   }
 
   /** Redimensionne une image via canvas et renvoie un data URL JPEG compressé */
@@ -1925,7 +1948,9 @@
 
     // Charge les avatars (cache 60s) avant le rendu
     await loadAvatars();
-    const myAvatar = _avatarCache[String(myTid)];
+    const myGender  = allUsers.find(x => x.telegram_id === myTid)?.gender || me?.gender || 'homme';
+    const myAvatar  = _avatarCache[String(myTid)];
+    const myGradient = myGender === 'femme' ? 'linear-gradient(135deg,#ec4899,#f97316)' : 'linear-gradient(135deg,#6366f1,#06b6d4)';
     const avatarInner = myAvatar
       ? `<img src="${myAvatar}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
       : initLetter;
@@ -1943,7 +1968,7 @@
         <div class="p-card" style="text-align:center;padding-bottom:24px">
           <input type="file" id="avatar-file-input" accept="image/*" style="display:none" onchange="handleAvatarUpload(this)">
           <div class="p-avatar-wrap" onclick="document.getElementById('avatar-file-input').click()" title="Changer la photo de profil">
-            <div class="p-avatar">${avatarInner}</div>
+            <div class="p-avatar" style="background:${myGradient}">${avatarInner}</div>
             <div class="p-avatar-edit">📷</div>
           </div>
           <div class="p-username">@${esc(myName)}</div>
@@ -2017,6 +2042,27 @@
           <button class="p-action-btn danger" onclick="openDeleteModal()">🗑️ Supprimer mon compte</button>
         </div>
 
+        ${myTid === adminId ? `
+        <!-- ─── Section Admin ─────────────────────────────────── -->
+        <div class="p-card" id="admin-panel">
+          <div class="p-card-label" style="color:#f97316">🛠 Administration</div>
+
+          <!-- Broadcast -->
+          <div style="margin-bottom:16px">
+            <div class="admin-modal-label">📢 Notif push à tous</div>
+            <input class="admin-modal-input" id="adm-bc-title" placeholder="Titre…">
+            <input class="admin-modal-input" id="adm-bc-msg"   placeholder="Message…">
+            <button class="btn-primary" style="margin-top:4px" onclick="adminBroadcast()">Envoyer à tous</button>
+            <div style="font-size:0.7rem;color:var(--sub);margin-top:4px" id="adm-bc-status"></div>
+          </div>
+
+          <!-- Liste utilisateurs -->
+          <div class="admin-modal-label" style="margin-top:8px">👥 Utilisateurs</div>
+          <input class="admin-modal-input" id="adm-search" placeholder="🔍 Rechercher…" oninput="adminFilterUsers(this.value)" style="margin-bottom:10px">
+          <div id="adm-users-list"><div style="color:var(--sub);text-align:center;padding:20px">Chargement…</div></div>
+        </div>
+        ` : ''}
+
       </div>`;
 
     // Mise à jour du bouton notifications
@@ -2042,6 +2088,134 @@
       const el = document.getElementById('profil-coins');
       if (el) el.textContent = entry !== undefined ? entry.coins : '—';
     } catch(e) {}
+
+    // Charge la liste admin si admin
+    if (myTid === adminId) adminLoadUsers();
+  }
+
+  // ── Admin ─────────────────────────────────────────────────────────────────
+  let _adminUsers = [];
+  let _adminTarget = null;   // utilisateur sélectionné
+
+  async function adminLoadUsers() {
+    const box = document.getElementById('adm-users-list');
+    if (!box) return;
+    try {
+      const data = await fetch(`${API}/admin/users?caller_id=${myTid}`).then(r => r.json());
+      if (!data.ok) { box.innerHTML = `<div style="color:#ef4444">${data.error}</div>`; return; }
+      _adminUsers = data.users;
+      adminRenderUsers(_adminUsers);
+    } catch(e) { if (box) box.innerHTML = '<div style="color:#ef4444">Erreur réseau</div>'; }
+  }
+
+  function adminFilterUsers(q) {
+    const filtered = q ? _adminUsers.filter(u => u.username.toLowerCase().includes(q.toLowerCase())) : _adminUsers;
+    adminRenderUsers(filtered);
+  }
+
+  function adminRenderUsers(list) {
+    const box = document.getElementById('adm-users-list');
+    if (!box) return;
+    if (!list.length) { box.innerHTML = '<div style="color:var(--sub);text-align:center;padding:12px">Aucun utilisateur</div>'; return; }
+    box.innerHTML = list.map(u => {
+      const badge = u.is_banned ? '🔴' : (u.bac > 0 ? '🟢' : '⚪');
+      const bannedTxt = u.is_banned ? ' <span style="color:#ef4444;font-size:0.7rem">(banni)</span>' : '';
+      return `<div class="admin-user-row">
+        <div class="admin-user-info">
+          <div class="admin-user-name">${badge} ${esc(u.username)}${bannedTxt}</div>
+          <div class="admin-user-sub">${u.bac > 0 ? u.bac + ' g/L · ' : ''}${u.nb_drinks}v · ${u.coins}🪙 · ${u.gender}</div>
+        </div>
+        <button class="admin-action-btn primary" onclick="adminOpenUser(${u.telegram_id})">Actions</button>
+      </div>`;
+    }).join('');
+  }
+
+  function adminOpenUser(tid) {
+    _adminTarget = _adminUsers.find(u => u.telegram_id === tid);
+    if (!_adminTarget) return;
+    const u = _adminTarget;
+    document.getElementById('adm-user-modal-title').textContent = u.username;
+    document.getElementById('adm-rename-input').value = '';
+    document.getElementById('adm-drinks-input').value = '1';
+    document.getElementById('adm-coins-input').value = '';
+    document.getElementById('adm-modal-status').textContent = '';
+    document.getElementById('adm-ban-btn').textContent = u.is_banned ? '✅ Débannir' : '🚫 Bannir';
+    document.getElementById('adm-ban-btn').onclick = () => adminToggleBan(!u.is_banned);
+    document.getElementById('adm-user-modal').style.display = 'flex';
+  }
+
+  function adminCloseUser() {
+    document.getElementById('adm-user-modal').style.display = 'none';
+    _adminTarget = null;
+  }
+
+  async function adminAction(action, extraBody = {}) {
+    if (!_adminTarget) return;
+    const statusEl = document.getElementById('adm-modal-status');
+    statusEl.style.color = 'var(--sub)';
+    statusEl.textContent = '⏳';
+    try {
+      const res = await fetch(`${API}/admin/${action}`, {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ caller_id: myTid, target_id: _adminTarget.telegram_id, ...extraBody }),
+      }).then(r => r.json());
+      if (!res.ok) { statusEl.style.color = '#ef4444'; statusEl.textContent = '❌ ' + (res.error || 'Erreur'); return; }
+      statusEl.style.color = '#22c55e'; statusEl.textContent = '✅ OK';
+      await adminLoadUsers();
+      // Met à jour l'objet si rechargé
+      if (_adminTarget) {
+        _adminTarget = _adminUsers.find(u => u.telegram_id === _adminTarget.telegram_id) || _adminTarget;
+        const u = _adminTarget;
+        if (document.getElementById('adm-ban-btn')) {
+          document.getElementById('adm-ban-btn').textContent = u.is_banned ? '✅ Débannir' : '🚫 Bannir';
+          document.getElementById('adm-ban-btn').onclick = () => adminToggleBan(!u.is_banned);
+          document.getElementById('adm-user-modal-title').textContent = u.username;
+        }
+      }
+    } catch(e) { statusEl.style.color = '#ef4444'; statusEl.textContent = '❌ Erreur réseau'; }
+  }
+
+  function adminToggleBan(ban) {
+    adminAction(ban ? 'ban' : 'unban');
+  }
+  function adminDoRename() {
+    const n = document.getElementById('adm-rename-input').value.trim();
+    if (!n) return;
+    adminAction('rename', { new_name: n });
+  }
+  function adminDoRemoveDrinks() {
+    const n = parseInt(document.getElementById('adm-drinks-input').value) || 1;
+    adminAction('remove-drinks', { n });
+  }
+  function adminDoEndSession() { adminAction('end-session'); }
+  function adminDoResetPwd()   { adminAction('reset-password'); }
+  function adminDoGiveCoins() {
+    const a = parseInt(document.getElementById('adm-coins-input').value);
+    if (!a) return;
+    adminAction('give-coins', { amount: a });
+  }
+
+  async function adminBroadcast() {
+    const title   = document.getElementById('adm-bc-title').value.trim();
+    const message = document.getElementById('adm-bc-msg').value.trim();
+    const statusEl = document.getElementById('adm-bc-status');
+    if (!title || !message) { statusEl.textContent = '❌ Titre et message requis'; return; }
+    statusEl.textContent = '⏳ Envoi…';
+    try {
+      const res = await fetch(`${API}/admin/broadcast-push`, {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ caller_id: myTid, title, message }),
+      }).then(r => r.json());
+      if (res.ok) {
+        statusEl.textContent = `✅ Envoyé à ${res.sent_to} utilisateurs`;
+        document.getElementById('adm-bc-title').value = '';
+        document.getElementById('adm-bc-msg').value = '';
+      } else {
+        statusEl.textContent = '❌ ' + (res.error || 'Erreur');
+      }
+    } catch(e) { statusEl.textContent = '❌ Erreur réseau'; }
   }
 
   function profilSelectGenre(g) {
@@ -2431,7 +2605,7 @@
     else if (following) btn = `<button class="amis-btn unfollow" onclick="event.stopPropagation();aboToggle(${u.telegram_id},false)">Ne plus suivre</button>`;
     else              btn = `<button class="amis-btn follow"   onclick="event.stopPropagation();aboToggle(${u.telegram_id},true)">Suivre</button>`;
     return `<div class="amis-row" onclick="openAmiProfil(${u.telegram_id},'${esc(u.username)}')" style="cursor:pointer">
-      <div class="amis-row-avatar">${_avatarEl(u.telegram_id, 38, initLetter)}</div>
+      <div class="amis-row-avatar">${_avatarEl(u.telegram_id, 38, initLetter, u.gender || 'homme')}</div>
       <div class="amis-row-info">
         <div class="amis-row-name">${nameHtml}</div>
         <div class="amis-row-sub">${sub}</div>
@@ -2454,7 +2628,7 @@
       const initLetter = (username || '?')[0].toUpperCase();
       const followingList = (data.following || [])
         .map(f => `<div class="amis-row" style="cursor:default">
-          <div class="amis-row-avatar">${_avatarEl(f.telegram_id, 38, (f.username||'?')[0].toUpperCase())}</div>
+          <div class="amis-row-avatar">${_avatarEl(f.telegram_id, 38, (f.username||'?')[0].toUpperCase(), allUsers.find(x=>x.telegram_id===f.telegram_id)?.gender||'homme')}</div>
           <div class="amis-row-info">
             <div class="amis-row-name">${esc(f.username)}</div>
           </div>
@@ -2462,7 +2636,7 @@
 
       document.getElementById('ami-profil-body').innerHTML = `
         <div style="display:flex;flex-direction:column;align-items:center;gap:12px;margin-bottom:24px">
-          ${_avatarEl(tid, 68, initLetter)}
+          ${_avatarEl(tid, 68, initLetter, allUsers.find(x=>x.telegram_id===tid)?.gender||'homme')}
           <div style="font-size:1.3rem;font-weight:900">${esc(username)}</div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px">
@@ -3591,5 +3765,50 @@ async function parisRefuse(betId) {
   parisLoadBets();
 }
 </script>
+
+<!-- ── Modale admin utilisateur ────────────────────────────────────────────── -->
+<div id="adm-user-modal" class="admin-modal-overlay" style="display:none" onclick="if(event.target===this)adminCloseUser()">
+  <div class="admin-modal-box">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <div class="admin-modal-title" id="adm-user-modal-title">Utilisateur</div>
+      <button onclick="adminCloseUser()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:var(--sub)">×</button>
+    </div>
+
+    <div class="admin-modal-section">
+      <div class="admin-modal-label">✏️ Renommer</div>
+      <div class="admin-modal-row">
+        <input class="admin-modal-input" id="adm-rename-input" placeholder="Nouveau pseudo…">
+        <button class="admin-action-btn primary" onclick="adminDoRename()">OK</button>
+      </div>
+    </div>
+
+    <div class="admin-modal-section">
+      <div class="admin-modal-label">🍺 Enlever des verres</div>
+      <div class="admin-modal-row">
+        <input class="admin-modal-input" id="adm-drinks-input" type="number" value="1" min="1" max="50" placeholder="Nb verres…">
+        <button class="admin-action-btn primary" onclick="adminDoRemoveDrinks()">Enlever</button>
+      </div>
+    </div>
+
+    <div class="admin-modal-section">
+      <div class="admin-modal-label">🪙 Donner / Enlever des pièces</div>
+      <div class="admin-modal-row">
+        <input class="admin-modal-input" id="adm-coins-input" type="number" placeholder="Ex: 50 ou -50…">
+        <button class="admin-action-btn primary" onclick="adminDoGiveCoins()">OK</button>
+      </div>
+    </div>
+
+    <div class="admin-modal-section">
+      <div class="admin-modal-label">Actions</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px">
+        <button class="admin-action-btn" id="adm-ban-btn">🚫 Bannir</button>
+        <button class="admin-action-btn danger" onclick="adminDoEndSession()">⏹ Terminer session</button>
+        <button class="admin-action-btn" onclick="adminDoResetPwd()">🔑 Reset mot de passe</button>
+      </div>
+    </div>
+
+    <div style="margin-top:14px;min-height:20px;font-size:0.85rem;font-weight:600" id="adm-modal-status"></div>
+  </div>
+</div>
 </body>
 </html>
