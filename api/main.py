@@ -354,6 +354,21 @@ async def ping():
     return {"ok": True}
 
 
+@app.post("/admin/reset-bj-stats")
+async def admin_reset_bj_stats(request: Request):
+    """Endpoint admin : remet à zéro toutes les stats et sessions blackjack."""
+    body = await request.json()
+    secret = body.get("secret", "")
+    if secret != os.environ.get("ADMIN_SECRET", ""):
+        return {"ok": False, "error": "Non autorisé"}
+    from data.database import _pipeline
+    _pipeline([
+        ("DELETE FROM blackjack_players", []),
+        ("DELETE FROM blackjack_sessions", []),
+    ])
+    return {"ok": True, "message": "Stats BJ réinitialisées"}
+
+
 @app.post("/admin/set-coins")
 async def admin_set_coins(request: Request):
     """Endpoint admin : définit le solde exact d'un utilisateur."""
