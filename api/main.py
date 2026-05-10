@@ -857,6 +857,36 @@ async def reset_session_web(request: Request):
 
 # ── Blackjack web endpoints ────────────────────────────────────────────────────
 
+@app.get("/blackjack/{token}/state")
+def get_bj_state(token: str):
+    """Retourne l'état courant d'une session blackjack (fallback HTTP pour les clients WS)."""
+    sess = get_blackjack_session(token)
+    if not sess:
+        return {"ok": False, "error": "Session introuvable"}
+    players = get_blackjack_players(sess["id"])
+    dealer_hand = json.loads(sess["dealer_hand"])
+    hide_dealer = sess["status"] == "active"
+    player_data = []
+    for p in players:
+        u = get_user(p["telegram_id"])
+        player_data.append({
+            "telegram_id": p["telegram_id"],
+            "username": u["username"] if u else str(p["telegram_id"]),
+            "hand": json.loads(p["hand"]),
+            "status": p["status"],
+            "result": p["result"],
+            "bet": p["bet"],
+        })
+    return {
+        "ok": True,
+        "status": sess["status"],
+        "creator_id": sess["creator_id"],
+        "dealer_hand": ([dealer_hand[0], "?"] if dealer_hand else []) if hide_dealer else dealer_hand,
+        "dealer_value": hand_value(dealer_hand) if not hide_dealer else None,
+        "players": player_data,
+    }
+
+
 @app.get("/blackjack/sessions")
 async def list_bj_sessions():
     """Liste toutes les sessions blackjack en attente ou actives."""

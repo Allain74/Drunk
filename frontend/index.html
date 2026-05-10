@@ -3043,7 +3043,8 @@ function closeBlackjack() {
 
 function bjBackToLobby() {
   // Retour au lobby BJ sans fermer l'overlay
-  if (_bjWs) { _bjWs.close(); _bjWs = null; }
+  _bjStopPoll();
+  if (_bjWs) { _bjWs.onclose = null; _bjWs.onerror = null; _bjWs.close(); _bjWs = null; }
   _bjToken = null; _bjLastState = null;
   document.getElementById('bj-lobby').style.display = '';
   document.getElementById('bj-game-view').style.display = 'none';
@@ -3138,16 +3139,36 @@ function bjEnterGame() {
   gv.style.flex = '1';
   gv.style.overflow = 'hidden';
   _bjWsConnect();
+  _bjStartPoll();
 }
 
 function _bjWsConnect() {
-  if (_bjWs) _bjWs.close();
+  // Désactive l'ancien onclose avant de fermer pour éviter la boucle de reconnexion
+  if (_bjWs) { _bjWs.onclose = null; _bjWs.onerror = null; _bjWs.close(); _bjWs = null; }
   const url = API.replace(/^http/, 'ws') + `/ws/blackjack/${_bjToken}`;
   _bjWs = new WebSocket(url);
   _bjWs.onopen    = () => {};
   _bjWs.onmessage = e => { const d = JSON.parse(e.data); if (d.event) { bjLoadSessions(); return; } _bjRender(d); };
-  _bjWs.onclose   = () => setTimeout(() => { if (_bjToken) _bjWsConnect(); }, 1200);
-  _bjWs.onerror   = () => _bjWs.close();
+  _bjWs.onclose   = () => { _bjWs = null; setTimeout(() => { if (_bjToken) _bjWsConnect(); }, 1200); };
+  _bjWs.onerror   = () => { if (_bjWs) { _bjWs.onclose = null; _bjWs.close(); _bjWs = null; } setTimeout(() => { if (_bjToken) _bjWsConnect(); }, 1200); };
+}
+
+// Polling de secours pour les non-créateurs bloqués en "waiting"
+let _bjPollTimer = null;
+function _bjStartPoll() {
+  _bjStopPoll();
+  _bjPollTimer = setInterval(async () => {
+    if (!_bjToken) { _bjStopPoll(); return; }
+    // Si le WS reçoit des messages on n'a pas besoin de poller — on poll seulement si le WS est mort
+    if (_bjWs && _bjWs.readyState === WebSocket.OPEN) return;
+    try {
+      const d = await fetch(`${API}/blackjack/${_bjToken}/state`).then(r => r.json());
+      if (d.ok) _bjRender(d);
+    } catch(e) {}
+  }, 3000);
+}
+function _bjStopPoll() {
+  if (_bjPollTimer) { clearInterval(_bjPollTimer); _bjPollTimer = null; }
 }
 
 // Card helpers
