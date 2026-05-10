@@ -343,13 +343,13 @@ async def _danger_loop():
         # ── Notif inactivité — Telegram + Push, une fois par semaine ─────────
         _INACTIVITY_MSGS = [
             ("😤 *{name}*, t'es devenu gay pour pas picoler depuis une semaine ? Allez, bois un verre ! 🍺",
-             "😤 {name}, une semaine sans boire… Allez, un verre !"),
+             "😤 {name}, t'es devenu gay pour pas picoler depuis une semaine ? Allez, bois un verre ! 🍺"),
             ("😶 *{name}*, deux semaines sans boire… t'as rejoint les alcooliques anonymes ou quoi ? 🤨",
-             "😶 {name}, deux semaines de sobriété, t'es sérieux là ?"),
+             "😶 {name}, deux semaines sans boire… t'as rejoint les alcooliques anonymes ou quoi ? 🤨"),
             ("💀 *{name}*, trois semaines. T'es sobre. C'est honteux. Tes potes ont honte de toi. 🫵",
-             "💀 {name}, trois semaines sans boire. Honteux."),
+             "💀 {name}, trois semaines. T'es sobre. C'est honteux. Tes potes ont honte de toi. 🫵"),
             ("🚨 *{name}*, un mois sans picoler. Appelle le 15, c'est une urgence médicale. 🏥",
-             "🚨 {name}, un mois de sobriété. Urgence médicale. 🏥"),
+             "🚨 {name}, un mois sans picoler. Appelle le 15, c'est une urgence médicale. 🏥"),
         ]
         for user in get_all_users():
             uid    = user["telegram_id"]
