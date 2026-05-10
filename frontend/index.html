@@ -2762,10 +2762,16 @@
       <button class="bj-btn-stand" id="bj-btn-stand" onclick="bjAct('stand')">✋ Rester</button>
     </div>
     <div class="bj-action-bar" id="bj-start-bar" style="display:none">
-      <button class="bj-btn-start" id="bj-start-btn" onclick="bjStart()">🚀 Lancer la partie</button>
+      <button class="bj-btn-start" id="bj-start-btn" onclick="bjStart()" style="flex:2">🚀 Lancer la partie</button>
+      <button onclick="bjLeave()" style="flex:1;background:#1f2937;color:#9ca3af;border:1px solid rgba(255,255,255,0.1);border-radius:14px;padding:15px;font-size:0.9rem;font-weight:700;cursor:pointer;font-family:inherit">Quitter</button>
     </div>
     <div class="bj-action-bar" id="bj-rematch-bar" style="display:none">
-      <button class="bj-btn-rematch" id="bj-rematch-btn" onclick="bjRematch()">🔄 Rejouer</button>
+      <button class="bj-btn-rematch" id="bj-rematch-btn" onclick="bjRematch()" style="flex:2">🔄 Rejouer</button>
+      <button onclick="bjLeave()" style="flex:1;background:#1f2937;color:#9ca3af;border:1px solid rgba(255,255,255,0.1);border-radius:14px;padding:15px;font-size:0.9rem;font-weight:700;cursor:pointer;font-family:inherit">Quitter</button>
+    </div>
+    <!-- Barre quitter (pendant la partie active, si pas mon tour) -->
+    <div class="bj-action-bar" id="bj-quit-bar" style="display:none">
+      <button onclick="bjLeave()" style="flex:1;background:#1f2937;color:#9ca3af;border:1px solid rgba(255,255,255,0.1);border-radius:14px;padding:15px;font-size:0.9rem;font-weight:700;cursor:pointer;font-family:inherit">🚪 Quitter la table</button>
     </div>
   </div>
 </div>
@@ -3059,10 +3065,12 @@ function _bjRender(state) {
   const actionBar  = document.getElementById('bj-action-bar');
   const startBar   = document.getElementById('bj-start-bar');
   const rematchBar = document.getElementById('bj-rematch-bar');
+  const quitBar    = document.getElementById('bj-quit-bar');
 
   actionBar.style.display  = 'none';
   startBar.style.display   = 'none';
   rematchBar.style.display = 'none';
+  quitBar.style.display    = 'none';
 
   if (me && me.status === 'playing' && state.status === 'active') {
     actionBar.style.display = 'flex';
@@ -3073,10 +3081,20 @@ function _bjRender(state) {
     startBar.style.display = 'flex';
     document.getElementById('bj-start-btn').disabled = false;
     document.getElementById('bj-start-btn').textContent = '🚀 Lancer la partie';
-  } else if (state.status === 'finished' && isCreator) {
-    rematchBar.style.display = 'flex';
-    document.getElementById('bj-rematch-btn').disabled = false;
-    document.getElementById('bj-rematch-btn').textContent = '🔄 Rejouer';
+  } else if (state.status === 'waiting' && !isCreator) {
+    // Joueur invité en attente : montrer juste Quitter
+    quitBar.style.display = 'flex';
+  } else if (state.status === 'active' && me && me.status !== 'playing') {
+    // Partie en cours mais pas mon tour : montrer Quitter
+    quitBar.style.display = 'flex';
+  } else if (state.status === 'finished') {
+    if (isCreator) {
+      rematchBar.style.display = 'flex';
+      document.getElementById('bj-rematch-btn').disabled = false;
+      document.getElementById('bj-rematch-btn').textContent = '🔄 Rejouer';
+    } else {
+      quitBar.style.display = 'flex';
+    }
   }
 
   _bjRefreshCoins();
@@ -3122,6 +3140,27 @@ async function bjRematch() {
   _bjLastState = null; _bjPrevDealerLen = 0;
   if (_bjWs) _bjWs.close();
   _bjWsConnect();
+}
+
+async function bjLeave() {
+  if (!_bjToken) { closeBlackjack(); return; }
+  const state = _bjLastState;
+  const isWaiting = state && state.status === 'waiting';
+
+  // Pendant la partie active : juste fermer la vue (on reste dans la session)
+  if (state && state.status === 'active') {
+    closeBlackjack();
+    return;
+  }
+
+  // En attente ou terminé : quitter vraiment (remboursement si waiting)
+  const r = await fetch(`${API}/blackjack/${_bjToken}/leave`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ telegram_id: myTid }),
+  }).then(r => r.json()).catch(() => ({ ok: true, refunded: 0 }));
+
+  if (r.refunded > 0) showToast(`✅ Mise remboursée : +${r.refunded} 🪙`);
+  closeBlackjack();
 }
 
 // ══════════════════════════════════════════════════════════════
