@@ -1379,7 +1379,7 @@ async def bj_start_web(token: str, request: Request):
     sess = get_blackjack_session(token)
     if not sess:
         return {"ok": False, "error": "Session introuvable"}
-    if sess["creator_id"] != caller_id:
+    if int(sess["creator_id"]) != int(caller_id):
         return {"ok": False, "error": "Seul le créateur peut lancer"}
     if sess["status"] != "waiting":
         return {"ok": False, "error": "Partie déjà lancée"}

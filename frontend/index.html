@@ -3575,6 +3575,7 @@ async function bjLoadSessions() {
       const playerNames = s.players.map(p => p.username).join(', ');
       const statusLabel = s.status === 'waiting' ? 'En attente' : 'En cours';
       const alreadyIn   = s.players.some(p => Number(p.telegram_id) === Number(myTid));
+      const isOwner     = Number(s.creator_id ?? 0) === Number(myTid);
       const canClose    = alreadyIn && s.status === 'waiting';
       const closeBtn    = canClose
         ? `<button onclick="event.stopPropagation();bjCloseTable('${s.token}')"
@@ -3582,11 +3583,18 @@ async function bjLoadSessions() {
              🗑 Fermer
            </button>`
         : '';
+      const startBtn    = (isOwner && s.status === 'waiting')
+        ? `<button onclick="event.stopPropagation();bjQuickStart('${s.token}')"
+             style="background:#22c55e20;border:1px solid #22c55e60;color:#22c55e;border-radius:8px;padding:4px 10px;font-size:0.75rem;font-weight:700;cursor:pointer;font-family:inherit;flex-shrink:0">
+             🚀 Lancer
+           </button>`
+        : '';
       return `<div class="bj-session-card" onclick="bjClickSession('${s.token}','${s.creator}',${alreadyIn})">
         <div class="bj-sc-top">
           <span class="bj-sc-creator">🃏 Table de ${_escHtml(s.creator)}</span>
           <div style="display:flex;align-items:center;gap:6px">
             <span class="bj-sc-status ${s.status}">${statusLabel}</span>
+            ${startBtn}
             ${closeBtn}
           </div>
         </div>
@@ -3596,6 +3604,17 @@ async function bjLoadSessions() {
   } catch(e) {
     el.innerHTML = `<div style="text-align:center;color:#ef4444;padding:16px;font-size:0.85rem">Erreur de chargement</div>`;
   }
+}
+
+async function bjQuickStart(token) {
+  // Lance la partie directement depuis le lobby
+  const r = await fetch(`${API}/blackjack/${token}/start-web`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ telegram_id: myTid }),
+  }).then(r => r.json()).catch(() => ({ ok: false, error: 'Erreur réseau' }));
+  if (!r.ok) { showToast('❌ ' + (r.error || 'Erreur')); return; }
+  _bjToken = token;
+  bjEnterGame();
 }
 
 function bjClickSession(token, creator, alreadyIn) {
@@ -3632,7 +3651,7 @@ async function bjJoin() {
   bjEnterGame();
 }
 
-function bjEnterGame() {
+async function bjEnterGame() {
   document.getElementById('bj-lobby').style.display = 'none';
   const gv = document.getElementById('bj-game-view');
   gv.style.display = 'flex';
@@ -3641,6 +3660,11 @@ function bjEnterGame() {
   gv.style.overflow = 'hidden';
   _bjWsConnect();
   _bjStartPoll();
+  // Fetch immédiat de l'état via HTTP (pas besoin d'attendre le WS)
+  try {
+    const s = await fetch(`${API}/blackjack/${_bjToken}/state`).then(r => r.json());
+    if (s.ok) _bjRender(s);
+  } catch(e) {}
 }
 
 function _bjWsConnect() {
