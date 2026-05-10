@@ -24,7 +24,7 @@ from data.database import (
     log_drink as db_log_drink, start_session, end_session,
     upsert_user, set_password, get_user_by_username, rename_user,
     delete_last_drink, update_max_bac, is_username_taken,
-    get_session_drinks, delete_user,
+    get_session_drinks, delete_user, update_location,
     init_push_subscriptions, save_push_subscription,
     delete_push_subscription, get_push_subscriptions,
 )
@@ -720,6 +720,8 @@ async def log_drink_web(request: Request):
     body        = await request.json()
     telegram_id = body.get("telegram_id")
     drink_key   = body.get("drink_key")
+    lat         = body.get("lat")
+    lon         = body.get("lon")
 
     if not telegram_id or not drink_key:
         return {"ok": False, "error": "Paramètres manquants"}
@@ -734,6 +736,13 @@ async def log_drink_web(request: Request):
     _ensure_session(telegram_id)
     db_log_drink(telegram_id, drink_key, alcohol_grams(drink.volume_ml, drink.abv))
     add_coins(telegram_id, 5, f"Verre bu ({drink.name})")
+
+    # Mise à jour de la position si fournie
+    if lat is not None and lon is not None:
+        try:
+            update_location(telegram_id, float(lat), float(lon))
+        except Exception:
+            pass
 
     drinks_data = get_session_drinks(telegram_id)
     bac = total_bac(drinks_data, user["weight_kg"], user["gender"])

@@ -2283,15 +2283,32 @@
   // updateDrinkBar : supprimée (barre de verres remplacée par onglet Menu)
   function updateDrinkBar() {}
 
+  // Position GPS en cache (mise à jour en arrière-plan)
+  let _cachedPos = null;
+  function _refreshPosition() {
+    if (!('geolocation' in navigator)) return;
+    navigator.geolocation.getCurrentPosition(
+      p => { _cachedPos = { lat: p.coords.latitude, lon: p.coords.longitude }; },
+      () => {},
+      { enableHighAccuracy: false, timeout: 5000, maximumAge: 60000 }
+    );
+  }
+
   async function quickDrink(drinkKey) {
     if (!myTid) { showTab('profil'); return; }
     const btn = event && event.currentTarget;
     if (btn) { btn.style.opacity = '0.5'; btn.disabled = true; }
+
+    // Capture la position en parallèle (sans bloquer l'ajout du verre)
+    _refreshPosition();
+
     try {
+      const payload = { telegram_id: myTid, drink_key: drinkKey };
+      if (_cachedPos) { payload.lat = _cachedPos.lat; payload.lon = _cachedPos.lon; }
       const data = await fetch(`${API}/log-drink`, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ telegram_id: myTid, drink_key: drinkKey }),
+        body: JSON.stringify(payload),
       }).then(r => r.json());
       if (!data.ok) { showToast('❌ ' + data.error); return; }
       showToast(`✅ Verre ajouté — ${data.bac.toFixed(2)} g/L`);
