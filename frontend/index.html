@@ -1651,7 +1651,7 @@
     const poids = document.getElementById('profil-poids').value;
     const err   = document.getElementById('profil-infos-err');
     err.style.display = 'none';
-    if (!pwd) { err.textContent = 'Mot de passe requis.'; err.style.display = 'block'; return; }
+    // pwd peut être vide pour les anciens comptes sans mot de passe
     try {
       const body = { telegram_id: myTid, current_password: pwd };
       if (window._profilGenre) body.gender = window._profilGenre;
@@ -1670,7 +1670,7 @@
     const curPwd  = document.getElementById('profil-cur-pwd2').value.trim();
     const err     = document.getElementById('profil-pwd-err');
     err.style.display = 'none';
-    if (!newPwd || !curPwd) { err.textContent = 'Remplis tous les champs.'; err.style.display = 'block'; return; }
+    if (!newPwd) { err.textContent = 'Entre un nouveau mot de passe.'; err.style.display = 'block'; return; }
     if (newPwd !== newPwd2) { err.textContent = 'Les mots de passe ne correspondent pas.'; err.style.display = 'block'; return; }
     try {
       const data = await fetch(`${API}/update-profile`, {
