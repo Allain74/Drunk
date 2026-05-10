@@ -103,6 +103,8 @@ _bot_app = None
 _danger_notified: dict[int, datetime] = {}
 # (drinker_id, follower_id) → dernière notif "ami ivre" envoyée
 _drunk_follower_notified: dict[tuple, datetime] = {}
+# (drinker_id, follower_id) → dernière notif "premier verre" envoyée (fenêtre 8h)
+_first_drink_notified: dict[tuple, datetime] = {}
 _last_weekly_recap_date: str = ""  # "YYYY-MM-DD" du dernier lundi envoyé
 PARIS = ZoneInfo("Europe/Paris")
 
@@ -328,7 +330,7 @@ async def _danger_loop():
                 for fid in followers:
                     key = (uid, fid)
                     last_notif = _drunk_follower_notified.get(key)
-                    if last_notif and (now - last_notif).total_seconds() < 4 * 3600:
+                    if last_notif and (now - last_notif).total_seconds() < 8 * 3600:
                         continue
                     _drunk_follower_notified[key] = now
                     loop.run_in_executor(
@@ -405,12 +407,11 @@ async def _weekly_recap_loop():
                     username = user["username"]
                     following_ids = user_following.get(uid, [])
 
-                    # Recap personnalisé (abonnements) ou global si aucun abonnement
-                    if following_ids:
-                        tg_msg, push_body = build_weekly_recap_for_user(username, following_ids, since, until)
-                    else:
-                        tg_msg    = build_weekly_recap(since, until)
-                        push_body = "Clique pour voir le recap de la semaine 📊"
+                    # Recap uniquement si l'utilisateur suit au moins une personne
+                    if not following_ids:
+                        continue
+
+                    tg_msg, push_body = build_weekly_recap_for_user(username, following_ids, since, until)
 
                     if _TG_NOTIFS:
                         try:
@@ -786,6 +787,17 @@ async def follow_endpoint(request: Request):
     if not follower_id or not following_id:
         return {"ok": False, "error": "Missing IDs"}
     follow_user(follower_id, following_id)
+    # Notif push à la personne suivie
+    follower = get_user(int(follower_id))
+    if follower:
+        import asyncio
+        loop = asyncio.get_event_loop()
+        loop.run_in_executor(
+            None, _send_push, int(following_id),
+            "👤 Nouveau follower",
+            f"{follower['username']} vient de s'abonner à toi sur Drunk !",
+            "/?tab=amis"
+        )
     return {"ok": True}
 
 @app.post("/unfollow")
@@ -1050,7 +1062,15 @@ async def log_drink_web(request: Request):
         for row in all_follows:
             follower_following.setdefault(row["follower_id"], set()).add(row["following_id"])
 
+        now_ts = datetime.now(timezone.utc)
         for fid in followers:
+            key = (telegram_id, fid)
+            last_fn = _first_drink_notified.get(key)
+            # Fenêtre 8h : pas deux notifs "premier verre" pour la même paire dans la journée
+            if last_fn and (now_ts - last_fn).total_seconds() < 8 * 3600:
+                continue
+            _first_drink_notified[key] = now_ts
+
             fid_following = follower_following.get(fid, set())
             others = [oid for oid in fid_following if oid != telegram_id and oid in active_drinkers]
             n_others = len(others)
