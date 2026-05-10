@@ -1031,8 +1031,8 @@
     if (!myTid) return data;
     return data.filter(u => {
       const tid = getTidByName(u.username);
-      if (!tid) return true; // unknown user, show anyway
-      return tid === myTid || followingSet.has(tid);
+      if (!tid) return false; // utilisateur inconnu → masqué
+      return tid === myTid || followingSet.has(tid) || isAdmin(tid);
     });
   }
 
