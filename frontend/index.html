@@ -3609,11 +3609,21 @@ async function bjLoadSessions() {
     el.innerHTML = open.map(s => {
       const playerNames = s.players.map(p => p.username).join(', ');
       const statusLabel = s.status === 'waiting' ? 'En attente' : 'En cours';
-      const alreadyIn = s.players.some(p => p.telegram_id === myTid);
+      const alreadyIn   = s.players.some(p => Number(p.telegram_id) === Number(myTid));
+      const canClose    = alreadyIn && s.status === 'waiting';
+      const closeBtn    = canClose
+        ? `<button onclick="event.stopPropagation();bjCloseTable('${s.token}')"
+             style="background:#ef444420;border:1px solid #ef444440;color:#ef4444;border-radius:8px;padding:4px 10px;font-size:0.75rem;font-weight:700;cursor:pointer;font-family:inherit;flex-shrink:0">
+             🗑 Fermer
+           </button>`
+        : '';
       return `<div class="bj-session-card" onclick="bjClickSession('${s.token}','${s.creator}',${alreadyIn})">
         <div class="bj-sc-top">
           <span class="bj-sc-creator">🃏 Table de ${_escHtml(s.creator)}</span>
-          <span class="bj-sc-status ${s.status}">${statusLabel}</span>
+          <div style="display:flex;align-items:center;gap:6px">
+            <span class="bj-sc-status ${s.status}">${statusLabel}</span>
+            ${closeBtn}
+          </div>
         </div>
         <div class="bj-sc-players">${s.players.length} joueur${s.players.length>1?'s':''} · ${_escHtml(playerNames)}${alreadyIn?' · <b style="color:#818cf8">Tu es dedans</b>':''}</div>
       </div>`;
@@ -3902,6 +3912,17 @@ async function bjRematch() {
   _bjLastState = null; _bjPrevDealerLen = 0;
   if (_bjWs) _bjWs.close();
   _bjWsConnect();
+}
+
+async function bjCloseTable(token) {
+  const r = await fetch(`${API}/blackjack/${token}/leave`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ telegram_id: myTid }),
+  }).then(r => r.json()).catch(() => ({ ok: true, refunded: 0 }));
+  if (r.refunded > 0) showToast(`✅ Table fermée — mise remboursée : +${r.refunded} 🪙`);
+  else showToast('Table fermée.');
+  bjLoadSessions();
+  _bjRefreshCoins();
 }
 
 async function bjLeave() {
