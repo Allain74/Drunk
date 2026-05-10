@@ -141,7 +141,7 @@
     /* ── Tabs ── */
     /* ── Bottom Navigation ── */
     #bottom-nav {
-      position: fixed; bottom: 0; left: 0; right: 0; z-index: 100;
+      position: fixed; bottom: 0; left: 0; right: 0; z-index: 1000;
       background: var(--card);
       border-top: 1px solid var(--border);
       box-shadow: 0 -2px 20px #00000015;
@@ -326,9 +326,19 @@
     }
 
     /* ── Map ── */
-    #map-section { max-width:1000px; margin:24px auto 0; padding-bottom:8px; }
+    #map-section { max-width:1000px; margin:24px auto 0; }
     #map-section h2 { font-size:.9rem; font-weight:700; color:var(--sub); margin-bottom:10px; text-transform:uppercase; }
-    #map { height:360px; border-radius:20px; border:none; overflow:hidden; box-shadow:0 4px 32px #0000001a; }
+    #map { height:360px; border-radius:20px; border:none; overflow:hidden; box-shadow:0 4px 32px #0000001a; position:relative; z-index:1; }
+    /* Empêche les panes Leaflet (z-index 400-700) de sortir du conteneur */
+    #map .leaflet-pane,
+    #map .leaflet-top,
+    #map .leaflet-bottom { z-index:auto; }
+    #map .leaflet-tile-pane   { z-index:2; }
+    #map .leaflet-overlay-pane { z-index:3; }
+    #map .leaflet-marker-pane { z-index:4; }
+    #map .leaflet-tooltip-pane { z-index:5; }
+    #map .leaflet-popup-pane  { z-index:6; }
+    #map .leaflet-control     { z-index:7; }
     .map-marker-pin {
       display:flex; align-items:center; gap:6px;
       padding:6px 12px; border-radius:99px;
@@ -3017,12 +3027,17 @@ function openBlackjack() {
 }
 
 function closeBlackjack() {
-  // Ferme complètement l'overlay (bouton ← Retour)
+  // Si on est dans la vue jeu → retour au lobby BJ (pas fermeture)
+  const gameView = document.getElementById('bj-game-view');
+  if (gameView && gameView.style.display !== 'none') {
+    bjBackToLobby();
+    return;
+  }
+  // On est dans le lobby → ferme l'overlay complètement
   document.getElementById('bj-overlay').classList.remove('open');
   if (_bjWs) { _bjWs.close(); _bjWs = null; }
   _bjToken = null; _bjLastState = null;
   document.getElementById('bj-lobby').style.display = '';
-  document.getElementById('bj-game-view').style.display = 'none';
   document.getElementById('bj-join-modal').style.display = 'none';
 }
 
