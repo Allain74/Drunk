@@ -1648,7 +1648,17 @@ async def _admin_gate(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if uid != ADMIN_ID:
         try:
             await update.effective_message.reply_text(
-                f"🚫 Le bot est désactivé.\nUtilise l'app web 👉 {SITE_URL}"
+                f"👋 Le bot est désactivé — tout se passe maintenant sur l'app !\n\n"
+                f"📲 *Installe l'app Drunk en 3 secondes :*\n\n"
+                f"*iPhone (Safari) :*\n"
+                f"1️⃣ Ouvre ce lien dans Safari : {SITE_URL}\n"
+                f"2️⃣ Appuie sur le bouton Partager ↑\n"
+                f"3️⃣ « Sur l'écran d'accueil » → Ajouter\n\n"
+                f"*Android (Chrome) :*\n"
+                f"1️⃣ Ouvre ce lien dans Chrome : {SITE_URL}\n"
+                f"2️⃣ Menu ⋮ → « Ajouter à l'écran d'accueil »\n\n"
+                f"L'app s'installe comme une vraie appli, sans passer par l'App Store 🍺",
+                parse_mode="Markdown"
             )
         except Exception:
             pass
