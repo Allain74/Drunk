@@ -1435,7 +1435,7 @@
     const adminClass = (tid && isAdmin(tid)) ? ' admin-name' : '';
     const avHtml = _avatarEl(tid, 32, (u.username||'?')[0].toUpperCase(), u.gender || 'homme', 'flex-shrink:0;');
     return `
-    <div class="card ${!u.has_session?'no-session':''}" onclick="openProfile('${esc(u.username)}')">
+    <div class="card ${!u.has_session?'no-session':''}" onclick="openProfile('${esc(u.username)}',true)">
       <div class="card-stripe" style="background:${color}"></div>
       <div class="card-head">
         <div style="display:flex;align-items:center;gap:8px;min-width:0">${avHtml}<div class="card-name${adminClass}" style="min-width:0">${esc(u.username)}</div></div>
@@ -1473,9 +1473,12 @@
   // ── Profile modal ──
   let _profileUsername = '';
   let _profileGen = 0;
+  let _profileHideSocial = false;
 
-  async function openProfile(username) {
-    _profileUsername = username;
+  async function openProfile(username, hideSocial = false) {
+    closeSocialList(); // fermer l'overlay liste sociale si ouvert
+    _profileUsername  = username;
+    _profileHideSocial = hideSocial;
     const gen = ++_profileGen;
     const tid          = getTidByName(username);
     const snapshotUser = lastData.find(u => u.username === username);
@@ -1513,7 +1516,7 @@
       const followersIds = socialInfo ? socialInfo.followers : [];
       const followingIds = socialInfo ? socialInfo.following : [];
 
-      const socialRow = `
+      const socialRow = hideSocial ? '' : `
         <div class="profile-social-row">
           <div class="profile-social-chip" onclick="openSocialList('followers',${JSON.stringify(followersIds)},'Abonnés de ${esc(username)}')">
             <div class="profile-social-chip-val">${nbFollowers}</div>
@@ -1600,11 +1603,11 @@
     renderModal(null, null, isActive ? null : []);
     document.getElementById('modal-bg4').classList.add('open');
 
-    // Fetch en parallèle : coins + social + (session si actif)
+    // Fetch en parallèle : coins + social (sauf si hideSocial) + (session si actif)
     const fetches = [
       fetch(`${API}/coins`).then(r => r.json()),
-      tid ? fetch(`${API}/following/${tid}`).then(r => r.json()) : Promise.resolve({ following: [] }),
-      tid ? fetch(`${API}/followers/${tid}`).then(r => r.json()) : Promise.resolve({ followers: [] }),
+      (!hideSocial && tid) ? fetch(`${API}/following/${tid}`).then(r => r.json()) : Promise.resolve({ following: [] }),
+      (!hideSocial && tid) ? fetch(`${API}/followers/${tid}`).then(r => r.json()) : Promise.resolve({ followers: [] }),
       isActive && tid ? fetch(`${API}/session/${tid}`).then(r => r.json()) : Promise.resolve({ drinks: [] }),
     ];
     const [coinsData, followingData, followersData, sessionData] = await Promise.allSettled(fetches);
@@ -1614,7 +1617,7 @@
     const userCoins = coinsData.status === 'fulfilled'
       ? (coinsData.value.find(c => c.username.toLowerCase() === username.toLowerCase())?.coins ?? null)
       : null;
-    const socialInfo = {
+    const socialInfo = hideSocial ? null : {
       following: followingData.status === 'fulfilled' ? (followingData.value.following || []) : [],
       followers: followersData.status === 'fulfilled' ? (followersData.value.followers || []) : [],
     };
@@ -1627,9 +1630,10 @@
 
   function openSocialList(type, ids, title) {
     // Récupère les infos utilisateur pour chaque ID
-    const users = ids.map(id => allUsers.find(u => u.telegram_id === id)).filter(Boolean);
+    // ids peuvent être des nombres ou des strings selon la source → normaliser
+    const users = ids.map(id => allUsers.find(u => Number(u.telegram_id) === Number(id))).filter(Boolean);
     const rows = users.map(u => {
-      const isSelf = u.telegram_id === myTid;
+      const isSelf = Number(u.telegram_id) === Number(myTid);
       const isAlreadyFollowing = followingSet.has(u.telegram_id);
       const isAdm = isAdmin(u.telegram_id);
       const avHtml = _avatarEl(u.telegram_id, 36, (u.username||'?')[0].toUpperCase(), u.gender || 'homme', 'flex-shrink:0;');
@@ -1639,7 +1643,7 @@
       else btn = `<button class="admin-action-btn primary" style="padding:5px 10px" onclick="socialListToggleFollow(${u.telegram_id},true)">➕ Suivre</button>`;
       return `<div class="social-list-row">
         ${avHtml}
-        <div class="social-list-name" onclick="closeSocialList();openProfile('${esc(u.username)}')">${esc(u.username)}</div>
+        <div class="social-list-name" style="cursor:pointer" onclick="closeSocialList();openProfile('${esc(u.username)}')">${esc(u.username)}</div>
         ${btn}
       </div>`;
     }).join('') || '<div style="color:var(--sub);text-align:center;padding:20px">Aucun utilisateur</div>';
@@ -1692,8 +1696,8 @@
     });
     if (doFollow) followingSet.add(tid);
     else followingSet.delete(tid);
-    // Rafraîchit le profil ouvert (re-fetch social)
-    openProfile(_profileUsername);
+    // Rafraîchit le profil ouvert (re-fetch social) — conserve le contexte hideSocial
+    openProfile(_profileUsername, _profileHideSocial);
     if (lastData.length) render(lastData);
   }
 
@@ -1708,7 +1712,7 @@
     if (doFollow) followingSet.add(tid);
     else followingSet.delete(tid);
     // Re-render profile modal
-    openProfile(_profileUsername);
+    openProfile(_profileUsername, _profileHideSocial);
     // Re-render live grid if filtered
     if (myTid) render(lastData);
     // Refresh abonnements if open
@@ -1814,7 +1818,7 @@
       const nameHtml = isAdm
         ? `<span class="admin-name">${esc(u.username)}</span>`
         : esc(u.username);
-      return `<div class="podium-item" onclick="openProfile('${esc(u.username)}')" style="cursor:pointer">
+      return `<div class="podium-item" onclick="openProfile('${esc(u.username)}',true)" style="cursor:pointer">
         <div class="podium-medal">${medals[i] || ''}</div>
         <div class="podium-name">${nameHtml}</div>
         <div class="podium-bac" style="color:${color}">${u.bac.toFixed(2)}</div>
@@ -2875,7 +2879,7 @@
     if (isAdm)        btn = `<button class="amis-btn locked" disabled>🔒</button>`;
     else if (following) btn = `<button class="amis-btn unfollow" onclick="event.stopPropagation();aboToggle(${u.telegram_id},false)">Ne plus suivre</button>`;
     else              btn = `<button class="amis-btn follow"   onclick="event.stopPropagation();aboToggle(${u.telegram_id},true)">Suivre</button>`;
-    return `<div class="amis-row" onclick="openAmiProfil(${u.telegram_id},'${esc(u.username)}')" style="cursor:pointer">
+    return `<div class="amis-row" onclick="openProfile('${esc(u.username)}')" style="cursor:pointer">
       <div class="amis-row-avatar">${_avatarEl(u.telegram_id, 38, initLetter, u.gender || 'homme')}</div>
       <div class="amis-row-info">
         <div class="amis-row-name">${nameHtml}</div>
