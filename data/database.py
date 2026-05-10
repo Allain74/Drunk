@@ -516,6 +516,14 @@ def get_bet(bet_id: int) -> dict | None:
     return _fetchone("SELECT * FROM bets WHERE id=?", [bet_id])
 
 
+def get_user_bets(telegram_id: int) -> list[dict]:
+    """Retourne tous les paris impliquant cet utilisateur (hors annulés), du plus récent."""
+    return _fetchall(
+        "SELECT * FROM bets WHERE (challenger_id=? OR opponent_id=?) AND status != 'cancelled' ORDER BY created_at DESC LIMIT 30",
+        [telegram_id, telegram_id],
+    )
+
+
 # ── Blackjack ─────────────────────────────────────────────────────────────────
 
 def create_blackjack_session(creator_id: int, token: str) -> int:
@@ -570,6 +578,13 @@ def _get_waiting_session_by_creator(telegram_id: int) -> dict | None:
     return _fetchone(
         "SELECT * FROM blackjack_sessions WHERE creator_id=? AND status='waiting' ORDER BY created_at DESC LIMIT 1",
         [telegram_id]
+    )
+
+
+def get_active_blackjack_sessions() -> list[dict]:
+    """Retourne toutes les sessions en attente ou actives."""
+    return _fetchall(
+        "SELECT * FROM blackjack_sessions WHERE status IN ('waiting', 'active') ORDER BY created_at DESC"
     )
 
 

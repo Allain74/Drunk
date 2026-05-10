@@ -16,8 +16,10 @@ from data.database import (
     get_drinks_by_session, get_all_time_stats, get_last_drink_time,
     set_last_inactivity_notif, get_last_inactivity_notif,
     get_active_bets, settle_bet, get_bet, get_user, add_coins, get_coins,
-    get_all_balances, get_transactions,
-    get_blackjack_session, get_blackjack_players, update_blackjack_session,
+    create_bet, get_pending_bet_for, accept_bet, cancel_bet,
+    get_user_bets, get_all_balances, get_transactions,
+    get_blackjack_session, get_blackjack_session_by_player,
+    get_active_blackjack_sessions, get_blackjack_players, update_blackjack_session,
     update_blackjack_player, create_blackjack_session, add_blackjack_player,
     follow_user, unfollow_user, is_following, get_following, get_followers,
     verify_password,
@@ -809,6 +811,265 @@ async def reset_session_web(request: Request):
     start_session(telegram_id)
 
     await _broadcast(build_snapshot())
+    return {"ok": True}
+
+
+# ── Blackjack web endpoints ────────────────────────────────────────────────────
+
+@app.get("/blackjack/sessions")
+async def list_bj_sessions():
+    """Liste toutes les sessions blackjack en attente ou actives."""
+    sessions = get_active_blackjack_sessions()
+    result = []
+    for s in sessions:
+        players = get_blackjack_players(s["id"])
+        creator = get_user(s["creator_id"])
+        result.append({
+            "token":   s["token"],
+            "status":  s["status"],
+            "creator": creator["username"] if creator else "?",
+            "creator_id": s["creator_id"],
+            "players": [
+                {
+                    "telegram_id": p["telegram_id"],
+                    "username": (get_user(p["telegram_id"]) or {}).get("username", "?"),
+                    "bet": p["bet"],
+                    "status": p["status"],
+                }
+                for p in players
+            ],
+        })
+    return result
+
+
+@app.post("/blackjack/create-web")
+async def bj_create_web(request: Request):
+    """Crée une nouvelle session blackjack depuis le web."""
+    body = await request.json()
+    telegram_id = body.get("telegram_id")
+    bet = int(body.get("bet", 50))
+    if not telegram_id:
+        return {"ok": False, "error": "Non connecté"}
+    user = get_user(telegram_id)
+    if not user:
+        return {"ok": False, "error": "Utilisateur introuvable"}
+    if bet < 10:
+        return {"ok": False, "error": "Mise minimum : 10 🪙"}
+    coins = get_coins(telegram_id)
+    if coins < bet:
+        return {"ok": False, "error": f"Solde insuffisant ({coins} 🪙)"}
+    # Une session en attente à la fois par créateur
+    existing = get_blackjack_session_by_player(telegram_id)
+    if existing:
+        return {"ok": True, "token": existing["token"]}
+    token = secrets.token_urlsafe(8)
+    session_id = create_blackjack_session(telegram_id, token)
+    add_blackjack_player(session_id, telegram_id, bet)
+    add_coins(telegram_id, -bet, "Blackjack - mise")
+    return {"ok": True, "token": token}
+
+
+@app.post("/blackjack/{token}/join-web")
+async def bj_join_web(token: str, request: Request):
+    """Rejoint une session blackjack depuis le web."""
+    body = await request.json()
+    telegram_id = body.get("telegram_id")
+    bet = int(body.get("bet", 50))
+    if not telegram_id:
+        return {"ok": False, "error": "Non connecté"}
+    sess = get_blackjack_session(token)
+    if not sess:
+        return {"ok": False, "error": "Session introuvable"}
+    if sess["status"] == "finished":
+        return {"ok": False, "error": "Partie terminée"}
+    players = get_blackjack_players(sess["id"])
+    # Déjà dedans ?
+    if any(p["telegram_id"] == telegram_id for p in players):
+        return {"ok": True, "token": token}
+    if sess["status"] == "active":
+        return {"ok": False, "error": "Partie déjà en cours"}
+    if len(players) >= 6:
+        return {"ok": False, "error": "Table complète (6 joueurs max)"}
+    if bet < 10:
+        return {"ok": False, "error": "Mise minimum : 10 🪙"}
+    coins = get_coins(telegram_id)
+    if coins < bet:
+        return {"ok": False, "error": f"Solde insuffisant ({coins} 🪙)"}
+    add_blackjack_player(sess["id"], telegram_id, bet)
+    add_coins(telegram_id, -bet, "Blackjack - mise")
+    # Notifier via WS
+    if token in _bj_clients:
+        for client in list(_bj_clients[token]):
+            try:
+                await client.send_text(json.dumps({"event": "player_joined"}))
+            except Exception:
+                pass
+    return {"ok": True, "token": token}
+
+
+@app.post("/blackjack/{token}/start-web")
+async def bj_start_web(token: str, request: Request):
+    """Lance la partie (deal les cartes) depuis le web."""
+    body = await request.json()
+    caller_id = body.get("telegram_id")
+    sess = get_blackjack_session(token)
+    if not sess:
+        return {"ok": False, "error": "Session introuvable"}
+    if sess["creator_id"] != caller_id:
+        return {"ok": False, "error": "Seul le créateur peut lancer"}
+    if sess["status"] != "waiting":
+        return {"ok": False, "error": "Partie déjà lancée"}
+    players = get_blackjack_players(sess["id"])
+    if len(players) < 1:
+        return {"ok": False, "error": "Aucun joueur"}
+
+    deck = new_deck()
+    dealer_hand = [deck.pop(), deck.pop()]
+
+    for p in players:
+        hand = [deck.pop(), deck.pop()]
+        update_blackjack_player(sess["id"], p["telegram_id"],
+            hand=json.dumps(hand), status="playing")
+
+    update_blackjack_session(sess["id"],
+        status="active",
+        deck=json.dumps(deck),
+        dealer_hand=json.dumps(dealer_hand),
+    )
+
+    # Gérer les blackjacks immédiats
+    players = get_blackjack_players(sess["id"])
+    for p in players:
+        hand = json.loads(p["hand"])
+        if is_blackjack(hand):
+            winnings = int(p["bet"] * 1.5)
+            add_coins(p["telegram_id"], p["bet"] + winnings, "Blackjack naturel !")
+            update_blackjack_player(sess["id"], p["telegram_id"],
+                status="done", result="blackjack")
+
+    # Si tous done → finished
+    players = get_blackjack_players(sess["id"])
+    if all(p["status"] in ("stand", "bust", "done") for p in players):
+        update_blackjack_session(sess["id"], status="finished",
+            dealer_hand=json.dumps(dealer_hand))
+
+    return {"ok": True}
+
+
+# ── Paris web endpoints ────────────────────────────────────────────────────────
+
+@app.get("/bets/user/{telegram_id}")
+async def get_bets_user(telegram_id: int):
+    """Retourne les paris d'un utilisateur."""
+    bets = get_user_bets(telegram_id)
+    result = []
+    for b in bets:
+        challenger = get_user(b["challenger_id"])
+        opponent   = get_user(b["opponent_id"])
+        winner     = get_user(b["winner_id"]) if b.get("winner_id") else None
+        result.append({
+            **b,
+            "challenger_name": challenger["username"] if challenger else "?",
+            "opponent_name":   opponent["username"]   if opponent   else "?",
+            "winner_name":     winner["username"]     if winner     else None,
+        })
+    return result
+
+
+@app.post("/bets/create")
+async def create_bet_web(request: Request):
+    """Crée un pari depuis le web."""
+    body          = await request.json()
+    challenger_id = body.get("challenger_id")
+    opponent_name = body.get("opponent_name", "").strip()
+    bet_type      = body.get("bet_type")      # verres | ivre | coinflip
+    amount        = int(body.get("amount", 0))
+    end_time      = body.get("end_time")      # "HH:MM" ou None
+
+    if not challenger_id:
+        return {"ok": False, "error": "Non connecté"}
+    if bet_type not in ("verres", "ivre", "coinflip"):
+        return {"ok": False, "error": "Type de pari invalide"}
+    if amount < 10:
+        return {"ok": False, "error": "Mise minimum : 10 🪙"}
+
+    challenger = get_user(challenger_id)
+    if not challenger:
+        return {"ok": False, "error": "Utilisateur introuvable"}
+
+    opponent = get_user_by_username(opponent_name)
+    if not opponent:
+        return {"ok": False, "error": f"Joueur « {opponent_name} » introuvable"}
+    if opponent["telegram_id"] == challenger_id:
+        return {"ok": False, "error": "Tu ne peux pas parier contre toi-même"}
+
+    if get_coins(challenger_id) < amount:
+        return {"ok": False, "error": f"Solde insuffisant ({get_coins(challenger_id)} 🪙)"}
+    if get_coins(opponent["telegram_id"]) < amount:
+        return {"ok": False, "error": f"{opponent['username']} n'a pas assez de 🪙"}
+
+    bet_id = create_bet(challenger_id, opponent["telegram_id"], bet_type, amount, end_time or None)
+
+    # Notif push à l'adversaire
+    type_labels = {"verres": "plus de verres", "ivre": "TAC le plus haut", "coinflip": "pile ou face"}
+    import asyncio
+    loop = asyncio.get_event_loop()
+    loop.run_in_executor(None, _send_push,
+        opponent["telegram_id"],
+        f"🎰 Pari de {challenger['username']}",
+        f"{amount} 🪙 sur {type_labels[bet_type]} — accepte ou refuse !",
+        "/?tab=menu"
+    )
+
+    return {"ok": True, "bet_id": bet_id}
+
+
+@app.post("/bets/accept")
+async def accept_bet_web(request: Request):
+    body       = await request.json()
+    telegram_id = body.get("telegram_id")
+    bet_id     = body.get("bet_id")
+    if not telegram_id or not bet_id:
+        return {"ok": False, "error": "Données manquantes"}
+    bet = get_bet(bet_id)
+    if not bet:
+        return {"ok": False, "error": "Pari introuvable"}
+    if bet["opponent_id"] != telegram_id:
+        return {"ok": False, "error": "Ce pari ne te concerne pas"}
+    if bet["status"] != "pending":
+        return {"ok": False, "error": "Pari déjà traité"}
+
+    # Coinflip : résoudre immédiatement
+    if bet["bet_type"] == "coinflip":
+        import random
+        winner_id = random.choice([bet["challenger_id"], bet["opponent_id"]])
+        loser_id  = bet["opponent_id"] if winner_id == bet["challenger_id"] else bet["challenger_id"]
+        accept_bet(bet_id)
+        settle_bet(bet_id, winner_id)
+        add_coins(winner_id,  bet["amount"],  f"Coinflip gagné")
+        add_coins(loser_id,  -bet["amount"],  f"Coinflip perdu")
+        winner = get_user(winner_id)
+        return {"ok": True, "coinflip": True, "winner": winner["username"] if winner else "?"}
+
+    accept_bet(bet_id)
+    return {"ok": True, "coinflip": False}
+
+
+@app.post("/bets/refuse")
+async def refuse_bet_web(request: Request):
+    body        = await request.json()
+    telegram_id = body.get("telegram_id")
+    bet_id      = body.get("bet_id")
+    if not telegram_id or not bet_id:
+        return {"ok": False, "error": "Données manquantes"}
+    bet = get_bet(bet_id)
+    if not bet:
+        return {"ok": False, "error": "Pari introuvable"}
+    if bet["opponent_id"] != telegram_id:
+        return {"ok": False, "error": "Ce pari ne te concerne pas"}
+    if bet["status"] != "pending":
+        return {"ok": False, "error": "Pari déjà traité"}
+    cancel_bet(bet_id)
     return {"ok": True}
 
 

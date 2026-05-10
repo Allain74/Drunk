@@ -537,6 +537,175 @@
     .picker-btn span { display: block; font-size: 0.65rem; font-weight: 400; color: var(--sub); margin-top: 3px; }
     .picker-btn:active { transform: scale(.96); background: var(--border); }
 
+/* Jeux cards */
+.jeux-card {
+  background: var(--card); border: 1px solid var(--border); border-radius: 16px;
+  padding: 20px 12px; cursor: pointer; text-align: center; width: 100%;
+  transition: transform .15s, background .15s;
+}
+.jeux-card:active { transform: scale(.97); background: var(--border); }
+.jeux-icon { font-size: 2.2rem; margin-bottom: 8px; }
+.jeux-name { font-weight: 800; font-size: 1rem; margin-bottom: 4px; color: var(--text); }
+.jeux-sub  { font-size: 0.72rem; color: var(--sub); line-height: 1.3; }
+
+/* Game overlays */
+.game-overlay {
+  position: fixed; inset: 0; z-index: 200;
+  background: var(--bg); display: flex; flex-direction: column;
+  transform: translateX(100%); transition: transform .28s cubic-bezier(.4,0,.2,1);
+  overflow: hidden;
+}
+.game-overlay.open { transform: translateX(0); }
+.go-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 16px; height: 52px; flex-shrink: 0;
+  background: var(--card); border-bottom: 1px solid var(--border);
+  padding-top: env(safe-area-inset-top);
+}
+.go-back {
+  background: none; border: none; color: var(--text); font-size: 1rem;
+  font-weight: 700; cursor: pointer; padding: 8px 4px; display: flex; align-items: center; gap: 6px;
+}
+.go-title { font-weight: 900; font-size: 1rem; }
+.go-coins { font-size: 0.82rem; font-weight: 700; color: #facc15; }
+.go-body { flex: 1; overflow-y: auto; padding: 16px; }
+
+/* Blackjack table */
+#bj-table-felt {
+  border-radius: 20px; overflow: hidden; margin-bottom: 16px;
+  background: radial-gradient(ellipse 120% 80% at 50% 40%, #165a2d 0%, #0e3d1d 70%, #050e08 100%);
+  padding: 16px 12px 12px;
+  position: relative;
+}
+#bj-table-felt::before {
+  content: ''; position: absolute; inset: 0; pointer-events: none; border-radius: 20px;
+  background-image: radial-gradient(circle, rgba(255,255,255,0.025) 1px, transparent 1px);
+  background-size: 10px 10px;
+}
+.bj-zone-label {
+  font-size: 0.6rem; font-weight: 700; letter-spacing: 2px; text-transform: uppercase;
+  color: rgba(255,255,255,0.4); margin-bottom: 8px; text-align: center;
+}
+.bj-cards { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; margin-bottom: 6px; }
+.bj-total { text-align: center; font-size: 0.72rem; color: rgba(255,255,255,0.5); font-weight: 600; margin-bottom: 12px; }
+.bj-divider { border: none; border-top: 1px solid rgba(255,255,255,0.1); margin: 12px 0; }
+.bj-pslot {
+  background: rgba(0,0,0,0.4); border: 2px solid rgba(255,255,255,0.1);
+  border-radius: 12px; padding: 10px 12px; margin-bottom: 8px;
+  display: flex; align-items: center; gap: 10px;
+}
+.bj-pslot.is-me   { border-color: #6366f1; }
+.bj-pslot.r-win   { border-color: #22c55e; }
+.bj-pslot.r-lose  { border-color: #ef444460; opacity: .75; }
+.bj-pslot.r-push  { border-color: #facc15; }
+.bj-pslot.r-blackjack { border-color: #facc15; }
+.bj-slot-left { flex: 1; min-width: 0; }
+.bj-slot-name { font-weight: 700; font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bj-slot-bet  { font-size: 0.65rem; color: rgba(255,255,255,0.4); margin-top: 2px; }
+.bj-slot-right { text-align: right; }
+.bj-slot-cards { display: flex; gap: 4px; justify-content: flex-end; margin-bottom: 4px; }
+.bj-slot-total { font-size: 0.65rem; color: rgba(255,255,255,0.45); }
+.bj-badge {
+  display: inline-block; font-size: 0.6rem; font-weight: 700;
+  padding: 2px 7px; border-radius: 99px; margin-top: 3px;
+}
+.b-playing { background: rgba(99,102,241,0.2); color: #818cf8; }
+.b-stand   { background: rgba(34,197,94,0.2);  color: #4ade80; }
+.b-bust    { background: rgba(239,68,68,0.2);  color: #f87171; }
+.b-done    { background: rgba(250,204,21,0.2); color: #fbbf24; }
+.b-waiting { background: rgba(255,255,255,0.07); color: rgba(255,255,255,0.3); }
+.bj-result { font-size: 0.75rem; font-weight: 800; margin-top: 4px; }
+.bj-r-win  { color: #22c55e; }
+.bj-r-lose { color: #ef4444; }
+.bj-r-push { color: #facc15; }
+.bj-r-blackjack { color: #facc15; }
+
+/* Playing card */
+:root { --cw: 44px; --ch: calc(44px * 1.43); }
+.card {
+  width: var(--cw); height: var(--ch); background: #fff; color: #111;
+  border-radius: 5px; box-shadow: 0 3px 8px rgba(0,0,0,0.5);
+  position: relative; flex-shrink: 0; overflow: hidden; user-select: none; font-size: 9px;
+}
+.card.deal { animation: dealIn .3s cubic-bezier(.22,.61,.36,1) both; }
+@keyframes dealIn { from { transform: translateY(-80px) scale(.6); opacity:0; } to { transform: none; opacity:1; } }
+.card.flip-out { animation: flipOut .18s ease-in  forwards; }
+.card.flip-in  { animation: flipIn  .22s ease-out forwards; }
+@keyframes flipOut { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+@keyframes flipIn  { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+.card .c-tl { position: absolute; top: 2px; left: 3px; font-weight: 900; line-height: 1.1; font-size: 9px; }
+.card .c-center { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); font-size: 16px; }
+.card .c-br { position: absolute; bottom: 2px; right: 3px; font-weight: 900; transform: rotate(180deg); font-size: 9px; line-height: 1.1; }
+.card.red { color: #c8181f; }
+.card.back { background: linear-gradient(145deg,#1e3a8a,#1e40af,#1e3a8a); border: 2px solid rgba(255,255,255,0.15); }
+.card.back::before {
+  content: ''; position: absolute; inset: 3px; border: 1px solid rgba(255,255,255,0.2); border-radius: 3px;
+  background: repeating-linear-gradient(45deg,rgba(255,255,255,0.05) 0,rgba(255,255,255,0.05) 3px,transparent 3px,transparent 6px);
+}
+.bj-action-bar {
+  display: flex; gap: 10px; padding: 12px 16px; background: var(--card);
+  border-top: 1px solid var(--border); flex-shrink: 0;
+}
+.bj-action-bar button {
+  flex: 1; padding: 14px; border-radius: 12px; border: none;
+  font-size: 0.95rem; font-weight: 800; cursor: pointer; font-family: inherit;
+  transition: transform .1s;
+}
+.bj-action-bar button:active { transform: scale(.96); }
+.bj-action-bar button:disabled { opacity: .35; cursor: not-allowed; }
+.bj-btn-hit   { background: #6366f1; color: #fff; }
+.bj-btn-stand { background: #374151; color: #fff; }
+.bj-btn-start { background: #22c55e; color: #fff; }
+.bj-btn-rematch { background: #22c55e; color: #fff; }
+
+/* Lobby */
+.bj-session-card {
+  background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+  padding: 14px 16px; margin-bottom: 10px; cursor: pointer;
+  transition: background .15s;
+}
+.bj-session-card:active { background: var(--border); }
+.bj-sc-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.bj-sc-creator { font-weight: 800; font-size: 0.9rem; }
+.bj-sc-status { font-size: 0.7rem; font-weight: 700; padding: 3px 8px; border-radius: 99px; }
+.bj-sc-status.waiting { background: rgba(99,102,241,0.2); color: #818cf8; }
+.bj-sc-status.active  { background: rgba(34,197,94,0.2);  color: #4ade80; }
+.bj-sc-players { font-size: 0.75rem; color: var(--sub); }
+
+/* Paris */
+.pari-card {
+  background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+  padding: 14px 16px; margin-bottom: 10px;
+}
+.pari-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px; }
+.pari-vs   { font-weight: 800; font-size: 0.9rem; }
+.pari-badge { font-size: 0.7rem; font-weight: 700; padding: 3px 8px; border-radius: 99px; }
+.pb-pending  { background: rgba(250,204,21,0.2); color: #fbbf24; }
+.pb-active   { background: rgba(99,102,241,0.2); color: #818cf8; }
+.pb-settled  { background: rgba(34,197,94,0.2);  color: #4ade80; }
+.pari-info   { font-size: 0.78rem; color: var(--sub); margin-bottom: 8px; }
+.pari-actions { display: flex; gap: 8px; }
+.pari-accept { background: #22c55e; color: #fff; border: none; border-radius: 8px; padding: 8px 16px; font-weight: 700; font-size: 0.82rem; cursor: pointer; font-family: inherit; }
+.pari-refuse { background: var(--bg); color: var(--sub); border: 1px solid var(--border); border-radius: 8px; padding: 8px 16px; font-weight: 700; font-size: 0.82rem; cursor: pointer; font-family: inherit; }
+
+.paris-form { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 16px; margin-bottom: 20px; }
+.paris-form label { display: block; font-size: 0.72rem; font-weight: 700; color: var(--sub); text-transform: uppercase; letter-spacing: .8px; margin-bottom: 6px; margin-top: 14px; }
+.paris-form label:first-child { margin-top: 0; }
+.paris-form input, .paris-form select {
+  width: 100%; background: var(--bg); border: 1px solid var(--border);
+  border-radius: 10px; color: var(--text); padding: 11px 14px;
+  font-size: 0.92rem; font-family: inherit; outline: none;
+}
+.paris-form input:focus, .paris-form select:focus { border-color: #6366f1; }
+.paris-type-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; }
+.paris-type-btn {
+  padding: 10px 4px; border-radius: 10px; border: 2px solid var(--border);
+  background: var(--bg); color: var(--text); font-size: 0.72rem; font-weight: 700;
+  cursor: pointer; text-align: center; transition: border-color .15s, background .15s;
+  font-family: inherit;
+}
+.paris-type-btn.sel { border-color: #6366f1; background: rgba(99,102,241,0.12); color: #818cf8; }
+
 /* Toast notification */
     #toast {
       position: fixed; bottom: calc(80px + env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%);
@@ -685,6 +854,23 @@
   <div style="display:flex;gap:10px;margin-top:4px">
     <button class="db-action-btn" style="flex:1" onclick="undoDrink()">↩️ Annuler</button>
     <button class="db-action-btn db-action-reset" style="flex:1" onclick="resetSession()">🔄 Reset</button>
+  </div>
+
+  <!-- Jeux -->
+  <div style="margin-top:28px">
+    <div style="font-size:0.68rem;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#6366f1;margin-bottom:14px">JEUX</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <button class="jeux-card" onclick="openBlackjack()">
+        <div class="jeux-icon">🃏</div>
+        <div class="jeux-name">Blackjack</div>
+        <div class="jeux-sub">Joue contre le croupier</div>
+      </button>
+      <button class="jeux-card" onclick="openParis()">
+        <div class="jeux-icon">🎰</div>
+        <div class="jeux-name">Paris</div>
+        <div class="jeux-sub">Défie tes amis</div>
+      </button>
+    </div>
   </div>
 </div>
 
@@ -2468,6 +2654,535 @@
         .catch(err => console.warn('SW non enregistré :', err));
     });
   }
+</script>
+
+<!-- ══════════════════════════════════════════════════════════════
+     OVERLAY — BLACKJACK
+═══════════════════════════════════════════════════════════════ -->
+<div id="bj-overlay" class="game-overlay">
+  <div class="go-header">
+    <button class="go-back" onclick="closeBlackjack()">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+      Retour
+    </button>
+    <span class="go-title">🃏 Blackjack</span>
+    <span class="go-coins" id="bj-coins-disp"></span>
+  </div>
+
+  <!-- Lobby -->
+  <div id="bj-lobby" class="go-body">
+    <div style="margin-bottom:16px">
+      <div style="font-size:0.68rem;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#6366f1;margin-bottom:14px">CRÉER UNE PARTIE</div>
+      <div class="bj-session-card" style="cursor:default">
+        <label style="font-size:0.72rem;font-weight:700;color:var(--sub);display:block;margin-bottom:8px;text-transform:uppercase;letter-spacing:.8px">Ta mise (🪙)</label>
+        <input id="bj-bet-input" type="number" min="10" value="50"
+          style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:10px;color:var(--text);padding:11px 14px;font-size:0.95rem;font-family:inherit;outline:none;margin-bottom:12px">
+        <button onclick="bjCreate()" class="btn-primary" style="width:100%">🎮 Créer une table</button>
+      </div>
+    </div>
+    <div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <div style="font-size:0.68rem;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#6366f1">TABLES OUVERTES</div>
+        <button onclick="bjLoadSessions()" style="background:none;border:none;color:var(--sub);font-size:0.8rem;cursor:pointer;font-family:inherit">↻ Actualiser</button>
+      </div>
+      <div id="bj-sessions-list"><div style="text-align:center;color:var(--sub);padding:20px;font-size:0.85rem">Chargement…</div></div>
+    </div>
+    <!-- Modal rejoindre -->
+    <div id="bj-join-modal" style="display:none;background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px;margin-top:16px">
+      <div style="font-weight:800;margin-bottom:10px">Rejoindre la table de <span id="bj-join-creator"></span></div>
+      <label style="font-size:0.72rem;font-weight:700;color:var(--sub);display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:.8px">Ta mise (🪙)</label>
+      <input id="bj-join-bet" type="number" min="10" value="50"
+        style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:10px;color:var(--text);padding:11px 14px;font-size:0.95rem;font-family:inherit;outline:none;margin-bottom:12px">
+      <div style="display:flex;gap:8px">
+        <button onclick="bjJoin()" class="btn-primary" style="flex:1">Rejoindre ✅</button>
+        <button onclick="document.getElementById('bj-join-modal').style.display='none'" style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:12px;color:var(--text);font-weight:700;font-size:0.9rem;cursor:pointer;padding:12px;font-family:inherit">Annuler</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Table de jeu -->
+  <div id="bj-game-view" style="display:none;flex:1;flex-direction:column;overflow:hidden">
+    <div class="go-body" id="bj-game-scroll">
+      <!-- Felt -->
+      <div id="bj-table-felt">
+        <!-- Banner -->
+        <div id="bj-banner" style="text-align:center;font-size:0.7rem;font-weight:700;padding:4px 14px;border-radius:99px;display:inline-block;margin:0 auto 10px;background:rgba(99,102,241,0.15);color:#818cf8"></div>
+        <!-- Dealer -->
+        <div class="bj-zone-label">🏠 Croupier</div>
+        <div class="bj-cards" id="bj-dealer-cards"></div>
+        <div class="bj-total" id="bj-dealer-total"></div>
+        <hr class="bj-divider">
+        <!-- Players -->
+        <div id="bj-players"></div>
+      </div>
+      <!-- Waiting notice -->
+      <div id="bj-wait-msg" style="display:none;text-align:center;padding:20px;background:var(--card);border-radius:14px;border:1px solid var(--border)">
+        <div style="font-size:1.5rem;margin-bottom:8px">⏳</div>
+        <div style="font-weight:800;margin-bottom:6px">En attente de joueurs</div>
+        <div style="font-size:0.8rem;color:var(--sub);margin-bottom:14px">D'autres peuvent rejoindre ta table.<br>Lance la partie quand tout le monde est prêt.</div>
+        <div id="bj-waiting-players" style="margin-bottom:14px"></div>
+      </div>
+    </div>
+    <!-- Action bar -->
+    <div class="bj-action-bar" id="bj-action-bar" style="display:none">
+      <button class="bj-btn-hit"   id="bj-btn-hit"   onclick="bjAct('hit')">🃏 Tirer</button>
+      <button class="bj-btn-stand" id="bj-btn-stand" onclick="bjAct('stand')">✋ Rester</button>
+    </div>
+    <div class="bj-action-bar" id="bj-start-bar" style="display:none">
+      <button class="bj-btn-start" onclick="bjStart()">🚀 Lancer la partie</button>
+    </div>
+    <div class="bj-action-bar" id="bj-rematch-bar" style="display:none">
+      <button class="bj-btn-rematch" onclick="bjRematch()">🔄 Rejouer</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     OVERLAY — PARIS
+═══════════════════════════════════════════════════════════════ -->
+<div id="paris-overlay" class="game-overlay">
+  <div class="go-header">
+    <button class="go-back" onclick="closeParis()">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+      Retour
+    </button>
+    <span class="go-title">🎰 Paris</span>
+    <span class="go-coins" id="paris-coins-disp"></span>
+  </div>
+  <div class="go-body">
+    <!-- Formulaire nouveau pari -->
+    <div style="font-size:0.68rem;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#6366f1;margin-bottom:14px">NOUVEAU PARI</div>
+    <div class="paris-form">
+      <label>Type de pari</label>
+      <div class="paris-type-grid">
+        <button class="paris-type-btn sel" data-type="verres" onclick="parisSelectType(this)">🍺<br>Plus de<br>verres</button>
+        <button class="paris-type-btn"     data-type="ivre"   onclick="parisSelectType(this)">🌀<br>TAC<br>le plus haut</button>
+        <button class="paris-type-btn"     data-type="coinflip" onclick="parisSelectType(this)">🪙<br>Pile<br>ou face</button>
+      </div>
+
+      <label>Contre qui ?</label>
+      <input id="paris-opponent" type="text" placeholder="Prénom exact…" autocomplete="off">
+
+      <label>Mise (🪙)</label>
+      <input id="paris-amount" type="number" min="10" value="50">
+
+      <div id="paris-time-row">
+        <label>Heure de règlement</label>
+        <input id="paris-time" type="time" placeholder="23:00">
+        <div style="font-size:0.72rem;color:var(--sub);margin-top:4px">Laisse vide pour un coinflip ou pari sans limite horaire</div>
+      </div>
+
+      <button onclick="parisCreate()" class="btn-primary" style="width:100%;margin-top:16px">Lancer le défi 🎰</button>
+    </div>
+
+    <!-- Mes paris -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <div style="font-size:0.68rem;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#6366f1">MES PARIS</div>
+      <button onclick="parisLoadBets()" style="background:none;border:none;color:var(--sub);font-size:0.8rem;cursor:pointer;font-family:inherit">↻ Actualiser</button>
+    </div>
+    <div id="paris-bets-list"><div style="text-align:center;color:var(--sub);padding:20px;font-size:0.85rem">Chargement…</div></div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════════
+//  BLACKJACK
+// ══════════════════════════════════════════════════════════════
+let _bjToken = null;
+let _bjWs    = null;
+let _bjLastState = null;
+let _bjPrevDealerLen = 0;
+
+function openBlackjack() {
+  if (!myTid) { showTab('profil'); showToast('Connecte-toi d\'abord'); return; }
+  document.getElementById('bj-overlay').classList.add('open');
+  _bjRefreshCoins();
+  bjLoadSessions();
+  // Si déjà dans une session, aller direct au jeu
+  _bjCheckExistingSession();
+}
+
+function closeBlackjack() {
+  document.getElementById('bj-overlay').classList.remove('open');
+  if (_bjWs) { _bjWs.close(); _bjWs = null; }
+  _bjToken = null; _bjLastState = null;
+  document.getElementById('bj-lobby').style.display = '';
+  document.getElementById('bj-game-view').style.display = 'none';
+  document.getElementById('bj-join-modal').style.display = 'none';
+}
+
+async function _bjRefreshCoins() {
+  const coins = await fetch(`${API}/coins`).then(r => r.json()).catch(() => null);
+  if (!coins) return;
+  const me = coins.find ? coins.find(c => c.telegram_id === myTid) : null;
+  const bal = me ? me.balance : 0;
+  document.getElementById('bj-coins-disp').textContent = `${bal} 🪙`;
+}
+
+async function _bjCheckExistingSession() {
+  try {
+    const sessions = await fetch(`${API}/blackjack/sessions`).then(r => r.json());
+    const mine = sessions.find(s => s.players.some(p => p.telegram_id === myTid));
+    if (mine && (mine.status === 'waiting' || mine.status === 'active')) {
+      _bjToken = mine.token;
+      bjEnterGame();
+    }
+  } catch(e) {}
+}
+
+async function bjLoadSessions() {
+  const el = document.getElementById('bj-sessions-list');
+  try {
+    const sessions = await fetch(`${API}/blackjack/sessions`).then(r => r.json());
+    const open = sessions.filter(s => s.status === 'waiting' || s.status === 'active');
+    if (!open.length) {
+      el.innerHTML = `<div style="text-align:center;color:var(--sub);padding:16px;font-size:0.85rem">Aucune table ouverte — crée la tienne !</div>`;
+      return;
+    }
+    el.innerHTML = open.map(s => {
+      const playerNames = s.players.map(p => p.username).join(', ');
+      const statusLabel = s.status === 'waiting' ? 'En attente' : 'En cours';
+      const alreadyIn = s.players.some(p => p.telegram_id === myTid);
+      return `<div class="bj-session-card" onclick="bjClickSession('${s.token}','${s.creator}',${alreadyIn})">
+        <div class="bj-sc-top">
+          <span class="bj-sc-creator">🃏 Table de ${_escHtml(s.creator)}</span>
+          <span class="bj-sc-status ${s.status}">${statusLabel}</span>
+        </div>
+        <div class="bj-sc-players">${s.players.length} joueur${s.players.length>1?'s':''} · ${_escHtml(playerNames)}${alreadyIn?' · <b style="color:#818cf8">Tu es dedans</b>':''}</div>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    el.innerHTML = `<div style="text-align:center;color:#ef4444;padding:16px;font-size:0.85rem">Erreur de chargement</div>`;
+  }
+}
+
+function bjClickSession(token, creator, alreadyIn) {
+  if (alreadyIn) {
+    _bjToken = token;
+    bjEnterGame();
+    return;
+  }
+  _bjToken = token;
+  document.getElementById('bj-join-creator').textContent = creator;
+  document.getElementById('bj-join-modal').style.display = 'block';
+  document.getElementById('bj-join-modal').scrollIntoView({ behavior: 'smooth' });
+}
+
+async function bjCreate() {
+  const bet = parseInt(document.getElementById('bj-bet-input').value) || 50;
+  const r = await fetch(`${API}/blackjack/create-web`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ telegram_id: myTid, bet }),
+  }).then(r => r.json()).catch(() => ({ ok: false, error: 'Erreur réseau' }));
+  if (!r.ok) { showToast('❌ ' + r.error); return; }
+  _bjToken = r.token;
+  bjEnterGame();
+}
+
+async function bjJoin() {
+  const bet = parseInt(document.getElementById('bj-join-bet').value) || 50;
+  const r = await fetch(`${API}/blackjack/${_bjToken}/join-web`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ telegram_id: myTid, bet }),
+  }).then(r => r.json()).catch(() => ({ ok: false, error: 'Erreur réseau' }));
+  if (!r.ok) { showToast('❌ ' + r.error); return; }
+  document.getElementById('bj-join-modal').style.display = 'none';
+  bjEnterGame();
+}
+
+function bjEnterGame() {
+  document.getElementById('bj-lobby').style.display = 'none';
+  const gv = document.getElementById('bj-game-view');
+  gv.style.display = 'flex';
+  gv.style.flexDirection = 'column';
+  gv.style.flex = '1';
+  gv.style.overflow = 'hidden';
+  _bjWsConnect();
+}
+
+function _bjWsConnect() {
+  if (_bjWs) _bjWs.close();
+  const url = API.replace(/^http/, 'ws') + `/ws/blackjack/${_bjToken}`;
+  _bjWs = new WebSocket(url);
+  _bjWs.onopen    = () => {};
+  _bjWs.onmessage = e => { const d = JSON.parse(e.data); if (d.event) { bjLoadSessions(); return; } _bjRender(d); };
+  _bjWs.onclose   = () => setTimeout(() => { if (_bjToken) _bjWsConnect(); }, 3000);
+  _bjWs.onerror   = () => _bjWs.close();
+}
+
+// Card helpers
+function _bjParseCard(c) {
+  if (!c || c === '?') return null;
+  const suit = c.slice(-1), rank = c.slice(0, -1);
+  return { rank, suit, isRed: suit === '♥' || suit === '♦' };
+}
+function _bjMakeCard(c, animate) {
+  const p = _bjParseCard(c);
+  const cls = 'card' + (animate ? ' deal' : '');
+  if (!p) return `<div class="${cls} back"></div>`;
+  return `<div class="${cls}${p.isRed ? ' red' : ''}">
+    <div class="c-tl">${p.rank}<br>${p.suit}</div>
+    <div class="c-center">${p.suit}</div>
+    <div class="c-br">${p.rank}<br>${p.suit}</div>
+  </div>`;
+}
+function _bjHandVal(hand) {
+  let t = 0, a = 0;
+  for (const c of (hand || [])) {
+    if (!c || c === '?') continue;
+    const r = c.slice(0, -1);
+    if (r === 'A') { t += 11; a++; }
+    else if ('JQK'.includes(r)) t += 10;
+    else t += parseInt(r) || 0;
+  }
+  while (t > 21 && a) { t -= 10; a--; }
+  return t;
+}
+function _escHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function _bjRender(state) {
+  const prev = _bjLastState;
+  _bjLastState = state;
+
+  // Banner
+  const bannerTxt = { waiting:'⏳ En attente de joueurs', active:'🎮 Partie en cours', finished:'🏁 Partie terminée' }[state.status] || '';
+  const bannerEl = document.getElementById('bj-banner');
+  bannerEl.textContent = bannerTxt;
+
+  // Wait message (waiting state)
+  const waitMsg = document.getElementById('bj-wait-msg');
+  waitMsg.style.display = state.status === 'waiting' ? 'block' : 'none';
+  if (state.status === 'waiting') {
+    document.getElementById('bj-waiting-players').innerHTML = state.players.map(p =>
+      `<div style="font-size:0.82rem;margin-bottom:4px">${p.telegram_id === myTid ? '👤 ' : ''}${_escHtml(p.username)} · ${p.bet} 🪙</div>`
+    ).join('');
+  }
+
+  // Dealer
+  const dHand = state.dealer_hand || [];
+  const prevDH = prev ? (prev.dealer_hand || []) : [];
+  const dealerEl = document.getElementById('bj-dealer-cards');
+  const wasHidden = prevDH.some(c => c === '?');
+  const nowClear  = dHand.every(c => c !== '?');
+  const revealed  = wasHidden && nowClear && prev;
+
+  if (revealed && dHand.length >= 2) {
+    dealerEl.innerHTML = dHand.map((c, i) => i === 1 ? `<div class="card back"></div>` : _bjMakeCard(c, i >= prevDH.length)).join('');
+    setTimeout(() => {
+      const hidden = dealerEl.querySelectorAll('.card')[1];
+      if (!hidden) return;
+      hidden.classList.add('flip-out');
+      setTimeout(() => {
+        const p2 = _bjParseCard(dHand[1]);
+        if (p2) {
+          hidden.className = 'card flip-in' + (p2.isRed ? ' red' : '');
+          hidden.innerHTML = `<div class="c-tl">${p2.rank}<br>${p2.suit}</div><div class="c-center">${p2.suit}</div><div class="c-br">${p2.rank}<br>${p2.suit}</div>`;
+        }
+      }, 180);
+    }, 50);
+  } else {
+    dealerEl.innerHTML = dHand.map((c, i) => _bjMakeCard(c, i >= prevDH.length)).join('');
+  }
+
+  const dtEl = document.getElementById('bj-dealer-total');
+  if (state.dealer_value != null) dtEl.textContent = `Total : ${state.dealer_value}`;
+  else if (dHand.length) { const vis = dHand.filter(c => c !== '?'); dtEl.textContent = vis.length ? `Visible : ${_bjHandVal(vis)}` : ''; }
+  else dtEl.textContent = '';
+
+  // Players
+  const playersEl = document.getElementById('bj-players');
+  playersEl.innerHTML = state.players.map(p => {
+    const isMe = p.telegram_id === myTid;
+    const hand = p.hand || [];
+    const prevP = prev ? prev.players.find(x => x.telegram_id === p.telegram_id) : null;
+    const prevLen = prevP ? (prevP.hand || []).length : 0;
+    const realHand = hand.filter(c => c !== '?');
+    const total = realHand.length ? _bjHandVal(realHand) : 0;
+    const badgeCls = { playing:'b-playing', stand:'b-stand', bust:'b-bust', done:'b-done', waiting:'b-waiting' }[p.status] || 'b-waiting';
+    const badgeTxt = { playing:'🎮 Joue', stand:'✋ Stand', bust:'💥 Bust!', done:'✅ Done', waiting:'⏳' }[p.status] || p.status;
+    const resultMap = { win:'<div class="bj-result bj-r-win">🏆 Gagné !</div>', lose:'<div class="bj-result bj-r-lose">💸 Perdu</div>', push:'<div class="bj-result bj-r-push">🤝 Égalité</div>', blackjack:'<div class="bj-result bj-r-blackjack">🎉 BLACKJACK !</div>' };
+    const resultHTML = resultMap[p.result] || '';
+    const slotCls = ['bj-pslot', isMe?'is-me':'', p.result?`r-${p.result}`:''].filter(Boolean).join(' ');
+    return `<div class="${slotCls}">
+      <div class="bj-slot-left">
+        <div class="bj-slot-name">${_escHtml(p.username)}${isMe?' 👤':''}</div>
+        <div class="bj-slot-bet">🪙 ${p.bet}</div>
+        <span class="bj-badge ${badgeCls}">${badgeTxt}</span>
+        ${resultHTML}
+      </div>
+      <div class="bj-slot-right">
+        <div class="bj-slot-cards">${hand.map((c, i) => _bjMakeCard(c, i >= prevLen)).join('')}</div>
+        ${total ? `<div class="bj-slot-total">= ${total}</div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+
+  // Action / start / rematch bars
+  const me = state.players.find(p => p.telegram_id === myTid);
+  const isCreator = myTid === state.creator_id;
+  const actionBar  = document.getElementById('bj-action-bar');
+  const startBar   = document.getElementById('bj-start-bar');
+  const rematchBar = document.getElementById('bj-rematch-bar');
+
+  actionBar.style.display  = 'none';
+  startBar.style.display   = 'none';
+  rematchBar.style.display = 'none';
+
+  if (me && me.status === 'playing' && state.status === 'active') {
+    actionBar.style.display = 'flex';
+    document.getElementById('bj-btn-hit').disabled = document.getElementById('bj-btn-stand').disabled = false;
+  } else if (state.status === 'waiting' && isCreator) {
+    startBar.style.display = 'flex';
+  } else if (state.status === 'finished' && isCreator) {
+    rematchBar.style.display = 'flex';
+  }
+
+  _bjRefreshCoins();
+}
+
+function bjAct(action) {
+  if (!_bjWs || _bjWs.readyState !== WebSocket.OPEN) return;
+  document.getElementById('bj-btn-hit').disabled = document.getElementById('bj-btn-stand').disabled = true;
+  _bjWs.send(JSON.stringify({ action, telegram_id: myTid }));
+}
+
+async function bjStart() {
+  const btn = document.querySelector('#bj-start-bar button');
+  if (btn) { btn.textContent = '⏳ Lancement…'; btn.disabled = true; }
+  const r = await fetch(`${API}/blackjack/${_bjToken}/start-web`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ telegram_id: myTid }),
+  }).then(r => r.json()).catch(() => ({ ok: false }));
+  if (!r.ok) {
+    showToast('❌ ' + (r.error || 'Erreur'));
+    if (btn) { btn.textContent = '🚀 Lancer la partie'; btn.disabled = false; }
+  }
+}
+
+async function bjRematch() {
+  const btn = document.querySelector('#bj-rematch-bar button');
+  if (btn) { btn.textContent = '⏳ …'; btn.disabled = true; }
+  const r = await fetch(`${API}/blackjack/${_bjToken}/rematch`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ telegram_id: myTid }),
+  }).then(r => r.json()).catch(() => ({ ok: false }));
+  if (!r.ok) {
+    showToast('❌ ' + (r.error || 'Erreur'));
+    if (btn) { btn.textContent = '🔄 Rejouer'; btn.disabled = false; }
+    return;
+  }
+  _bjToken = r.token;
+  _bjLastState = null; _bjPrevDealerLen = 0;
+  if (_bjWs) _bjWs.close();
+  _bjWsConnect();
+}
+
+// ══════════════════════════════════════════════════════════════
+//  PARIS
+// ══════════════════════════════════════════════════════════════
+let _parisType = 'verres';
+
+function openParis() {
+  if (!myTid) { showTab('profil'); showToast('Connecte-toi d\'abord'); return; }
+  document.getElementById('paris-overlay').classList.add('open');
+  _parisRefreshCoins();
+  parisLoadBets();
+}
+
+function closeParis() {
+  document.getElementById('paris-overlay').classList.remove('open');
+}
+
+async function _parisRefreshCoins() {
+  const coins = await fetch(`${API}/coins`).then(r => r.json()).catch(() => null);
+  if (!coins) return;
+  const me = coins.find ? coins.find(c => c.telegram_id === myTid) : null;
+  const bal = me ? me.balance : 0;
+  document.getElementById('paris-coins-disp').textContent = `${bal} 🪙`;
+}
+
+function parisSelectType(btn) {
+  document.querySelectorAll('.paris-type-btn').forEach(b => b.classList.remove('sel'));
+  btn.classList.add('sel');
+  _parisType = btn.dataset.type;
+  const timeRow = document.getElementById('paris-time-row');
+  timeRow.style.display = _parisType === 'coinflip' ? 'none' : 'block';
+}
+
+async function parisCreate() {
+  const opponent = document.getElementById('paris-opponent').value.trim();
+  const amount   = parseInt(document.getElementById('paris-amount').value) || 0;
+  const endTime  = document.getElementById('paris-time').value || null;
+  if (!opponent) { showToast('❌ Entre le prénom de ton adversaire'); return; }
+  const r = await fetch(`${API}/bets/create`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ challenger_id: myTid, opponent_name: opponent, bet_type: _parisType, amount, end_time: endTime }),
+  }).then(r => r.json()).catch(() => ({ ok: false, error: 'Erreur réseau' }));
+  if (!r.ok) { showToast('❌ ' + r.error); return; }
+  showToast('✅ Défi envoyé !');
+  document.getElementById('paris-opponent').value = '';
+  parisLoadBets();
+}
+
+async function parisLoadBets() {
+  const el = document.getElementById('paris-bets-list');
+  try {
+    const bets = await fetch(`${API}/bets/user/${myTid}`).then(r => r.json());
+    if (!bets.length) {
+      el.innerHTML = `<div style="text-align:center;color:var(--sub);padding:20px;font-size:0.85rem">Aucun pari en cours — défie quelqu'un !</div>`;
+      return;
+    }
+    const typeLabels = { verres:'🍺 Plus de verres', ivre:'🌀 TAC le plus haut', coinflip:'🪙 Pile ou face' };
+    const statusLabels = { pending:'En attente', active:'En cours', settled:'Terminé', cancelled:'Annulé' };
+    const statusCls    = { pending:'pb-pending', active:'pb-active', settled:'pb-settled', cancelled:'pb-settled' };
+    el.innerHTML = bets.map(b => {
+      const isChallenged = b.opponent_id === myTid && b.status === 'pending';
+      const winnerLine = b.status === 'settled' ? `<div style="font-size:0.78rem;font-weight:700;margin-top:6px;color:${b.winner_id === myTid ? '#22c55e' : '#ef4444'}">${b.winner_id === myTid ? '🏆 Tu as gagné !' : `💸 ${_escHtml(b.winner_name || '?')} a gagné`}</div>` : '';
+      return `<div class="pari-card">
+        <div class="pari-top">
+          <div class="pari-vs">${_escHtml(b.challenger_name)} vs ${_escHtml(b.opponent_name)}</div>
+          <span class="pari-badge ${statusCls[b.status] || ''}">${statusLabels[b.status] || b.status}</span>
+        </div>
+        <div class="pari-info">${typeLabels[b.bet_type] || b.bet_type} · ${b.amount} 🪙${b.end_time ? ` · règlement à ${b.end_time}` : ''}</div>
+        ${winnerLine}
+        ${isChallenged ? `<div class="pari-actions">
+          <button class="pari-accept" onclick="parisAccept(${b.id})">✅ Accepter</button>
+          <button class="pari-refuse" onclick="parisRefuse(${b.id})">❌ Refuser</button>
+        </div>` : ''}
+      </div>`;
+    }).join('');
+    _parisRefreshCoins();
+  } catch(e) {
+    el.innerHTML = `<div style="text-align:center;color:#ef4444;padding:16px;font-size:0.85rem">Erreur de chargement</div>`;
+  }
+}
+
+async function parisAccept(betId) {
+  const r = await fetch(`${API}/bets/accept`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ telegram_id: myTid, bet_id: betId }),
+  }).then(r => r.json()).catch(() => ({ ok: false, error: 'Erreur réseau' }));
+  if (!r.ok) { showToast('❌ ' + r.error); return; }
+  if (r.coinflip) {
+    showToast(r.winner === myName ? '🎉 Pile ou face : TU GAGNES !' : `😅 Pile ou face : ${r.winner} gagne`);
+  } else {
+    showToast('✅ Pari accepté !');
+  }
+  parisLoadBets();
+  _parisRefreshCoins();
+}
+
+async function parisRefuse(betId) {
+  const r = await fetch(`${API}/bets/refuse`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ telegram_id: myTid, bet_id: betId }),
+  }).then(r => r.json()).catch(() => ({ ok: false, error: 'Erreur réseau' }));
+  if (!r.ok) { showToast('❌ ' + r.error); return; }
+  showToast('Pari refusé.');
+  parisLoadBets();
+}
 </script>
 </body>
 </html>
