@@ -953,6 +953,8 @@ async def bj_start_web(token: str, request: Request):
         update_blackjack_session(sess["id"], status="finished",
             dealer_hand=json.dumps(dealer_hand))
 
+    # Notifier tous les clients WS connectés
+    await _bj_broadcast(token)
     return {"ok": True}
 
 
@@ -1073,6 +1075,46 @@ async def refuse_bet_web(request: Request):
     return {"ok": True}
 
 
+async def _bj_broadcast(token: str):
+    """Diffuse l'état actuel d'une session blackjack à tous ses clients WS."""
+    sess = get_blackjack_session(token)
+    if not sess:
+        return
+    players = get_blackjack_players(sess["id"])
+    dealer_hand = json.loads(sess["dealer_hand"])
+    hide_dealer = sess["status"] == "active"
+
+    player_data = []
+    for p in players:
+        u = get_user(p["telegram_id"])
+        player_data.append({
+            "telegram_id": p["telegram_id"],
+            "username": u["username"] if u else str(p["telegram_id"]),
+            "hand": json.loads(p["hand"]),
+            "status": p["status"],
+            "result": p["result"],
+            "bet": p["bet"],
+        })
+
+    state = {
+        "status": sess["status"],
+        "creator_id": sess["creator_id"],
+        "dealer_hand": (
+            ([dealer_hand[0], "?"] if dealer_hand else []) if hide_dealer else dealer_hand
+        ),
+        "dealer_value": hand_value(dealer_hand) if not hide_dealer else None,
+        "players": player_data,
+    }
+
+    dead = set()
+    for client in list(_bj_clients.get(token, set())):
+        try:
+            await client.send_text(json.dumps(state))
+        except Exception:
+            dead.add(client)
+    _bj_clients.get(token, set()).difference_update(dead)
+
+
 @app.websocket("/ws/blackjack/{token}")
 async def blackjack_ws(ws: WebSocket, token: str):
     session = get_blackjack_session(token)
@@ -1082,44 +1124,8 @@ async def blackjack_ws(ws: WebSocket, token: str):
     await ws.accept()
     _bj_clients.setdefault(token, set()).add(ws)
 
-    async def broadcast_state():
-        sess = get_blackjack_session(token)
-        players = get_blackjack_players(sess["id"])
-        dealer_hand = json.loads(sess["dealer_hand"])
-        hide_dealer = sess["status"] == "active"
-
-        player_data = []
-        for p in players:
-            u = get_user(p["telegram_id"])
-            player_data.append({
-                "telegram_id": p["telegram_id"],
-                "username": u["username"] if u else str(p["telegram_id"]),
-                "hand": json.loads(p["hand"]),
-                "status": p["status"],
-                "result": p["result"],
-                "bet": p["bet"],
-            })
-
-        state = {
-            "status": sess["status"],
-            "creator_id": sess["creator_id"],
-            "dealer_hand": (
-                ([dealer_hand[0], "?"] if dealer_hand else []) if hide_dealer else dealer_hand
-            ),
-            "dealer_value": hand_value(dealer_hand) if not hide_dealer else None,
-            "players": player_data,
-        }
-
-        dead = set()
-        for client in list(_bj_clients.get(token, set())):
-            try:
-                await client.send_text(json.dumps(state))
-            except Exception:
-                dead.add(client)
-        _bj_clients.get(token, set()).difference_update(dead)
-
     try:
-        await broadcast_state()
+        await _bj_broadcast(token)
         while True:
             data = await ws.receive_text()
             msg = json.loads(data)
@@ -1180,7 +1186,7 @@ async def blackjack_ws(ws: WebSocket, token: str):
                             else:
                                 update_blackjack_player(sess["id"], p["telegram_id"], result="lose")
 
-                    await broadcast_state()
+                    await _bj_broadcast(token)
 
     except Exception:
         pass
@@ -1279,4 +1285,6 @@ async def blackjack_rematch(token: str, request: Request):
             except Exception:
                 pass
 
+    # Notifier tous les clients sur la nouvelle session
+    await _bj_broadcast(new_token)
     return {"ok": True, "token": new_token}
