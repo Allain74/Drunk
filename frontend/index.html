@@ -55,7 +55,7 @@
       background: var(--bg);
       color: var(--text);
       min-height: 100vh;
-      padding: 32px 16px 80px;
+      padding: 24px 16px 80px;
       transition: background .3s, color .3s;
     }
 
@@ -134,32 +134,60 @@
     /* ── Admin name ── */
     .admin-name { color: #facc15; font-weight: 900; }
 
+    /* ── Status dot ── */
+    #dot { display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--muted); transition:background .4s; vertical-align:middle; }
+    #dot.ok { background:#22c55e; box-shadow:0 0 6px #22c55e88; }
+
     /* ── Tabs ── */
-    .tabs {
-      display: flex;
-      gap: 8px;
-      max-width: 1000px;
-      margin: 0 auto 24px;
-      flex-wrap: wrap;
-    }
-
-    .tab {
-      padding: 8px 20px;
-      border-radius: 10px;
-      border: 1px solid var(--border);
+    /* ── Bottom Navigation ── */
+    #bottom-nav {
+      position: fixed; bottom: 0; left: 0; right: 0; z-index: 100;
       background: var(--card);
-      color: var(--sub);
-      font-size: 0.85rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all .2s;
+      border-top: 1px solid var(--border);
+      box-shadow: 0 -2px 20px #00000015;
+      display: flex;
+      padding-bottom: env(safe-area-inset-bottom);
     }
+    .nav-item {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 4px; padding: 10px 4px 8px;
+      background: none; border: none; cursor: pointer;
+      color: var(--sub); font-size: 0.6rem; font-weight: 700;
+      font-family: inherit; letter-spacing: .3px;
+      transition: color .2s; -webkit-tap-highlight-color: transparent;
+    }
+    .nav-item.active { color: #6366f1; }
+    .nav-item svg { width: 24px; height: 24px; stroke-width: 1.8; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; }
 
-    .tab.active {
-      background: #6366f1;
-      color: #fff;
-      border-color: #6366f1;
-    }
+    /* ── Page header (style app native) ── */
+    .page-hd { margin-bottom: 24px; }
+    .page-hd-label { font-size: 0.68rem; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: #6366f1; margin-bottom: 4px; }
+    .page-hd-title { font-size: 2rem; font-weight: 900; letter-spacing: -.5px; color: var(--text); }
+    .page-hd-sub { font-size: 0.85rem; color: var(--sub); margin-top: 4px; }
+
+    /* ── Profil — cartes style app ── */
+    .p-card { background: var(--card); border-radius: 20px; padding: 20px; margin-bottom: 12px; border: 1px solid var(--border); }
+    .p-card-label { font-size: 0.75rem; font-weight: 700; color: var(--sub); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 14px; }
+    .p-avatar { width: 80px; height: 80px; border-radius: 50%; background: linear-gradient(135deg,#6366f1,#06b6d4); display: flex; align-items: center; justify-content: center; font-size: 2.2rem; font-weight: 900; color: #fff; margin: 0 auto 10px; }
+    .p-username { font-size: 1.2rem; font-weight: 800; color: #6366f1; text-align: center; }
+    .p-stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 4px; }
+    .p-stat { background: var(--bg); border-radius: 14px; padding: 14px; text-align: center; }
+    .p-stat-val { font-size: 1.2rem; font-weight: 900; }
+    .p-stat-lbl { font-size: 0.62rem; color: var(--sub); margin-top: 3px; }
+    .p-field-label { font-size: 0.78rem; font-weight: 600; color: var(--sub); margin-bottom: 6px; }
+    .p-toggle { display: flex; border-radius: 12px; overflow: hidden; border: 1px solid var(--border); }
+    .p-toggle-btn { flex: 1; padding: 10px; border: none; background: var(--bg); color: var(--sub); font-weight: 700; font-size: 0.9rem; cursor: pointer; font-family: inherit; transition: all .2s; }
+    .p-toggle-btn.active { background: #fff; color: #1a202c; }
+    [data-theme="dark"] .p-toggle-btn.active { background: #2d3748; color: var(--text); }
+    .p-action-btn { width: 100%; padding: 14px; border-radius: 14px; border: 1.5px solid var(--border); background: var(--bg); color: var(--text); font-size: 0.95rem; font-weight: 700; cursor: pointer; font-family: inherit; text-align: left; margin-bottom: 8px; transition: background .2s; display: flex; align-items: center; gap: 12px; }
+    .p-action-btn:last-child { margin-bottom: 0; }
+    .p-action-btn.danger { color: #ef4444; border-color: #ef444430; }
+
+    /* ── Sub-nav ── */
+    .sub-nav { display: flex; gap: 4px; background: var(--border); border-radius: 14px; padding: 4px; margin-bottom: 20px; }
+    .sub-nav-btn { flex: 1; padding: 9px; border-radius: 11px; border: none; background: none; color: var(--sub); font-weight: 700; font-size: 0.85rem; cursor: pointer; font-family: inherit; transition: all .2s; }
+    .sub-nav-btn.active { background: var(--card); color: var(--text); box-shadow: 0 1px 6px #0002; }
 
     /* ── Panels ── */
     .panel { display: none; }
@@ -380,7 +408,7 @@
     .modal-id-err { color:#ef4444; font-size:0.8rem; margin-top:4px; display:none; }
 
     /* ── Abonnements panel ── */
-    #abonnements-panel { max-width:640px; margin:0 auto; }
+    #amis-panel { max-width:640px; margin:0 auto; }
     .abo-empty-state { text-align:center; padding:60px 20px; color:var(--sub); }
     .abo-empty-state .abo-icon { font-size:3rem; margin-bottom:12px; }
     .abo-empty-state p { margin-bottom:16px; font-size:0.9rem; }
@@ -459,7 +487,7 @@
 
     /* Toast notification */
     #toast {
-      position: fixed; bottom: 160px; left: 50%; transform: translateX(-50%);
+      position: fixed; bottom: calc(80px + env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%);
       background: #1a1a2e; color: #fff; padding: 10px 20px;
       border-radius: 20px; font-size: 0.85rem; font-weight: 600;
       z-index: 500; opacity: 0; transition: opacity .25s; pointer-events: none;
@@ -478,7 +506,7 @@
 
     /* ── Safe area iOS (notch + home indicator) ── */
     body {
-      padding-bottom: max(80px, calc(60px + env(safe-area-inset-bottom)));
+      padding-bottom: calc(70px + env(safe-area-inset-bottom));
       padding-left:  max(16px, env(safe-area-inset-left));
       padding-right: max(16px, env(safe-area-inset-right));
     }
@@ -489,46 +517,7 @@
     @media (max-width: 640px) {
 
       /* Corps */
-      body { padding-top: 20px; }
-
-      /* Header : titre centré, boutons en ligne en dessous */
-      header {
-        flex-direction: column;
-        gap: 10px;
-        margin-bottom: 20px;
-        align-items: center;
-      }
-      h1 { font-size: 1.6rem; }
-      #header-right {
-        position: static;
-        width: 100%;
-        justify-content: center;
-      }
-      #identity-btn { max-width: 180px; font-size: 0.8rem; }
-
-      /* Status */
-      #status { margin-bottom: 16px; font-size: 0.72rem; }
-
-      /* Tabs : scrollables horizontalement sur mobile */
-      .tabs {
-        flex-wrap: nowrap;
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
-        scrollbar-width: none;
-        margin-bottom: 16px;
-        padding-bottom: 4px;
-        gap: 6px;
-      }
-      .tabs::-webkit-scrollbar { display: none; }
-      .tab {
-        flex-shrink: 0;
-        padding: 8px 14px;
-        font-size: 0.78rem;
-        /* Cible tactile minimum 44px */
-        min-height: 44px;
-        display: flex;
-        align-items: center;
-      }
+      body { padding-top: 16px; }
 
       /* Grid : 1 colonne sur très petit écran */
       #grid {
@@ -578,86 +567,26 @@
     ════════════════════════════════════════════════════════════════════════ */
     @media (min-width: 641px) and (max-width: 768px) {
       #grid { grid-template-columns: repeat(2, 1fr); }
-      .tab { padding: 8px 16px; font-size: 0.82rem; }
     }
   </style>
 </head>
 <body>
 
-<header>
-  <h1>🍺 <span>Drunk</span></h1>
-  <div id="header-right">
-    <button id="identity-btn" onclick="openIdentityModal()">👤 Connexion</button>
-    <button id="theme-btn" onclick="toggleTheme()">🌙</button>
+<!-- Pas de header persistant : chaque panel gère son propre titre -->
+
+<!-- ══════════════════════════════════════════════════════════════
+     1. MENU — Ajouter un verre
+═══════════════════════════════════════════════════════════════ -->
+<div id="menu-panel" class="panel">
+  <div class="page-hd">
+    <div class="page-hd-label">MENU</div>
+    <div class="page-hd-title">Ajouter un verre</div>
   </div>
-</header>
-
-<div id="status">
-  <div id="dot"></div>
-  <span id="status-text">Connexion…</span>
-</div>
-
-<div class="tabs">
-  <button class="tab active" onclick="showTab('live')">📊 Live</button>
-  <button class="tab" onclick="showTab('defi')">🏆 Défi</button>
-  <button class="tab" onclick="showTab('palmares')">🏅 Palmarès</button>
-  <button class="tab" onclick="showTab('thune')">💰 Ma thune</button>
-  <button class="tab" onclick="showTab('abonnements')">👥 Abonnements</button>
-  <button class="tab" onclick="showTab('boissons')">🍺 Boissons</button>
-  <button class="tab" onclick="showTab('compte')">👤 Mon compte</button>
-</div>
-
-<!-- Live -->
-<div id="live-panel" class="panel active">
-  <div id="grid"></div>
-  <div id="empty" style="display:none"><div class="icon">🫗</div><p>Aucune session active.</p></div>
-  <div id="map-section" style="display:none">
-    <h2>📍 Positions</h2>
-    <div id="map"></div>
-  </div>
-</div>
-
-<!-- Défi -->
-<div id="defi-panel" class="panel">
-  <div class="podium" id="podium"></div>
-  <div class="table-scroll">
-    <table class="defi-table">
-      <thead><tr><th>#</th><th>Joueur</th><th>TAC</th><th>Record</th><th>Verres</th><th>Sobre dans</th></tr></thead>
-      <tbody id="defi-tbody"></tbody>
-    </table>
-  </div>
-</div>
-
-<!-- Palmarès -->
-<div id="palmares-panel" class="panel">
-  <div class="table-scroll">
-    <table class="palmares-table">
-      <thead><tr><th>#</th><th>Joueur</th><th>Doses total</th><th>Moy./jour conso</th><th>Record ever</th><th>Verres</th><th>Alcool pur</th></tr></thead>
-      <tbody id="palmares-tbody"></tbody>
-    </table>
-  </div>
-</div>
-
-<!-- Ma thune -->
-<div id="thune-panel" class="panel">
-  <div class="table-scroll">
-    <table class="thune-table">
-      <thead><tr><th>#</th><th>Joueur</th><th>pièces</th></tr></thead>
-      <tbody id="thune-tbody"></tbody>
-    </table>
-  </div>
-</div>
-
-<!-- Abonnements -->
-<div id="abonnements-panel" class="panel">
-  <div id="abo-content"></div>
-</div>
-
-<!-- Boissons -->
-<div id="boissons-panel" class="panel">
-  <div id="boissons-note" style="display:none;background:var(--card);border-radius:14px;padding:14px 16px;margin-bottom:16px;font-size:0.88rem;color:var(--sub);text-align:center">
-    👋 <strong>Connecte-toi</strong> pour enregistrer tes verres.
-    <button style="background:none;border:none;color:#6366f1;font-weight:700;cursor:pointer;font-size:0.88rem" onclick="showTab('compte')">Se connecter →</button>
+  <div id="menu-note" style="display:none;background:var(--card);border-radius:16px;padding:16px;margin-bottom:16px;text-align:center">
+    <div style="font-size:1.5rem;margin-bottom:8px">🔒</div>
+    <div style="font-weight:700;margin-bottom:4px">Connexion requise</div>
+    <div style="font-size:0.82rem;color:var(--sub);margin-bottom:12px">Connecte-toi pour enregistrer tes verres.</div>
+    <button class="btn-primary" style="width:auto;padding:10px 24px" onclick="showTab('profil')">Se connecter →</button>
   </div>
   <div class="picker-section"><div class="picker-label">🍺 Bières</div>
     <div class="picker-grid">
@@ -700,37 +629,116 @@
       <button class="picker-btn" onclick="quickDrink('bucket')">Bucket<span>12.5cl · 40%</span></button>
     </div>
   </div>
-  <div style="display:flex;gap:10px;margin-top:8px">
-    <button class="db-action-btn" style="flex:1" onclick="undoDrink()">↩️ Annuler le dernier</button>
-    <button class="db-action-btn db-action-reset" style="flex:1" onclick="resetSession()">🔄 Reset session</button>
+  <div style="display:flex;gap:10px;margin-top:4px">
+    <button class="db-action-btn" style="flex:1" onclick="undoDrink()">↩️ Annuler</button>
+    <button class="db-action-btn db-action-reset" style="flex:1" onclick="resetSession()">🔄 Reset</button>
   </div>
 </div>
 
-<!-- Mon compte -->
-<div id="compte-panel" class="panel">
-  <div id="compte-content"></div>
+<!-- ══════════════════════════════════════════════════════════════
+     2. LIVE — TAC en direct + classement live (fusion)
+═══════════════════════════════════════════════════════════════ -->
+<div id="live-panel" class="panel active">
+  <div class="page-hd" style="display:flex;align-items:flex-start;justify-content:space-between">
+    <div>
+      <div class="page-hd-label">DRUNK <span id="dot" style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--muted);margin-left:4px;vertical-align:middle"></span></div>
+      <div class="page-hd-title">Live 🍺</div>
+      <div class="page-hd-sub" id="status-text">Connexion…</div>
+    </div>
+    <button id="theme-btn" onclick="toggleTheme()" style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:8px 12px;cursor:pointer;font-size:1rem;color:var(--text);margin-top:4px">🌙</button>
+  </div>
+  <div id="grid"></div>
+  <div id="empty" style="display:none"><div class="icon">🫗</div><p>Aucune session active.</p></div>
+
+  <!-- Classement en direct (ex-Défi) -->
+  <div id="ranking-section" style="margin-top:32px">
+    <div style="font-size:0.68rem;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#6366f1;margin-bottom:16px">CLASSEMENT EN DIRECT</div>
+    <div class="podium" id="podium"></div>
+    <div class="table-scroll">
+      <table class="defi-table">
+        <thead><tr><th>#</th><th>Joueur</th><th>TAC</th><th>Record</th><th>Verres</th><th>Sobre dans</th></tr></thead>
+        <tbody id="defi-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="map-section" style="display:none;margin-top:24px">
+    <div style="font-size:0.68rem;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#6366f1;margin-bottom:12px">POSITIONS</div>
+    <div id="map"></div>
+  </div>
 </div>
 
-<!-- ── Barre de verres (fixée en bas, visible quand connecté) ── -->
-<div id="drink-bar" style="display:none">
-  <div id="drink-bar-stats">
-    <span id="db-bac" style="font-weight:900;font-size:1.1rem">0.00 g/L</span>
-    <span id="db-label" style="font-size:0.72rem;color:var(--sub);margin-left:6px">Sobre</span>
-    <span id="db-count" style="font-size:0.75rem;color:var(--sub);margin-left:auto">0 verre(s)</span>
+<!-- ══════════════════════════════════════════════════════════════
+     3. CLASSEMENT — Palmarès + Thune
+═══════════════════════════════════════════════════════════════ -->
+<div id="classement-panel" class="panel">
+  <div class="page-hd">
+    <div class="page-hd-label">CLASSEMENT</div>
+    <div class="page-hd-title">Palmarès 🏆</div>
   </div>
-  <div id="drink-bar-quick">
-    <button class="db-btn" onclick="quickDrink('demi')">🍺<br><span>Demi</span></button>
-    <button class="db-btn" onclick="quickDrink('pinte')">🍺<br><span>Pinte</span></button>
-    <button class="db-btn" onclick="quickDrink('vin')">🍷<br><span>Vin</span></button>
-    <button class="db-btn" onclick="quickDrink('vodka')">🥃<br><span>Vodka</span></button>
-    <button class="db-btn" onclick="quickDrink('shot96')">💥<br><span>Shot 96°</span></button>
-    <button class="db-btn db-btn-more" onclick="openDrinkPicker()">＋<br><span>Autre</span></button>
+  <div class="sub-nav">
+    <button class="sub-nav-btn active" id="sub-stats" onclick="showClassementSub('stats')">🏅 Palmarès</button>
+    <button class="sub-nav-btn"        id="sub-thune" onclick="showClassementSub('thune')">💰 Thune</button>
   </div>
-  <div id="drink-bar-actions">
-    <button class="db-action-btn" onclick="undoDrink()">↩️ Annuler</button>
-    <button class="db-action-btn db-action-reset" onclick="resetSession()">🔄 Reset</button>
+  <div id="classement-stats">
+    <div class="table-scroll">
+      <table class="palmares-table">
+        <thead><tr><th>#</th><th>Joueur</th><th>Doses total</th><th>Moy./jour</th><th>Record ever</th><th>Verres</th><th>Alcool pur</th></tr></thead>
+        <tbody id="palmares-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+  <div id="classement-thune" style="display:none">
+    <div class="table-scroll">
+      <table class="thune-table">
+        <thead><tr><th>#</th><th>Joueur</th><th>pièces</th></tr></thead>
+        <tbody id="thune-tbody"></tbody>
+      </table>
+    </div>
   </div>
 </div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     4. AMIS — Abonnements
+═══════════════════════════════════════════════════════════════ -->
+<div id="amis-panel" class="panel">
+  <div class="page-hd">
+    <div class="page-hd-label">SOCIAL</div>
+    <div class="page-hd-title">Amis 👥</div>
+  </div>
+  <div id="abo-content"></div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     5. PROFIL — Compte + Portefeuille
+═══════════════════════════════════════════════════════════════ -->
+<div id="profil-panel" class="panel">
+  <div id="profil-content"></div>
+</div>
+
+<!-- ── Bottom Navigation ── -->
+<nav id="bottom-nav">
+  <button class="nav-item" onclick="showTab('menu')">
+    <svg viewBox="0 0 24 24"><path d="M8 3v18M8 3C8 3 6 5 6 8s2 3 2 3M8 3c0 0 2 2 2 5s-2 3-2 3M15 3a2 2 0 012 2v4a2 2 0 01-2 2h0v8"/></svg>
+    Menu
+  </button>
+  <button class="nav-item active" onclick="showTab('live')">
+    <svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+    Live
+  </button>
+  <button class="nav-item" onclick="showTab('classement')">
+    <svg viewBox="0 0 24 24"><path d="M6 9H2v12h4V9zM14 4h-4v17h4V4zM22 12h-4v9h4v-9z"/></svg>
+    Classement
+  </button>
+  <button class="nav-item" onclick="showTab('amis')">
+    <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
+    Amis
+  </button>
+  <button class="nav-item" onclick="showTab('profil')">
+    <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+    Profil
+  </button>
+</nav>
 
 <!-- ── Picker complet de verres ── -->
 <div class="modal-bg" id="modal-bg-picker" onclick="closeDrinkPicker(event)" style="z-index:250">
@@ -959,12 +967,9 @@
   }
 
   function updateIdentityBtn() {
+    // Bouton header supprimé — le profil est géré via l'onglet Profil
     const btn = document.getElementById('identity-btn');
-    if (myTid && myName) {
-      btn.textContent = `👤 ${myName}`;
-    } else {
-      btn.textContent = '👤 Connexion';
-    }
+    if (btn) btn.textContent = myTid && myName ? `👤 ${myName}` : '👤 Connexion';
   }
 
   // Filter snapshot by following (if identified)
@@ -992,18 +997,28 @@
     document.getElementById('theme-btn').textContent = saved === 'dark' ? '☀️' : '🌙';
   }
 
-  // ── Tabs ──
+  // ── Navigation ──
+  const NAV_TABS = ['menu','live','classement','amis','profil'];
+
   function showTab(name) {
-    const tabs = ['live','defi','palmares','thune','abonnements','boissons','compte'];
-    document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', tabs[i]===name));
-    tabs.forEach(tab => {
-      document.getElementById(tab+'-panel').classList.toggle('active', tab===name);
+    document.querySelectorAll('.nav-item').forEach((btn, i) => {
+      btn.classList.toggle('active', NAV_TABS[i] === name);
     });
-    if (name === 'palmares')    loadPalmares();
-    if (name === 'thune')       loadThune();
-    if (name === 'abonnements') loadAbonnements();
-    if (name === 'boissons')    loadBoissons();
-    if (name === 'compte')      loadCompte();
+    NAV_TABS.forEach(tab => {
+      document.getElementById(tab+'-panel').classList.toggle('active', tab === name);
+    });
+    if (name === 'classement') { loadPalmares(); }
+    if (name === 'amis')       { loadAbonnements(); }
+    if (name === 'profil')     { loadProfil(); }
+    if (name === 'menu')       { loadMenu(); }
+  }
+
+  function showClassementSub(sub) {
+    document.getElementById('sub-stats').classList.toggle('active', sub === 'stats');
+    document.getElementById('sub-thune').classList.toggle('active', sub === 'thune');
+    document.getElementById('classement-stats').style.display = sub === 'stats' ? '' : 'none';
+    document.getElementById('classement-thune').style.display = sub === 'thune' ? '' : 'none';
+    if (sub === 'thune') loadThune();
   }
 
   // ── Cards ──
@@ -1145,7 +1160,7 @@
     // Re-render live grid if filtered
     if (myTid) render(lastData);
     // Refresh abonnements if open
-    const aboPanel = document.getElementById('abonnements-panel');
+    const aboPanel = document.getElementById('amis-panel');
     if (aboPanel.classList.contains('active')) loadAbonnements();
   }
 
@@ -1199,12 +1214,11 @@
       localStorage.setItem('authV', '2');
       await loadFollowing();
       updateIdentityBtn();
-      updateDrinkBar();
       closeIdentityModal();
       render(lastData);
-      // If abonnements tab is open, refresh it
-      const aboPanel = document.getElementById('abonnements-panel');
+      const aboPanel = document.getElementById('amis-panel');
       if (aboPanel.classList.contains('active')) loadAbonnements();
+      loadProfil();
     } catch(e) {
       err.textContent = 'Erreur réseau. Réessaie.';
       err.style.display = 'block';
@@ -1216,15 +1230,15 @@
     myName = '';
     localStorage.removeItem('myTid');
     localStorage.removeItem('myName');
-    localStorage.setItem('authV', '2'); // garder la version, juste déco
+    localStorage.setItem('authV', '2');
     followingSet = new Set();
     updateIdentityBtn();
-    updateDrinkBar();
     closeIdentityModal();
     render(lastData);
-    const aboPanel = document.getElementById('abonnements-panel');
+    const aboPanel = document.getElementById('amis-panel');
     if (aboPanel.classList.contains('active')) loadAbonnements();
-    loadCompte();
+    loadProfil();
+    loadMenu();
   }
 
   // ── Défi ──
@@ -1392,115 +1406,232 @@
     });
   }
 
-  // ── Boissons tab ──
-  function loadBoissons() {
-    const note = document.getElementById('boissons-note');
+  // ── Menu tab ──
+  function loadMenu() {
+    const note = document.getElementById('menu-note');
     if (note) note.style.display = myTid ? 'none' : 'block';
   }
 
-  // ── Mon compte tab ──
-  async function loadCompte() {
-    const box = document.getElementById('compte-content');
+  // ── Profil tab ──
+  async function loadProfil() {
+    const box = document.getElementById('profil-content');
     if (!box) return;
 
     if (!myTid) {
-      // ── Non connecté : formulaires login + inscription ──
+      // ── Non connecté : login + inscription ──
       box.innerHTML = `
+        <div class="page-hd">
+          <div class="page-hd-label">PROFIL</div>
+          <div class="page-hd-title" id="ct-page-title">Connexion</div>
+        </div>
         <div style="max-width:400px;margin:0 auto">
           <div id="ct-panel-login">
-            <h2 style="margin-bottom:4px">👤 Connexion</h2>
-            <p style="color:var(--sub);font-size:0.85rem;margin-bottom:16px">Entre ton pseudo et ton mot de passe.</p>
-            <input type="text"     id="ct-login-pseudo" placeholder="Pseudo…" autocomplete="off"
-                   onkeydown="if(event.key==='Enter') document.getElementById('ct-login-pwd').focus()"/>
-            <input type="password" id="ct-login-pwd"    placeholder="Mot de passe…" style="margin-top:8px"
-                   onkeydown="if(event.key==='Enter') ctSubmitLogin()"/>
-            <div class="modal-id-err" id="ct-login-err"></div>
-            <button class="btn-primary" onclick="ctSubmitLogin()">Se connecter</button>
-            <p style="text-align:center;margin-top:12px;font-size:0.82rem;color:var(--sub)">
-              Pas encore de compte ?
-              <button style="background:none;border:none;color:#6366f1;font-weight:700;cursor:pointer;font-size:0.82rem"
-                      onclick="ctSwitchPanel('register')">Créer un compte →</button>
-            </p>
-          </div>
-
-          <div id="ct-panel-register" style="display:none">
-            <h2 style="margin-bottom:4px">✨ Créer un compte</h2>
-            <p style="color:var(--sub);font-size:0.85rem;margin-bottom:16px">Crée ton compte pour suivre ton TAC depuis le site.</p>
-            <input type="text"     id="ct-reg-pseudo"  placeholder="Pseudo (2–30 caractères)…" autocomplete="off"/>
-            <div style="display:flex;gap:8px;margin-top:8px">
-              <button id="ct-reg-btn-homme" class="reg-genre-btn active" onclick="ctSelectGenre('homme')">👨 Homme</button>
-              <button id="ct-reg-btn-femme" class="reg-genre-btn"        onclick="ctSelectGenre('femme')">👩 Femme</button>
+            <div class="p-card">
+              <div class="p-card-label">Se connecter</div>
+              <input type="text"     id="ct-login-pseudo" placeholder="Pseudo…" autocomplete="off"
+                     onkeydown="if(event.key==='Enter') document.getElementById('ct-login-pwd').focus()"/>
+              <input type="password" id="ct-login-pwd"    placeholder="Mot de passe…" style="margin-top:8px"
+                     onkeydown="if(event.key==='Enter') ctSubmitLogin()"/>
+              <div class="modal-id-err" id="ct-login-err"></div>
+              <button class="btn-primary" onclick="ctSubmitLogin()">Se connecter</button>
+              <p style="text-align:center;margin-top:14px;font-size:0.82rem;color:var(--sub)">
+                Pas encore de compte ?
+                <button style="background:none;border:none;color:#6366f1;font-weight:700;cursor:pointer;font-size:0.82rem"
+                        onclick="ctSwitchPanel('register')">Créer un compte →</button>
+              </p>
             </div>
-            <input type="number"   id="ct-reg-poids"   placeholder="Poids (kg)…" min="30" max="250" style="margin-top:8px"/>
-            <input type="password" id="ct-reg-pwd"     placeholder="Mot de passe…" style="margin-top:8px"/>
-            <input type="password" id="ct-reg-pwd2"    placeholder="Confirmer le mot de passe…" style="margin-top:8px"
-                   onkeydown="if(event.key==='Enter') ctSubmitRegister()"/>
-            <div class="modal-id-err" id="ct-reg-err"></div>
-            <button class="btn-primary" onclick="ctSubmitRegister()">Créer mon compte</button>
-            <p style="text-align:center;margin-top:10px;font-size:0.82rem">
-              <button style="background:none;border:none;color:var(--sub);cursor:pointer;font-size:0.82rem"
-                      onclick="ctSwitchPanel('login')">← Retour à la connexion</button>
-            </p>
+          </div>
+          <div id="ct-panel-register" style="display:none">
+            <div class="p-card">
+              <div class="p-card-label">Créer un compte</div>
+              <input type="text" id="ct-reg-pseudo" placeholder="Pseudo (2–30 caractères)…" autocomplete="off"/>
+              <div class="p-toggle" style="margin-top:10px">
+                <button id="ct-reg-btn-homme" class="p-toggle-btn active" onclick="ctSelectGenre('homme')">Homme</button>
+                <button id="ct-reg-btn-femme" class="p-toggle-btn"        onclick="ctSelectGenre('femme')">Femme</button>
+              </div>
+              <input type="number"   id="ct-reg-poids" placeholder="Poids (kg)…" min="30" max="250" style="margin-top:10px"/>
+              <input type="password" id="ct-reg-pwd"   placeholder="Mot de passe…" style="margin-top:8px"/>
+              <input type="password" id="ct-reg-pwd2"  placeholder="Confirmer le mot de passe…" style="margin-top:8px"
+                     onkeydown="if(event.key==='Enter') ctSubmitRegister()"/>
+              <div class="modal-id-err" id="ct-reg-err"></div>
+              <button class="btn-primary" onclick="ctSubmitRegister()">Créer mon compte</button>
+              <p style="text-align:center;margin-top:12px;font-size:0.82rem">
+                <button style="background:none;border:none;color:var(--sub);cursor:pointer;font-size:0.82rem"
+                        onclick="ctSwitchPanel('login')">← Retour à la connexion</button>
+              </p>
+            </div>
           </div>
         </div>`;
-      // Initialise le genre sélectionné (défaut Homme)
       window._ctGenre = 'homme';
       return;
     }
 
-    // ── Connecté : profil ──
-    const me = lastData ? lastData.find(u => u.username === myName) : null;
-    const bac       = me ? me.bac        : 0;
-    const nbDrinks  = me ? me.nb_drinks  : 0;
-    const soberIn   = me ? me.sober_in_h : 0;
-    const peak      = me ? me.peak_24h   : 0;
-    const lvl       = level(bac);
-    const color     = COLORS[lvl];
-    const emoji     = EMOJIS[lvl];
-    const label     = LABELS[lvl];
+    // ── Connecté : profil redesigné ──
+    const me     = lastData ? lastData.find(u => u.username === myName) : null;
+    const bac    = me ? me.bac       : 0;
+    const drinks = me ? me.nb_drinks : 0;
+    const peak   = me ? me.peak_24h  : 0;
+    const lvl    = level(bac);
+    const color  = COLORS[lvl];
+    const label  = LABELS[lvl];
+    const initLetter = (myName || '?')[0].toUpperCase();
 
     box.innerHTML = `
-      <div style="max-width:420px;margin:0 auto">
-        <div style="background:var(--card);border-radius:20px;padding:24px;margin-bottom:16px">
-          <div style="font-size:2.5rem;text-align:center;margin-bottom:4px">${emoji}</div>
-          <div style="font-size:1.6rem;font-weight:900;text-align:center;margin-bottom:2px">${esc(myName)}</div>
-          <div style="text-align:center;margin-bottom:16px">
-            <span style="font-size:0.72rem;font-weight:700;background:#6366f1;color:#fff;border-radius:6px;padding:2px 8px">Moi</span>
-          </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px">
-            <div style="background:var(--bg);border-radius:12px;padding:12px;text-align:center">
-              <div style="font-size:1.3rem;font-weight:800;color:${color}">${bac.toFixed(2)} g/L</div>
-              <div style="font-size:0.65rem;color:var(--sub);margin-top:2px">TAC actuel · ${label}</div>
-            </div>
-            <div style="background:var(--bg);border-radius:12px;padding:12px;text-align:center">
-              <div style="font-size:1.3rem;font-weight:800">${nbDrinks}</div>
-              <div style="font-size:0.65rem;color:var(--sub);margin-top:2px">Verre(s) bu(s)</div>
-            </div>
-            <div style="background:var(--bg);border-radius:12px;padding:12px;text-align:center">
-              <div style="font-size:1.3rem;font-weight:800;color:#f97316">${peak > 0 ? peak + ' g/L' : '—'}</div>
-              <div style="font-size:0.65rem;color:var(--sub);margin-top:2px">Record 24h</div>
-            </div>
-            <div style="background:var(--bg);border-radius:12px;padding:12px;text-align:center">
-              <div style="font-size:1.3rem;font-weight:800" id="ct-coins">…</div>
-              <div style="font-size:0.65rem;color:var(--sub);margin-top:2px">🪙 Pièces</div>
-            </div>
-          </div>
-          <button class="btn-history" style="width:100%;margin-bottom:8px" onclick="openEditModal()">✏️ Modifier mon profil</button>
-          <button class="btn-history" style="width:100%;margin-bottom:8px;background:#ef4444;color:#fff;border-color:#ef4444" onclick="openDeleteModal()">🗑️ Supprimer mon compte</button>
-          <button class="btn-history" style="width:100%;color:var(--sub)" onclick="logout();showTab('compte')">🚪 Se déconnecter</button>
+      <div class="page-hd">
+        <div class="page-hd-label">PROFIL</div>
+        <div class="page-hd-title">Mon profil</div>
+        <div class="page-hd-sub">Tes stats et paramètres.</div>
+      </div>
+      <div style="max-width:440px;margin:0 auto">
+
+        <!-- Avatar + pseudo -->
+        <div class="p-card" style="text-align:center;padding-bottom:24px">
+          <div class="p-avatar">${initLetter}</div>
+          <div class="p-username">@${esc(myName)}</div>
         </div>
+
+        <!-- Infos -->
+        <div class="p-card">
+          <div class="p-card-label">Infos</div>
+          <div class="p-field-label">Sexe biologique</div>
+          <div class="p-toggle" id="profil-genre-toggle">
+            <button class="p-toggle-btn" id="profil-btn-homme" onclick="profilSelectGenre('homme')">Homme</button>
+            <button class="p-toggle-btn" id="profil-btn-femme" onclick="profilSelectGenre('femme')">Femme</button>
+          </div>
+          <div style="margin-top:14px">
+            <div class="p-field-label">Poids (kg)</div>
+            <input type="number" id="profil-poids" placeholder="ex: 75" min="30" max="250"
+                   style="width:100%;padding:10px 14px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.95rem;font-family:inherit;box-sizing:border-box"/>
+          </div>
+          <div style="margin-top:14px">
+            <div class="p-field-label">Mot de passe actuel (requis pour sauvegarder)</div>
+            <input type="password" id="profil-cur-pwd" placeholder="Mot de passe actuel…"
+                   style="width:100%;padding:10px 14px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.95rem;font-family:inherit;box-sizing:border-box"/>
+          </div>
+          <div class="modal-id-err" id="profil-infos-err" style="margin-top:6px"></div>
+          <button class="btn-primary" style="margin-top:12px" onclick="profilSaveInfos()">Enregistrer les infos</button>
+        </div>
+
+        <!-- Statistiques -->
+        <div class="p-card">
+          <div class="p-card-label">Statistiques</div>
+          <div class="p-stat-grid">
+            <div class="p-stat">
+              <div class="p-stat-val" style="color:${color}">${bac.toFixed(2)} g/L</div>
+              <div class="p-stat-lbl">TAC actuel · ${label}</div>
+            </div>
+            <div class="p-stat">
+              <div class="p-stat-val">${drinks}</div>
+              <div class="p-stat-lbl">Verre(s) ce soir</div>
+            </div>
+            <div class="p-stat">
+              <div class="p-stat-val" style="color:#f97316">${peak > 0 ? peak + ' g/L' : '—'}</div>
+              <div class="p-stat-lbl">Record 24h</div>
+            </div>
+            <div class="p-stat">
+              <div class="p-stat-val" id="profil-coins">…</div>
+              <div class="p-stat-lbl">🪙 Pièces</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Mot de passe -->
+        <div class="p-card">
+          <div class="p-card-label">Sécurité</div>
+          <input type="password" id="profil-new-pwd"  placeholder="Nouveau mot de passe…"
+                 style="width:100%;padding:10px 14px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.95rem;font-family:inherit;box-sizing:border-box;margin-bottom:8px"/>
+          <input type="password" id="profil-new-pwd2" placeholder="Confirmer le nouveau mot de passe…"
+                 style="width:100%;padding:10px 14px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.95rem;font-family:inherit;box-sizing:border-box"/>
+          <div style="margin-top:10px">
+            <div class="p-field-label">Mot de passe actuel (requis)</div>
+            <input type="password" id="profil-cur-pwd2" placeholder="Mot de passe actuel…"
+                   style="width:100%;padding:10px 14px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.95rem;font-family:inherit;box-sizing:border-box"/>
+          </div>
+          <div class="modal-id-err" id="profil-pwd-err" style="margin-top:6px"></div>
+          <button class="btn-primary" style="margin-top:12px" onclick="profilSavePwd()">Changer le mot de passe</button>
+        </div>
+
+        <!-- Actions compte -->
+        <div class="p-card">
+          <div class="p-card-label">Compte</div>
+          <button class="p-action-btn" onclick="toggleTheme()">🌙 Changer le thème</button>
+          <button class="p-action-btn" onclick="logout();showTab('profil')">🚪 Se déconnecter</button>
+          <button class="p-action-btn danger" onclick="openDeleteModal()">🗑️ Supprimer mon compte</button>
+        </div>
+
       </div>`;
 
-    // Charge les pièces en arrière-plan
+    // Charge les pièces + données utilisateur
     try {
       const coinsData = await fetch(`${API}/coins`).then(r => r.json());
       const entry = coinsData.find(c => c.username.toLowerCase() === myName.toLowerCase());
-      const el = document.getElementById('ct-coins');
+      const el = document.getElementById('profil-coins');
       if (el) el.textContent = entry !== undefined ? entry.coins : '—';
+    } catch(e) {}
+
+    // Pré-remplit genre + poids depuis le snapshot
+    try {
+      const userData = await fetch(`${API}/snapshot`).then(r => r.json());
+      const u = userData.find(x => x.username === myName);
+      if (u) {
+        const gender = u.gender || 'homme';
+        profilSelectGenre(gender);
+        const poidsEl = document.getElementById('profil-poids');
+        if (poidsEl && u.weight_kg) poidsEl.value = u.weight_kg;
+      }
     } catch(e) {}
   }
 
+  function profilSelectGenre(g) {
+    window._profilGenre = g;
+    const hBtn = document.getElementById('profil-btn-homme');
+    const fBtn = document.getElementById('profil-btn-femme');
+    if (hBtn) hBtn.classList.toggle('active', g === 'homme');
+    if (fBtn) fBtn.classList.toggle('active', g === 'femme');
+  }
+
+  async function profilSaveInfos() {
+    const pwd   = document.getElementById('profil-cur-pwd').value.trim();
+    const poids = document.getElementById('profil-poids').value;
+    const err   = document.getElementById('profil-infos-err');
+    err.style.display = 'none';
+    if (!pwd) { err.textContent = 'Mot de passe requis.'; err.style.display = 'block'; return; }
+    try {
+      const body = { telegram_id: myTid, current_password: pwd };
+      if (window._profilGenre) body.gender = window._profilGenre;
+      if (poids) body.weight = parseFloat(poids);
+      const data = await fetch(`${API}/update-profile`, {
+        method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body),
+      }).then(r => r.json());
+      if (!data.ok) { err.textContent = data.error; err.style.display = 'block'; return; }
+      showToast('✅ Infos mises à jour !');
+    } catch(e) { err.textContent = 'Erreur réseau.'; err.style.display = 'block'; }
+  }
+
+  async function profilSavePwd() {
+    const newPwd  = document.getElementById('profil-new-pwd').value.trim();
+    const newPwd2 = document.getElementById('profil-new-pwd2').value.trim();
+    const curPwd  = document.getElementById('profil-cur-pwd2').value.trim();
+    const err     = document.getElementById('profil-pwd-err');
+    err.style.display = 'none';
+    if (!newPwd || !curPwd) { err.textContent = 'Remplis tous les champs.'; err.style.display = 'block'; return; }
+    if (newPwd !== newPwd2) { err.textContent = 'Les mots de passe ne correspondent pas.'; err.style.display = 'block'; return; }
+    try {
+      const data = await fetch(`${API}/update-profile`, {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ telegram_id: myTid, current_password: curPwd, new_password: newPwd }),
+      }).then(r => r.json());
+      if (!data.ok) { err.textContent = data.error; err.style.display = 'block'; return; }
+      document.getElementById('profil-new-pwd').value = '';
+      document.getElementById('profil-new-pwd2').value = '';
+      document.getElementById('profil-cur-pwd2').value = '';
+      showToast('✅ Mot de passe changé !');
+    } catch(e) { err.textContent = 'Erreur réseau.'; err.style.display = 'block'; }
+  }
+
   function ctSwitchPanel(panel) {
+    const titleEl = document.getElementById('ct-page-title');
+    if (titleEl) titleEl.textContent = panel === 'login' ? 'Connexion' : 'Créer un compte';
     document.getElementById('ct-panel-login').style.display    = panel === 'login'    ? '' : 'none';
     document.getElementById('ct-panel-register').style.display = panel === 'register' ? '' : 'none';
   }
@@ -1525,8 +1656,8 @@
       if (!data.ok) { err.textContent = data.error || 'Pseudo ou mot de passe incorrect.'; err.style.display = 'block'; return; }
       myTid = data.telegram_id; myName = data.username;
       localStorage.setItem('myTid', String(myTid)); localStorage.setItem('myName', myName); localStorage.setItem('authV', '2');
-      await loadFollowing(); updateIdentityBtn(); updateDrinkBar(); render(lastData);
-      loadCompte();
+      await loadFollowing(); updateIdentityBtn(); render(lastData);
+      loadProfil();
     } catch(e) { err.textContent = 'Erreur réseau.'; err.style.display = 'block'; }
   }
 
@@ -1547,9 +1678,9 @@
       if (!data.ok) { err.textContent = data.error; err.style.display = 'block'; return; }
       myTid = data.telegram_id; myName = data.username;
       localStorage.setItem('myTid', String(myTid)); localStorage.setItem('myName', myName); localStorage.setItem('authV', '2');
-      await loadFollowing(); updateIdentityBtn(); updateDrinkBar(); render(lastData);
+      await loadFollowing(); updateIdentityBtn(); render(lastData);
       showToast('✅ Compte créé ! Bienvenue 🍺');
-      loadCompte();
+      loadProfil();
     } catch(e) { err.textContent = 'Erreur réseau.'; err.style.display = 'block'; }
   }
 
@@ -1616,7 +1747,6 @@
 
   function render(data) {
     lastData = data;
-    updateDrinkBar();
     const filtered = filterSnapshot(data);
     const grid  = document.getElementById('grid');
     const empty = document.getElementById('empty');
@@ -1628,10 +1758,10 @@
       updateMap(filtered);
     }
     // Rafraîchit les onglets dynamiques si ouverts
-    const comptePanel = document.getElementById('compte-panel');
-    if (comptePanel && comptePanel.classList.contains('active')) loadCompte();
-    const boissonsPanel = document.getElementById('boissons-panel');
-    if (boissonsPanel && boissonsPanel.classList.contains('active')) loadBoissons();
+    const profilPanel = document.getElementById('profil-panel');
+    if (profilPanel && profilPanel.classList.contains('active')) loadProfil();
+    const menuPanel = document.getElementById('menu-panel');
+    if (menuPanel && menuPanel.classList.contains('active')) loadMenu();
   }
 
   // ── WebSocket ──
@@ -1791,7 +1921,6 @@
     await loadUsers();
     if (myTid) await loadFollowing();
     updateIdentityBtn();
-    updateDrinkBar();
     connect();
   }
 
@@ -1908,7 +2037,7 @@
 
       closeEditModal();
       showToast('✅ Profil mis à jour !');
-      loadCompte();
+      loadProfil();
     } catch(e) {
       err.textContent = 'Erreur réseau.'; err.style.display = 'block';
     }
@@ -1952,36 +2081,18 @@
       closeDeleteModal();
       showToast('✅ Compte supprimé.');
       updateIdentityBtn();
-      updateDrinkBar();
       render(lastData);
-      loadCompte();
+      loadProfil();
     } catch(e) {
       err.textContent = 'Erreur réseau.'; err.style.display = 'block';
     }
   }
 
-  // ── Barre de verres ───────────────────────────────────────────────────────
-  function updateDrinkBar() {
-    const bar = document.getElementById('drink-bar');
-    if (!myTid) { bar.style.display = 'none'; return; }
-    bar.style.display = 'block';
-
-    // Met à jour les stats depuis lastData
-    const me = lastData.find(u => {
-      const tid = getTidByName(u.username);
-      return tid === myTid;
-    });
-    if (me) {
-      const color = ['#64748b','#22c55e','#84cc16','#eab308','#f97316','#ef4444','#a855f7'][level(me.bac)];
-      document.getElementById('db-bac').textContent   = me.bac.toFixed(2) + ' g/L';
-      document.getElementById('db-bac').style.color   = color;
-      document.getElementById('db-label').textContent = me.label;
-      document.getElementById('db-count').textContent = me.nb_drinks + ' verre(s)';
-    }
-  }
+  // updateDrinkBar : supprimée (barre de verres remplacée par onglet Menu)
+  function updateDrinkBar() {}
 
   async function quickDrink(drinkKey) {
-    if (!myTid) { openIdentityModal(); return; }
+    if (!myTid) { showTab('profil'); return; }
     const btn = event && event.currentTarget;
     if (btn) { btn.style.opacity = '0.5'; btn.disabled = true; }
     try {
