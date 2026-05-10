@@ -24,7 +24,7 @@ from data.database import (
     log_drink as db_log_drink, start_session, end_session,
     upsert_user, set_password, get_user_by_username,
     delete_last_drink, update_max_bac, is_username_taken,
-    get_session_drinks,
+    get_session_drinks, delete_user,
 )
 from core.recap import build_weekly_recap
 from core.widmark import total_bac, bac_label, sober_in_hours, alcohol_grams
@@ -575,6 +575,29 @@ async def update_profile_endpoint(request: Request):
             return {"ok": False, "error": "Nouveau mot de passe trop court (min. 4 caractères)"}
         set_password(telegram_id, new_password)
 
+    return {"ok": True}
+
+
+# ── Suppression de compte ─────────────────────────────────────────────────────
+
+@app.post("/delete-account")
+async def delete_account_endpoint(request: Request):
+    body        = await request.json()
+    telegram_id = body.get("telegram_id")
+    password    = body.get("password", "").strip()
+
+    if not telegram_id:
+        return {"ok": False, "error": "Non authentifié"}
+
+    user = get_user(telegram_id)
+    if not user:
+        return {"ok": False, "error": "Utilisateur introuvable"}
+
+    if not verify_password(user["username"], password):
+        return {"ok": False, "error": "Mot de passe incorrect"}
+
+    delete_user(telegram_id)
+    await _broadcast(build_snapshot())
     return {"ok": True}
 
 

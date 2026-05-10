@@ -588,3 +588,17 @@ def is_following(follower_id: int, following_id: int) -> bool:
 def get_following(follower_id: int) -> list[int]:
     rows = _fetchall("SELECT following_id FROM follows WHERE follower_id=?", [follower_id])
     return [r["following_id"] for r in rows]
+
+
+def delete_user(telegram_id: int):
+    """Supprime un compte et toutes ses données associées."""
+    _pipeline([
+        ("DELETE FROM drink_logs   WHERE telegram_id=?", [telegram_id]),
+        ("DELETE FROM sessions     WHERE telegram_id=?", [telegram_id]),
+        ("DELETE FROM transactions WHERE telegram_id=?", [telegram_id]),
+        ("DELETE FROM follows      WHERE follower_id=? OR following_id=?", [telegram_id, telegram_id]),
+        ("DELETE FROM bets         WHERE challenger_id=? OR opponent_id=?", [telegram_id, telegram_id]),
+        ("DELETE FROM blackjack_players WHERE telegram_id=?", [telegram_id]),
+        ("DELETE FROM banned_users WHERE telegram_id=?", [telegram_id]),
+        ("DELETE FROM users        WHERE telegram_id=?", [telegram_id]),
+    ])

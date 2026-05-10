@@ -546,7 +546,7 @@
       #map { height: 220px; }
 
       /* Modaux : pleine largeur sur mobile */
-      .modal, .modal2, .modal3, .modal4, .modal-id, #modal-bg-edit .modal-id, #modal-bg-picker .modal {
+      .modal, .modal2, .modal3, .modal4, .modal-id, #modal-bg-edit .modal-id, #modal-bg-delete .modal-id, #modal-bg-picker .modal {
         max-width: 100%;
         border-radius: 20px 20px 0 0;
         position: fixed;
@@ -557,7 +557,7 @@
         max-height: 90vh;
         overflow-y: auto;
       }
-      .modal-bg, .modal-bg2, .modal-bg3, .modal-bg4, .modal-bg-id, #modal-bg-edit, #modal-bg-picker {
+      .modal-bg, .modal-bg2, .modal-bg3, .modal-bg4, .modal-bg-id, #modal-bg-edit, #modal-bg-delete, #modal-bg-picker {
         align-items: flex-end;
         padding: 0;
       }
@@ -824,6 +824,20 @@
   </div>
 </div>
 
+<div class="modal-bg-id" id="modal-bg-delete" onclick="closeDeleteModal(event)" style="z-index:350">
+  <div class="modal-id" style="max-width:380px">
+    <button class="modal-id-close" onclick="closeDeleteModal()">✕</button>
+    <h3 style="color:#ef4444">🗑️ Supprimer mon compte</h3>
+    <p style="color:var(--sub);font-size:0.85rem;margin-bottom:12px">
+      Cette action est <strong>irréversible</strong>. Toutes tes données (verres, pièces, sessions) seront supprimées définitivement.
+    </p>
+    <input type="password" id="delete-pwd" placeholder="Confirme ton mot de passe…"
+           onkeydown="if(event.key==='Enter') submitDeleteAccount()" style="margin-bottom:4px"/>
+    <div class="modal-id-err" id="delete-err"></div>
+    <button class="btn-primary" style="background:#ef4444;border-color:#ef4444" onclick="submitDeleteAccount()">Supprimer définitivement</button>
+  </div>
+</div>
+
 <div id="toast"></div>
 
 <script>
@@ -1034,7 +1048,10 @@
           <button class="btn-history" onclick="openChartFromProfile('${esc(username)}')">📈 Historique</button>
           ${followBtn}
         </div>
-        ${isSelf ? `<button class="btn-history" style="width:100%;margin-top:8px" onclick="openEditModal()">✏️ Modifier mon profil</button>` : ''}
+        ${isSelf ? `
+          <button class="btn-history" style="width:100%;margin-top:8px" onclick="openEditModal()">✏️ Modifier mon profil</button>
+          <button class="btn-history" style="width:100%;margin-top:8px;background:#ef4444;color:#fff;border-color:#ef4444" onclick="openDeleteModal()">🗑️ Supprimer mon compte</button>
+        ` : ''}
       `;
     };
 
@@ -1658,6 +1675,50 @@
 
       closeEditModal();
       showToast('✅ Profil mis à jour !');
+    } catch(e) {
+      err.textContent = 'Erreur réseau.'; err.style.display = 'block';
+    }
+  }
+
+  // ── Suppression de compte ─────────────────────────────────────────────────
+  function openDeleteModal() {
+    closeModal4();
+    document.getElementById('delete-pwd').value = '';
+    document.getElementById('delete-err').style.display = 'none';
+    document.getElementById('modal-bg-delete').classList.add('open');
+    setTimeout(() => document.getElementById('delete-pwd').focus(), 100);
+  }
+
+  function closeDeleteModal(e) {
+    if (!e || e.target === document.getElementById('modal-bg-delete'))
+      document.getElementById('modal-bg-delete').classList.remove('open');
+  }
+
+  async function submitDeleteAccount() {
+    const pwd = document.getElementById('delete-pwd').value.trim();
+    const err = document.getElementById('delete-err');
+    err.style.display = 'none';
+
+    if (!pwd) { err.textContent = 'Mot de passe requis.'; err.style.display = 'block'; return; }
+
+    try {
+      const data = await fetch(`${API}/delete-account`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ telegram_id: myTid, password: pwd }),
+      }).then(r => r.json());
+
+      if (!data.ok) { err.textContent = data.error; err.style.display = 'block'; return; }
+
+      // Déconnexion locale
+      myTid = null; myUsername = null; myIsAdmin = false;
+      localStorage.removeItem('drunk_tid');
+      localStorage.removeItem('drunk_username');
+      localStorage.removeItem('drunk_admin');
+      closeDeleteModal();
+      showToast('✅ Compte supprimé.');
+      updateDrinkBar();
+      render();
     } catch(e) {
       err.textContent = 'Erreur réseau.'; err.style.display = 'block';
     }
