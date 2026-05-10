@@ -572,104 +572,139 @@
 .go-coins { font-size: 0.82rem; font-weight: 700; color: #facc15; }
 .go-body { flex: 1; overflow-y: auto; padding: 16px; }
 
-/* Blackjack table */
+/* ── Blackjack ── */
+/* Felt table */
 #bj-table-felt {
-  border-radius: 20px; overflow: hidden; margin-bottom: 16px;
-  background: radial-gradient(ellipse 120% 80% at 50% 40%, #165a2d 0%, #0e3d1d 70%, #050e08 100%);
-  padding: 16px 12px 12px;
-  position: relative;
+  flex: 1; display: flex; flex-direction: column;
+  background: radial-gradient(ellipse 160% 100% at 50% 30%, #1a6b35 0%, #0e3d1d 60%, #050e08 100%);
+  padding: 14px 14px 10px; position: relative; overflow: hidden;
 }
 #bj-table-felt::before {
-  content: ''; position: absolute; inset: 0; pointer-events: none; border-radius: 20px;
-  background-image: radial-gradient(circle, rgba(255,255,255,0.025) 1px, transparent 1px);
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background-image: radial-gradient(circle, rgba(255,255,255,0.018) 1px, transparent 1px);
   background-size: 10px 10px;
 }
+#bj-table-felt::after {
+  content: ''; position: absolute; inset: 6px; pointer-events: none;
+  border: 1px solid rgba(255,255,255,0.06); border-radius: 20px;
+}
+.bj-dealer-zone {
+  text-align: center; padding-bottom: 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  margin-bottom: 10px; flex-shrink: 0;
+}
 .bj-zone-label {
-  font-size: 0.6rem; font-weight: 700; letter-spacing: 2px; text-transform: uppercase;
-  color: rgba(255,255,255,0.4); margin-bottom: 8px; text-align: center;
+  font-size: 0.58rem; font-weight: 700; letter-spacing: 2.5px; text-transform: uppercase;
+  color: rgba(255,255,255,0.35); margin-bottom: 8px;
 }
-.bj-cards { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; margin-bottom: 6px; }
-.bj-total { text-align: center; font-size: 0.72rem; color: rgba(255,255,255,0.5); font-weight: 600; margin-bottom: 12px; }
-.bj-divider { border: none; border-top: 1px solid rgba(255,255,255,0.1); margin: 12px 0; }
+.bj-cards { display: flex; gap: 5px; justify-content: center; flex-wrap: wrap; margin-bottom: 5px; }
+.bj-total { font-size: 0.7rem; color: rgba(255,255,255,0.45); font-weight: 600; }
+.bj-players-zone { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 7px; }
+
+/* Player slots */
 .bj-pslot {
-  background: rgba(0,0,0,0.4); border: 2px solid rgba(255,255,255,0.1);
-  border-radius: 12px; padding: 10px 12px; margin-bottom: 8px;
-  display: flex; align-items: center; gap: 10px;
+  background: rgba(0,0,0,0.38); border: 1.5px solid rgba(255,255,255,0.1);
+  border-radius: 14px; padding: 10px 13px;
+  display: flex; align-items: center; gap: 12px;
+  transition: border-color .3s, box-shadow .3s;
+  flex-shrink: 0;
 }
-.bj-pslot.is-me   { border-color: #6366f1; }
-.bj-pslot.r-win   { border-color: #22c55e; }
-.bj-pslot.r-lose  { border-color: #ef444460; opacity: .75; }
-.bj-pslot.r-push  { border-color: #facc15; }
-.bj-pslot.r-blackjack { border-color: #facc15; }
+.bj-pslot.is-me     { border-color: rgba(99,102,241,0.6); }
+.bj-pslot.s-playing { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,0.18), 0 0 20px rgba(99,102,241,0.15); animation: slotPulse 1.8s ease-in-out infinite; }
+.bj-pslot.r-win       { border-color: #22c55e; box-shadow: 0 0 16px rgba(34,197,94,0.3); }
+.bj-pslot.r-lose      { border-color: rgba(239,68,68,0.4); opacity: .7; }
+.bj-pslot.r-push      { border-color: #facc15; }
+.bj-pslot.r-blackjack { border-color: #facc15; box-shadow: 0 0 20px rgba(250,204,21,0.35); }
+@keyframes slotPulse {
+  0%,100% { box-shadow: 0 0 0 3px rgba(99,102,241,0.18), 0 0 16px rgba(99,102,241,0.1); }
+  50%      { box-shadow: 0 0 0 5px rgba(99,102,241,0.28), 0 0 28px rgba(99,102,241,0.25); }
+}
 .bj-slot-left { flex: 1; min-width: 0; }
-.bj-slot-name { font-weight: 700; font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.bj-slot-bet  { font-size: 0.65rem; color: rgba(255,255,255,0.4); margin-top: 2px; }
-.bj-slot-right { text-align: right; }
+.bj-slot-name { font-weight: 800; font-size: 0.88rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #fff; }
+.bj-slot-bet  { font-size: 0.62rem; color: rgba(255,255,255,0.38); margin-top: 2px; }
+.bj-slot-right { text-align: right; flex-shrink: 0; }
 .bj-slot-cards { display: flex; gap: 4px; justify-content: flex-end; margin-bottom: 4px; }
-.bj-slot-total { font-size: 0.65rem; color: rgba(255,255,255,0.45); }
+.bj-slot-total { font-size: 0.62rem; color: rgba(255,255,255,0.4); font-weight: 600; }
 .bj-badge {
-  display: inline-block; font-size: 0.6rem; font-weight: 700;
+  display: inline-block; font-size: 0.58rem; font-weight: 700;
   padding: 2px 7px; border-radius: 99px; margin-top: 3px;
 }
-.b-playing { background: rgba(99,102,241,0.2); color: #818cf8; }
-.b-stand   { background: rgba(34,197,94,0.2);  color: #4ade80; }
-.b-bust    { background: rgba(239,68,68,0.2);  color: #f87171; }
-.b-done    { background: rgba(250,204,21,0.2); color: #fbbf24; }
-.b-waiting { background: rgba(255,255,255,0.07); color: rgba(255,255,255,0.3); }
-.bj-result { font-size: 0.75rem; font-weight: 800; margin-top: 4px; }
-.bj-r-win  { color: #22c55e; }
-.bj-r-lose { color: #ef4444; }
-.bj-r-push { color: #facc15; }
-.bj-r-blackjack { color: #facc15; }
+.b-playing { background: rgba(99,102,241,0.22); color: #a5b4fc; }
+.b-stand   { background: rgba(34,197,94,0.2);   color: #4ade80; }
+.b-bust    { background: rgba(239,68,68,0.2);   color: #f87171; }
+.b-done    { background: rgba(250,204,21,0.2);  color: #fbbf24; }
+.b-waiting { background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.28); }
+.bj-result { font-size: 0.78rem; font-weight: 800; margin-top: 4px; letter-spacing: -.2px; }
+.bj-r-win       { color: #4ade80; }
+.bj-r-lose      { color: #f87171; }
+.bj-r-push      { color: #facc15; }
+.bj-r-blackjack { color: #fbbf24; }
 
-/* Playing card */
-:root { --cw: 44px; --ch: calc(44px * 1.43); }
-.card {
+/* Banner */
+#bj-banner {
+  display: inline-block; font-size: 0.65rem; font-weight: 800; letter-spacing: .5px;
+  padding: 4px 14px; border-radius: 99px; margin-bottom: 10px;
+  transition: background .3s, color .3s;
+}
+#bj-banner.waiting  { background: rgba(99,102,241,0.18); color: #818cf8; }
+#bj-banner.active   { background: rgba(34,197,94,0.18);  color: #4ade80; }
+#bj-banner.finished { background: rgba(250,204,21,0.18); color: #fbbf24; }
+
+/* Playing cards */
+:root { --cw: 50px; --ch: calc(50px * 1.45); }
+.bjcard {
   width: var(--cw); height: var(--ch); background: #fff; color: #111;
-  border-radius: 5px; box-shadow: 0 3px 8px rgba(0,0,0,0.5);
-  position: relative; flex-shrink: 0; overflow: hidden; user-select: none; font-size: 9px;
+  border-radius: 6px; box-shadow: 0 4px 14px rgba(0,0,0,0.55), 0 1px 0 rgba(255,255,255,0.1) inset;
+  position: relative; flex-shrink: 0; overflow: hidden; user-select: none;
 }
-.card.deal { animation: dealIn .3s cubic-bezier(.22,.61,.36,1) both; }
-@keyframes dealIn { from { transform: translateY(-80px) scale(.6); opacity:0; } to { transform: none; opacity:1; } }
-.card.flip-out { animation: flipOut .18s ease-in  forwards; }
-.card.flip-in  { animation: flipIn  .22s ease-out forwards; }
-@keyframes flipOut { from { transform: scaleX(1); } to { transform: scaleX(0); } }
-@keyframes flipIn  { from { transform: scaleX(0); } to { transform: scaleX(1); } }
-.card .c-tl { position: absolute; top: 2px; left: 3px; font-weight: 900; line-height: 1.1; font-size: 9px; }
-.card .c-center { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); font-size: 16px; }
-.card .c-br { position: absolute; bottom: 2px; right: 3px; font-weight: 900; transform: rotate(180deg); font-size: 9px; line-height: 1.1; }
-.card.red { color: #c8181f; }
-.card.back { background: linear-gradient(145deg,#1e3a8a,#1e40af,#1e3a8a); border: 2px solid rgba(255,255,255,0.15); }
-.card.back::before {
-  content: ''; position: absolute; inset: 3px; border: 1px solid rgba(255,255,255,0.2); border-radius: 3px;
-  background: repeating-linear-gradient(45deg,rgba(255,255,255,0.05) 0,rgba(255,255,255,0.05) 3px,transparent 3px,transparent 6px);
+.bjcard.deal { animation: bjDeal .26s cubic-bezier(.2,.7,.3,1) both; }
+@keyframes bjDeal { from { transform: translateY(-60px) scale(.55) rotate(-8deg); opacity:0; } to { transform: none; opacity:1; } }
+.bjcard.flip-out { animation: bjFlipOut .15s ease-in  forwards; }
+.bjcard.flip-in  { animation: bjFlipIn  .2s  ease-out forwards; }
+@keyframes bjFlipOut { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+@keyframes bjFlipIn  { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+.bjcard .c-tl { position: absolute; top: 3px; left: 4px; font-size: 10px; font-weight: 900; line-height: 1.1; }
+.bjcard .c-sym { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); font-size: 18px; }
+.bjcard .c-br { position: absolute; bottom: 3px; right: 4px; font-size: 10px; font-weight: 900; line-height: 1.1; transform: rotate(180deg); }
+.bjcard.red { color: #c8181f; }
+.bjcard.back {
+  background: linear-gradient(145deg,#1e3a8a,#1e40af 50%,#1e3a8a);
+  border: 2px solid rgba(255,255,255,0.12);
 }
+.bjcard.back::before {
+  content:''; position:absolute; inset:4px; border:1px solid rgba(255,255,255,0.18); border-radius:3px;
+  background: repeating-linear-gradient(45deg,rgba(255,255,255,0.04) 0,rgba(255,255,255,0.04) 3px,transparent 3px,transparent 6px);
+}
+
+/* Action bars */
 .bj-action-bar {
-  display: flex; gap: 10px; padding: 12px 16px; background: var(--card);
-  border-top: 1px solid var(--border); flex-shrink: 0;
+  display: flex; gap: 10px; padding: 12px 16px;
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+  background: rgba(8,12,20,0.95); border-top: 1px solid rgba(255,255,255,0.07);
+  flex-shrink: 0; backdrop-filter: blur(12px);
 }
 .bj-action-bar button {
-  flex: 1; padding: 14px; border-radius: 12px; border: none;
-  font-size: 0.95rem; font-weight: 800; cursor: pointer; font-family: inherit;
-  transition: transform .1s;
+  flex: 1; padding: 15px; border-radius: 14px; border: none;
+  font-size: 1rem; font-weight: 800; cursor: pointer; font-family: inherit;
+  transition: transform .1s, filter .15s; letter-spacing: -.2px;
 }
-.bj-action-bar button:active { transform: scale(.96); }
-.bj-action-bar button:disabled { opacity: .35; cursor: not-allowed; }
-.bj-btn-hit   { background: #6366f1; color: #fff; }
-.bj-btn-stand { background: #374151; color: #fff; }
-.bj-btn-start { background: #22c55e; color: #fff; }
+.bj-action-bar button:active { transform: scale(.95); filter: brightness(.9); }
+.bj-action-bar button:disabled { opacity: .3; cursor: not-allowed; transform: none !important; }
+.bj-btn-hit     { background: #6366f1; color: #fff; }
+.bj-btn-stand   { background: #1f2937; color: #d1d5db; border: 1px solid rgba(255,255,255,0.12); }
+.bj-btn-start   { background: #22c55e; color: #fff; }
 .bj-btn-rematch { background: #22c55e; color: #fff; }
 
 /* Lobby */
 .bj-session-card {
   background: var(--card); border: 1px solid var(--border); border-radius: 14px;
   padding: 14px 16px; margin-bottom: 10px; cursor: pointer;
-  transition: background .15s;
+  transition: background .12s, transform .1s;
 }
-.bj-session-card:active { background: var(--border); }
+.bj-session-card:active { background: var(--border); transform: scale(.99); }
 .bj-sc-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
 .bj-sc-creator { font-weight: 800; font-size: 0.9rem; }
-.bj-sc-status { font-size: 0.7rem; font-weight: 700; padding: 3px 8px; border-radius: 99px; }
+.bj-sc-status { font-size: 0.68rem; font-weight: 700; padding: 3px 8px; border-radius: 99px; }
 .bj-sc-status.waiting { background: rgba(99,102,241,0.2); color: #818cf8; }
 .bj-sc-status.active  { background: rgba(34,197,94,0.2);  color: #4ade80; }
 .bj-sc-players { font-size: 0.75rem; color: var(--sub); }
@@ -2702,39 +2737,35 @@
     </div>
   </div>
 
-  <!-- Table de jeu -->
-  <div id="bj-game-view" style="display:none;flex:1;flex-direction:column;overflow:hidden">
-    <div class="go-body" id="bj-game-scroll">
-      <!-- Felt -->
-      <div id="bj-table-felt">
-        <!-- Banner -->
-        <div id="bj-banner" style="text-align:center;font-size:0.7rem;font-weight:700;padding:4px 14px;border-radius:99px;display:inline-block;margin:0 auto 10px;background:rgba(99,102,241,0.15);color:#818cf8"></div>
-        <!-- Dealer -->
+  <!-- Table de jeu (plein écran, pas de scroll) -->
+  <div id="bj-game-view" style="display:none;flex:1;flex-direction:column;overflow:hidden;min-height:0">
+
+    <!-- Felt : prend tout l'espace restant -->
+    <div id="bj-table-felt">
+      <!-- Banner statut -->
+      <div style="text-align:center;margin-bottom:8px">
+        <div id="bj-banner" class="waiting">⏳ En attente…</div>
+      </div>
+      <!-- Zone croupier -->
+      <div class="bj-dealer-zone">
         <div class="bj-zone-label">🏠 Croupier</div>
         <div class="bj-cards" id="bj-dealer-cards"></div>
         <div class="bj-total" id="bj-dealer-total"></div>
-        <hr class="bj-divider">
-        <!-- Players -->
-        <div id="bj-players"></div>
       </div>
-      <!-- Waiting notice -->
-      <div id="bj-wait-msg" style="display:none;text-align:center;padding:20px;background:var(--card);border-radius:14px;border:1px solid var(--border)">
-        <div style="font-size:1.5rem;margin-bottom:8px">⏳</div>
-        <div style="font-weight:800;margin-bottom:6px">En attente de joueurs</div>
-        <div style="font-size:0.8rem;color:var(--sub);margin-bottom:14px">D'autres peuvent rejoindre ta table.<br>Lance la partie quand tout le monde est prêt.</div>
-        <div id="bj-waiting-players" style="margin-bottom:14px"></div>
-      </div>
+      <!-- Zone joueurs (scrollable si beaucoup de joueurs) -->
+      <div class="bj-players-zone" id="bj-players"></div>
     </div>
-    <!-- Action bar -->
+
+    <!-- Barre d'actions (sous la table) -->
     <div class="bj-action-bar" id="bj-action-bar" style="display:none">
       <button class="bj-btn-hit"   id="bj-btn-hit"   onclick="bjAct('hit')">🃏 Tirer</button>
       <button class="bj-btn-stand" id="bj-btn-stand" onclick="bjAct('stand')">✋ Rester</button>
     </div>
     <div class="bj-action-bar" id="bj-start-bar" style="display:none">
-      <button class="bj-btn-start" onclick="bjStart()">🚀 Lancer la partie</button>
+      <button class="bj-btn-start" id="bj-start-btn" onclick="bjStart()">🚀 Lancer la partie</button>
     </div>
     <div class="bj-action-bar" id="bj-rematch-bar" style="display:none">
-      <button class="bj-btn-rematch" onclick="bjRematch()">🔄 Rejouer</button>
+      <button class="bj-btn-rematch" id="bj-rematch-btn" onclick="bjRematch()">🔄 Rejouer</button>
     </div>
   </div>
 </div>
@@ -2908,7 +2939,7 @@ function _bjWsConnect() {
   _bjWs = new WebSocket(url);
   _bjWs.onopen    = () => {};
   _bjWs.onmessage = e => { const d = JSON.parse(e.data); if (d.event) { bjLoadSessions(); return; } _bjRender(d); };
-  _bjWs.onclose   = () => setTimeout(() => { if (_bjToken) _bjWsConnect(); }, 3000);
+  _bjWs.onclose   = () => setTimeout(() => { if (_bjToken) _bjWsConnect(); }, 1200);
   _bjWs.onerror   = () => _bjWs.close();
 }
 
@@ -2920,11 +2951,11 @@ function _bjParseCard(c) {
 }
 function _bjMakeCard(c, animate) {
   const p = _bjParseCard(c);
-  const cls = 'card' + (animate ? ' deal' : '');
+  const cls = 'bjcard' + (animate ? ' deal' : '');
   if (!p) return `<div class="${cls} back"></div>`;
   return `<div class="${cls}${p.isRed ? ' red' : ''}">
     <div class="c-tl">${p.rank}<br>${p.suit}</div>
-    <div class="c-center">${p.suit}</div>
+    <div class="c-sym">${p.suit}</div>
     <div class="c-br">${p.rank}<br>${p.suit}</div>
   </div>`;
 }
@@ -2949,18 +2980,10 @@ function _bjRender(state) {
   _bjLastState = state;
 
   // Banner
-  const bannerTxt = { waiting:'⏳ En attente de joueurs', active:'🎮 Partie en cours', finished:'🏁 Partie terminée' }[state.status] || '';
+  const bannerMap = { waiting:'⏳ En attente', active:'🎮 En cours', finished:'🏁 Terminé' };
   const bannerEl = document.getElementById('bj-banner');
-  bannerEl.textContent = bannerTxt;
-
-  // Wait message (waiting state)
-  const waitMsg = document.getElementById('bj-wait-msg');
-  waitMsg.style.display = state.status === 'waiting' ? 'block' : 'none';
-  if (state.status === 'waiting') {
-    document.getElementById('bj-waiting-players').innerHTML = state.players.map(p =>
-      `<div style="font-size:0.82rem;margin-bottom:4px">${p.telegram_id === myTid ? '👤 ' : ''}${_escHtml(p.username)} · ${p.bet} 🪙</div>`
-    ).join('');
-  }
+  bannerEl.textContent = bannerMap[state.status] || '';
+  bannerEl.className = state.status;
 
   // Dealer
   const dHand = state.dealer_hand || [];
@@ -2971,26 +2994,26 @@ function _bjRender(state) {
   const revealed  = wasHidden && nowClear && prev;
 
   if (revealed && dHand.length >= 2) {
-    dealerEl.innerHTML = dHand.map((c, i) => i === 1 ? `<div class="card back"></div>` : _bjMakeCard(c, i >= prevDH.length)).join('');
+    dealerEl.innerHTML = dHand.map((c, i) => i === 1 ? `<div class="bjcard back"></div>` : _bjMakeCard(c, i >= prevDH.length)).join('');
     setTimeout(() => {
-      const hidden = dealerEl.querySelectorAll('.card')[1];
+      const hidden = dealerEl.querySelectorAll('.bjcard')[1];
       if (!hidden) return;
       hidden.classList.add('flip-out');
       setTimeout(() => {
         const p2 = _bjParseCard(dHand[1]);
         if (p2) {
-          hidden.className = 'card flip-in' + (p2.isRed ? ' red' : '');
-          hidden.innerHTML = `<div class="c-tl">${p2.rank}<br>${p2.suit}</div><div class="c-center">${p2.suit}</div><div class="c-br">${p2.rank}<br>${p2.suit}</div>`;
+          hidden.className = 'bjcard flip-in' + (p2.isRed ? ' red' : '');
+          hidden.innerHTML = `<div class="c-tl">${p2.rank}<br>${p2.suit}</div><div class="c-sym">${p2.suit}</div><div class="c-br">${p2.rank}<br>${p2.suit}</div>`;
         }
-      }, 180);
-    }, 50);
+      }, 150);
+    }, 40);
   } else {
     dealerEl.innerHTML = dHand.map((c, i) => _bjMakeCard(c, i >= prevDH.length)).join('');
   }
 
   const dtEl = document.getElementById('bj-dealer-total');
-  if (state.dealer_value != null) dtEl.textContent = `Total : ${state.dealer_value}`;
-  else if (dHand.length) { const vis = dHand.filter(c => c !== '?'); dtEl.textContent = vis.length ? `Visible : ${_bjHandVal(vis)}` : ''; }
+  if (state.dealer_value != null) dtEl.textContent = `= ${state.dealer_value}`;
+  else if (dHand.length) { const vis = dHand.filter(c => c !== '?'); dtEl.textContent = vis.length ? `visible : ${_bjHandVal(vis)}` : ''; }
   else dtEl.textContent = '';
 
   // Players
@@ -3002,17 +3025,26 @@ function _bjRender(state) {
     const prevLen = prevP ? (prevP.hand || []).length : 0;
     const realHand = hand.filter(c => c !== '?');
     const total = realHand.length ? _bjHandVal(realHand) : 0;
+    const isPlaying = p.status === 'playing' && state.status === 'active';
     const badgeCls = { playing:'b-playing', stand:'b-stand', bust:'b-bust', done:'b-done', waiting:'b-waiting' }[p.status] || 'b-waiting';
-    const badgeTxt = { playing:'🎮 Joue', stand:'✋ Stand', bust:'💥 Bust!', done:'✅ Done', waiting:'⏳' }[p.status] || p.status;
-    const resultMap = { win:'<div class="bj-result bj-r-win">🏆 Gagné !</div>', lose:'<div class="bj-result bj-r-lose">💸 Perdu</div>', push:'<div class="bj-result bj-r-push">🤝 Égalité</div>', blackjack:'<div class="bj-result bj-r-blackjack">🎉 BLACKJACK !</div>' };
-    const resultHTML = resultMap[p.result] || '';
-    const slotCls = ['bj-pslot', isMe?'is-me':'', p.result?`r-${p.result}`:''].filter(Boolean).join(' ');
+    const badgeTxt = { playing:'🎮 À toi !', stand:'✋ Stand', bust:'💥 Bust', done:'✅', waiting:'⏳ Attend' }[p.status] || p.status;
+    const resultMap = {
+      win:       '<div class="bj-result bj-r-win">🏆 Gagné !</div>',
+      lose:      '<div class="bj-result bj-r-lose">💸 Perdu</div>',
+      push:      '<div class="bj-result bj-r-push">🤝 Égalité</div>',
+      blackjack: '<div class="bj-result bj-r-blackjack">🎉 BLACKJACK !</div>',
+    };
+    const slotCls = [
+      'bj-pslot',
+      isMe ? 'is-me' : '',
+      p.result ? `r-${p.result}` : (isPlaying && isMe ? 's-playing' : ''),
+    ].filter(Boolean).join(' ');
     return `<div class="${slotCls}">
       <div class="bj-slot-left">
         <div class="bj-slot-name">${_escHtml(p.username)}${isMe?' 👤':''}</div>
         <div class="bj-slot-bet">🪙 ${p.bet}</div>
         <span class="bj-badge ${badgeCls}">${badgeTxt}</span>
-        ${resultHTML}
+        ${resultMap[p.result] || ''}
       </div>
       <div class="bj-slot-right">
         <div class="bj-slot-cards">${hand.map((c, i) => _bjMakeCard(c, i >= prevLen)).join('')}</div>
@@ -3034,11 +3066,17 @@ function _bjRender(state) {
 
   if (me && me.status === 'playing' && state.status === 'active') {
     actionBar.style.display = 'flex';
-    document.getElementById('bj-btn-hit').disabled = document.getElementById('bj-btn-stand').disabled = false;
+    const bh = document.getElementById('bj-btn-hit'), bs = document.getElementById('bj-btn-stand');
+    bh.disabled = bs.disabled = false;
+    bh.textContent = '🃏 Tirer'; bs.textContent = '✋ Rester';
   } else if (state.status === 'waiting' && isCreator) {
     startBar.style.display = 'flex';
+    document.getElementById('bj-start-btn').disabled = false;
+    document.getElementById('bj-start-btn').textContent = '🚀 Lancer la partie';
   } else if (state.status === 'finished' && isCreator) {
     rematchBar.style.display = 'flex';
+    document.getElementById('bj-rematch-btn').disabled = false;
+    document.getElementById('bj-rematch-btn').textContent = '🔄 Rejouer';
   }
 
   _bjRefreshCoins();
@@ -3046,7 +3084,12 @@ function _bjRender(state) {
 
 function bjAct(action) {
   if (!_bjWs || _bjWs.readyState !== WebSocket.OPEN) return;
-  document.getElementById('bj-btn-hit').disabled = document.getElementById('bj-btn-stand').disabled = true;
+  // Feedback immédiat
+  const hitBtn   = document.getElementById('bj-btn-hit');
+  const standBtn = document.getElementById('bj-btn-stand');
+  hitBtn.disabled = standBtn.disabled = true;
+  if (action === 'hit')   hitBtn.textContent   = '⏳ …';
+  if (action === 'stand') standBtn.textContent = '⏳ …';
   _bjWs.send(JSON.stringify({ action, telegram_id: myTid }));
 }
 

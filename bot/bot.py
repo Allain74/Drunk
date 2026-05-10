@@ -9,8 +9,9 @@ import httpx
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import (
     ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler,
-    ConversationHandler, ContextTypes, Application, filters
+    ConversationHandler, ContextTypes, Application, TypeHandler, filters
 )
+from telegram.ext import ApplicationHandlerStop
 from core.drinks import DRINKS, list_drinks_text
 from core.widmark import alcohol_grams, total_bac, bac_label, sober_in_hours
 from core.recap import build_weekly_recap
@@ -1639,9 +1640,27 @@ async def cmd_lancer_bj(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 # ── App ───────────────────────────────────────────────────────────────────────
 
+SITE_URL = os.environ.get("SITE_URL", "https://drunk-weld.vercel.app")
+
+async def _admin_gate(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Bloque tout le monde sauf l'admin — s'exécute en groupe -1, avant tous les handlers."""
+    uid = update.effective_user.id if update.effective_user else None
+    if uid != ADMIN_ID:
+        try:
+            await update.effective_message.reply_text(
+                f"🚫 Le bot est désactivé.\nUtilise l'app web 👉 {SITE_URL}"
+            )
+        except Exception:
+            pass
+        raise ApplicationHandlerStop
+
+
 def create_application() -> Application:
     token = os.environ["TELEGRAM_BOT_TOKEN"]
     app = ApplicationBuilder().token(token).updater(None).build()
+
+    # Bloque tous les non-admins AVANT tout autre handler
+    app.add_handler(TypeHandler(Update, _admin_gate), group=-1)
 
     app.add_handler(CommandHandler("start",                       cmd_start))
     app.add_handler(CommandHandler("topo",                        cmd_topo))
