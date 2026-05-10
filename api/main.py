@@ -64,6 +64,8 @@ def _send_push(telegram_id: int, title: str, body: str, url: str = "/"):
                 data=json.dumps({"title": title, "body": body, "url": url}),
                 vapid_private_key=VAPID_PRIVATE_KEY,
                 vapid_claims=VAPID_CLAIMS,
+                ttl=86400,                          # garde 24h si appareil hors ligne
+                headers={"urgency": "high"},        # réveille iOS même app fermée
             )
             print(f"[PUSH] ✅ envoyé à {sub['endpoint'][:60]}…")
         except Exception as e:
