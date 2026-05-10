@@ -100,13 +100,15 @@ def set_password(telegram_id: int, password: str):
              [_hash_password(password), telegram_id])
 
 def verify_password(username: str, password: str) -> dict | None:
-    """Retourne le user si le pseudo+password est correct, sinon None."""
+    """Retourne le user si le pseudo+password est correct, sinon None.
+    Les anciens comptes sans mot de passe peuvent se connecter avec un champ vide."""
     user = _fetchone("SELECT * FROM users WHERE LOWER(username)=LOWER(?)", [username])
     if not user:
         return None
     stored = user.get("password_hash") or ""
     if not stored:
-        return None  # password non configuré
+        # Ancien compte sans mot de passe : autorise uniquement si mdp laissé vide
+        return user if password == "" else None
     if _check_password(password, stored):
         return user
     return None

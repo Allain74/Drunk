@@ -525,9 +525,9 @@ async def unfollow_endpoint(request: Request):
 async def login_endpoint(request: Request):
     body = await request.json()
     username = body.get("username", "").strip()
-    password = body.get("password", "").strip()
-    if not username or not password:
-        return {"ok": False, "error": "Pseudo et mot de passe requis"}
+    password = body.get("password", "").strip()  # peut être vide pour anciens comptes
+    if not username:
+        return {"ok": False, "error": "Pseudo requis"}
     user = verify_password(username, password)
     if not user:
         return {"ok": False, "error": "Pseudo ou mot de passe incorrect"}

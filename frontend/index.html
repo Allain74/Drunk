@@ -1482,7 +1482,7 @@
               <div class="p-card-label">Se connecter</div>
               <input type="text"     id="ct-login-pseudo" placeholder="Pseudo…" autocomplete="off"
                      onkeydown="if(event.key==='Enter') document.getElementById('ct-login-pwd').focus()"/>
-              <input type="password" id="ct-login-pwd"    placeholder="Mot de passe…" style="margin-top:8px"
+              <input type="password" id="ct-login-pwd"    placeholder="Mot de passe… (vide si pas encore défini)" style="margin-top:8px"
                      onkeydown="if(event.key==='Enter') ctSubmitLogin()"/>
               <div class="modal-id-err" id="ct-login-err"></div>
               <button class="btn-primary" onclick="ctSubmitLogin()">Se connecter</button>
@@ -1703,7 +1703,7 @@
     const password = document.getElementById('ct-login-pwd').value.trim();
     const err      = document.getElementById('ct-login-err');
     err.style.display = 'none';
-    if (!username || !password) return;
+    if (!username) return;
     try {
       const data = await fetch(`${API}/login`, {
         method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -1744,6 +1744,11 @@
   let _palmares = [];
 
   async function loadPalmares() {
+    const tbody = document.getElementById('palmares-tbody');
+    if (!myTid) {
+      if (tbody) tbody.innerHTML = `<tr><td colspan="7">${_loginCta('Classement réservé aux membres')}</td></tr>`;
+      return;
+    }
     _palmares = await fetch(`${API}/alltime`).then(r=>r.json());
     // Filtre par follows (comme le Live et le Défi)
     const visible = myTid
@@ -1801,13 +1806,38 @@
   // ── Render ──
   let lastData = [];
 
+  function _loginCta(msg) {
+    return `<div style="text-align:center;padding:60px 20px">
+      <div style="font-size:2.4rem;margin-bottom:14px">🔒</div>
+      <div style="font-weight:800;font-size:1.1rem;margin-bottom:8px">${msg}</div>
+      <div style="font-size:0.83rem;color:var(--sub);margin-bottom:20px">Connecte-toi pour accéder à cette section.</div>
+      <button class="btn-primary" style="max-width:200px;margin:0 auto;display:block" onclick="showTab('profil')">Se connecter →</button>
+    </div>`;
+  }
+
   function render(data) {
     lastData = data;
-    const filtered = filterSnapshot(data);
     const grid  = document.getElementById('grid');
     const empty = document.getElementById('empty');
-    if (!filtered.length) { grid.innerHTML=''; empty.style.display='block'; }
-    else {
+
+    if (!myTid) {
+      grid.innerHTML = '';
+      empty.style.display = 'block';
+      empty.innerHTML = _loginCta('Live réservé aux membres');
+      // Vide aussi le classement en direct
+      const podium = document.getElementById('podium');
+      const tbody  = document.getElementById('defi-tbody');
+      if (podium) podium.innerHTML = '';
+      if (tbody)  tbody.innerHTML  = '';
+      return;
+    }
+
+    const filtered = filterSnapshot(data);
+    if (!filtered.length) {
+      grid.innerHTML = '';
+      empty.innerHTML = '<div class="icon">🫗</div><p>Aucune session active.</p>';
+      empty.style.display = 'block';
+    } else {
       empty.style.display = 'none';
       grid.innerHTML = filtered.map(renderCard).join('');
       renderDefi(filtered);
@@ -1847,6 +1877,11 @@
   let _thune = [];
 
   async function loadThune() {
+    const tbody = document.getElementById('thune-tbody');
+    if (!myTid) {
+      if (tbody) tbody.innerHTML = `<tr><td colspan="3">${_loginCta('Classement réservé aux membres')}</td></tr>`;
+      return;
+    }
     _thune = await fetch(`${API}/coins`).then(r => r.json());
     const medals = ['🥇','🥈','🥉'];
     const tbody = document.getElementById('thune-tbody');
