@@ -537,33 +537,7 @@
     .picker-btn span { display: block; font-size: 0.65rem; font-weight: 400; color: var(--sub); margin-top: 3px; }
     .picker-btn:active { transform: scale(.96); background: var(--border); }
 
-    /* Bannière push notifications */
-    #push-banner {
-      position: fixed; bottom: calc(70px + env(safe-area-inset-bottom) + 8px);
-      left: 12px; right: 12px; z-index: 400;
-      background: linear-gradient(135deg, #6366f1, #8b5cf6);
-      border-radius: 18px;
-      padding: 14px 16px;
-      display: flex; align-items: center; gap: 12px;
-      box-shadow: 0 8px 32px #6366f155;
-      transform: translateY(120%);
-      transition: transform .4s cubic-bezier(.34,1.56,.64,1);
-      pointer-events: none;
-    }
-    #push-banner.show { transform: translateY(0); pointer-events: all; }
-    #push-banner-icon { font-size: 1.6rem; flex-shrink: 0; }
-    #push-banner-text { flex: 1; color: #fff; }
-    #push-banner-title { font-weight: 800; font-size: 0.9rem; }
-    #push-banner-sub { font-size: 0.75rem; opacity: .85; margin-top: 2px; }
-    #push-banner-actions { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
-    .push-banner-btn {
-      padding: 7px 14px; border-radius: 10px; border: none; font-weight: 700;
-      font-size: 0.8rem; cursor: pointer; font-family: inherit; white-space: nowrap;
-    }
-    .push-banner-btn.yes { background: #fff; color: #6366f1; }
-    .push-banner-btn.no  { background: #ffffff22; color: #fff; }
-
-    /* Toast notification */
+/* Toast notification */
     #toast {
       position: fixed; bottom: calc(80px + env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%);
       background: #1a1a2e; color: #fff; padding: 10px 20px;
@@ -987,18 +961,6 @@
   </div>
 </div>
 
-<!-- Bannière push notifications -->
-<div id="push-banner">
-  <div id="push-banner-icon">🔔</div>
-  <div id="push-banner-text">
-    <div id="push-banner-title">Active les notifications</div>
-    <div id="push-banner-sub">Sois alerté quand tes amis boivent !</div>
-  </div>
-  <div id="push-banner-actions">
-    <button class="push-banner-btn yes" onclick="pushBannerAccept()">Activer</button>
-    <button class="push-banner-btn no"  onclick="pushBannerDismiss()">Plus tard</button>
-  </div>
-</div>
 
 <div id="toast"></div>
 
@@ -1760,7 +1722,7 @@
       localStorage.setItem('myTid', String(myTid)); localStorage.setItem('myName', myName); localStorage.setItem('authV', '2');
       await loadFollowing(); updateIdentityBtn(); render(lastData);
       loadProfil();
-      maybeShowPushBanner();
+      autoSubscribePush();
     } catch(e) { err.textContent = 'Erreur réseau.'; err.style.display = 'block'; }
   }
 
@@ -1784,7 +1746,7 @@
       await loadFollowing(); updateIdentityBtn(); render(lastData);
       showToast('✅ Compte créé ! Bienvenue 🍺');
       loadProfil();
-      maybeShowPushBanner();
+      autoSubscribePush();
     } catch(e) { err.textContent = 'Erreur réseau.'; err.style.display = 'block'; }
   }
 
@@ -2147,7 +2109,7 @@
     await loadUsers();
     if (myTid) {
       await loadFollowing();
-      maybeShowPushBanner();
+      autoSubscribePush();
     }
     updateIdentityBtn();
     connect();
@@ -2366,34 +2328,13 @@
       document.getElementById('modal-bg-picker').classList.remove('open');
   }
 
-  // ── Bannière push ─────────────────────────────────────────────────────────
-  let _pushBannerTimer = null;
-
-  async function maybeShowPushBanner() {
-    // Pas de push dispo (navigateur ou iOS non-PWA)
+  // ── Auto-subscribe push après login ──────────────────────────────────────
+  async function autoSubscribePush() {
     if (!('PushManager' in window) || !('serviceWorker' in navigator)) return;
-    // Déjà refusé définitivement par le navigateur
     if (Notification.permission === 'denied') return;
-    // Déjà dismissed par l'utilisateur aujourd'hui
-    if (localStorage.getItem('pushDismissed') === new Date().toDateString()) return;
-    // Déjà abonné
     const sub = await getPushSub();
-    if (sub) return;
-    // Affiche la bannière après 2s
-    _pushBannerTimer = setTimeout(() => {
-      document.getElementById('push-banner').classList.add('show');
-    }, 2000);
-  }
-
-  function pushBannerDismiss() {
-    document.getElementById('push-banner').classList.remove('show');
-    localStorage.setItem('pushDismissed', new Date().toDateString());
-    clearTimeout(_pushBannerTimer);
-  }
-
-  async function pushBannerAccept() {
-    document.getElementById('push-banner').classList.remove('show');
-    await subscribeToPush();
+    if (sub) return; // déjà abonné
+    await subscribeToPush(); // demande la permission directement
   }
 
   // ── Push Notifications ────────────────────────────────────────────────────
