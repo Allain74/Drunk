@@ -590,15 +590,56 @@ def get_following(follower_id: int) -> list[int]:
     return [r["following_id"] for r in rows]
 
 
+def get_followers(following_id: int) -> list[int]:
+    """Retourne les IDs de tous ceux qui suivent cet utilisateur."""
+    rows = _fetchall("SELECT follower_id FROM follows WHERE following_id=?", [following_id])
+    return [r["follower_id"] for r in rows]
+
+
+# ── Push subscriptions ────────────────────────────────────────────────────────
+
+def init_push_subscriptions():
+    _execute("""CREATE TABLE IF NOT EXISTS push_subscriptions (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        telegram_id INTEGER NOT NULL,
+        endpoint    TEXT NOT NULL UNIQUE,
+        p256dh      TEXT NOT NULL,
+        auth        TEXT NOT NULL,
+        created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+    )""")
+
+
+def save_push_subscription(telegram_id: int, endpoint: str, p256dh: str, auth: str):
+    _execute(
+        """INSERT INTO push_subscriptions (telegram_id, endpoint, p256dh, auth)
+           VALUES (?, ?, ?, ?)
+           ON CONFLICT(endpoint) DO UPDATE SET telegram_id=excluded.telegram_id,
+               p256dh=excluded.p256dh, auth=excluded.auth""",
+        [telegram_id, endpoint, p256dh, auth]
+    )
+
+
+def delete_push_subscription(endpoint: str):
+    _execute("DELETE FROM push_subscriptions WHERE endpoint=?", [endpoint])
+
+
+def get_push_subscriptions(telegram_id: int) -> list[dict]:
+    return _fetchall(
+        "SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE telegram_id=?",
+        [telegram_id]
+    )
+
+
 def delete_user(telegram_id: int):
     """Supprime un compte et toutes ses données associées."""
     _pipeline([
-        ("DELETE FROM drink_logs   WHERE telegram_id=?", [telegram_id]),
-        ("DELETE FROM sessions     WHERE telegram_id=?", [telegram_id]),
-        ("DELETE FROM transactions WHERE telegram_id=?", [telegram_id]),
-        ("DELETE FROM follows      WHERE follower_id=? OR following_id=?", [telegram_id, telegram_id]),
-        ("DELETE FROM bets         WHERE challenger_id=? OR opponent_id=?", [telegram_id, telegram_id]),
-        ("DELETE FROM blackjack_players WHERE telegram_id=?", [telegram_id]),
-        ("DELETE FROM banned_users WHERE telegram_id=?", [telegram_id]),
-        ("DELETE FROM users        WHERE telegram_id=?", [telegram_id]),
+        ("DELETE FROM drink_logs          WHERE telegram_id=?", [telegram_id]),
+        ("DELETE FROM sessions            WHERE telegram_id=?", [telegram_id]),
+        ("DELETE FROM transactions        WHERE telegram_id=?", [telegram_id]),
+        ("DELETE FROM follows             WHERE follower_id=? OR following_id=?", [telegram_id, telegram_id]),
+        ("DELETE FROM bets                WHERE challenger_id=? OR opponent_id=?", [telegram_id, telegram_id]),
+        ("DELETE FROM blackjack_players   WHERE telegram_id=?", [telegram_id]),
+        ("DELETE FROM banned_users        WHERE telegram_id=?", [telegram_id]),
+        ("DELETE FROM push_subscriptions  WHERE telegram_id=?", [telegram_id]),
+        ("DELETE FROM users               WHERE telegram_id=?", [telegram_id]),
     ])

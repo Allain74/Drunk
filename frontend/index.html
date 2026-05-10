@@ -1573,6 +1573,7 @@
         <!-- Actions compte -->
         <div class="p-card">
           <div class="p-card-label">Compte</div>
+          <button class="p-action-btn" id="push-btn" onclick="togglePush()">🔔 Activer les notifications</button>
           <button class="p-action-btn" onclick="toggleTheme()">🌙 Changer le thème</button>
           <button class="p-action-btn" onclick="logout();showTab('profil')">🚪 Se déconnecter</button>
           <button class="p-action-btn danger" onclick="openDeleteModal()">🗑️ Supprimer mon compte</button>
@@ -1599,6 +1600,9 @@
         if (poidsEl && u.weight_kg) poidsEl.value = u.weight_kg;
       }
     } catch(e) {}
+
+    // Mise à jour du bouton notifications
+    updatePushBtn();
   }
 
   function profilSelectGenre(g) {
@@ -2154,6 +2158,89 @@
   function closeDrinkPicker(e) {
     if (!e || e.target === document.getElementById('modal-bg-picker'))
       document.getElementById('modal-bg-picker').classList.remove('open');
+  }
+
+  // ── Push Notifications ────────────────────────────────────────────────────
+  function urlBase64ToUint8Array(b64) {
+    const pad = '='.repeat((4 - b64.length % 4) % 4);
+    const raw = atob((b64 + pad).replace(/-/g, '+').replace(/_/g, '/'));
+    return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+  }
+
+  let _vapidKey = null;
+  async function getVapidKey() {
+    if (_vapidKey) return _vapidKey;
+    try {
+      const d = await fetch(`${API}/push/vapid-public-key`).then(r => r.json());
+      _vapidKey = d.key;
+      return _vapidKey;
+    } catch(e) { return null; }
+  }
+
+  async function getPushSub() {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return null;
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      return await reg.pushManager.getSubscription();
+    } catch(e) { return null; }
+  }
+
+  async function updatePushBtn() {
+    const btn = document.getElementById('push-btn');
+    if (!btn) return;
+    if (!('PushManager' in window)) {
+      btn.textContent = '🔕 Notifications non supportées';
+      btn.disabled = true;
+      return;
+    }
+    const sub = await getPushSub();
+    btn.textContent = sub ? '🔕 Désactiver les notifications' : '🔔 Activer les notifications';
+  }
+
+  async function togglePush() {
+    if (!myTid) { showTab('profil'); return; }
+    const sub = await getPushSub();
+    if (sub) { await unsubscribePush(sub); }
+    else      { await subscribeToPush(); }
+  }
+
+  async function subscribeToPush() {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      showToast('❌ Notifications non supportées ici'); return;
+    }
+    const key = await getVapidKey();
+    if (!key) { showToast('❌ Clé VAPID manquante — configure VAPID_PUBLIC_KEY'); return; }
+    try {
+      const perm = await Notification.requestPermission();
+      if (perm !== 'granted') { showToast('❌ Permission refusée'); return; }
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(key),
+      });
+      const j = sub.toJSON();
+      await fetch(`${API}/push/subscribe`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ telegram_id: myTid, endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth }),
+      });
+      showToast('🔔 Notifications activées !');
+      updatePushBtn();
+    } catch(e) { showToast('❌ ' + e.message); }
+  }
+
+  async function unsubscribePush(sub) {
+    try {
+      const endpoint = sub.endpoint;
+      await sub.unsubscribe();
+      await fetch(`${API}/push/unsubscribe`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ endpoint }),
+      });
+      showToast('🔕 Notifications désactivées');
+      updatePushBtn();
+    } catch(e) { showToast('❌ ' + e.message); }
   }
 
   // Ouvre le bon onglet si ?tab= dans l'URL (shortcuts PWA)

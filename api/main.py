@@ -19,12 +19,14 @@ from data.database import (
     get_all_balances, get_transactions,
     get_blackjack_session, get_blackjack_players, update_blackjack_session,
     update_blackjack_player, create_blackjack_session, add_blackjack_player,
-    follow_user, unfollow_user, is_following, get_following,
+    follow_user, unfollow_user, is_following, get_following, get_followers,
     verify_password,
     log_drink as db_log_drink, start_session, end_session,
     upsert_user, set_password, get_user_by_username,
     delete_last_drink, update_max_bac, is_username_taken,
     get_session_drinks, delete_user,
+    init_push_subscriptions, save_push_subscription,
+    delete_push_subscription, get_push_subscriptions,
 )
 from core.recap import build_weekly_recap
 from core.widmark import total_bac, bac_label, sober_in_hours, alcohol_grams
@@ -32,6 +34,52 @@ from core.blackjack import new_deck, hand_value, display_hand, is_blackjack
 from core.drinks import DRINKS
 
 load_dotenv()
+
+# ── Web Push (VAPID) ──────────────────────────────────────────────────────────
+try:
+    from pywebpush import webpush, WebPushException
+    _PUSH_ENABLED = True
+except ImportError:
+    _PUSH_ENABLED = False
+
+VAPID_PRIVATE_KEY = os.environ.get("VAPID_PRIVATE_KEY", "")
+VAPID_PUBLIC_KEY  = os.environ.get("VAPID_PUBLIC_KEY", "")
+VAPID_CLAIMS      = {"sub": "mailto:admin@drunk.app"}
+
+
+def _send_push(telegram_id: int, title: str, body: str, url: str = "/"):
+    """Envoie une notification push à tous les appareils d'un utilisateur."""
+    if not _PUSH_ENABLED or not VAPID_PRIVATE_KEY:
+        return
+    subs = get_push_subscriptions(telegram_id)
+    for sub in subs:
+        try:
+            webpush(
+                subscription_info={
+                    "endpoint": sub["endpoint"],
+                    "keys": {"p256dh": sub["p256dh"], "auth": sub["auth"]},
+                },
+                data=json.dumps({"title": title, "body": body, "url": url}),
+                vapid_private_key=VAPID_PRIVATE_KEY,
+                vapid_claims=VAPID_CLAIMS,
+            )
+        except Exception as e:
+            # Subscription expirée → on la supprime
+            try:
+                resp = getattr(e, "response", None)
+                if resp and resp.status_code in (404, 410):
+                    delete_push_subscription(sub["endpoint"])
+            except Exception:
+                pass
+
+
+async def _notify_followers(actor_id: int, title: str, body: str, url: str = "/"):
+    """Notifie en tâche de fond tous les abonnés d'un utilisateur."""
+    import asyncio
+    loop = asyncio.get_event_loop()
+    followers = get_followers(actor_id)
+    for fid in followers:
+        loop.run_in_executor(None, _send_push, fid, title, body, url)
 
 _ws_clients: set[WebSocket] = set()
 _bj_clients: dict[str, set[WebSocket]] = {}
@@ -47,6 +95,7 @@ RENDER_URL = os.environ.get("RENDER_URL", "https://drunk-l34t.onrender.com")
 async def lifespan(app: FastAPI):
     global _bot_app
     init_db()
+    init_push_subscriptions()
 
     from bot.bot import create_application
     _bot_app = create_application()
@@ -601,6 +650,33 @@ async def delete_account_endpoint(request: Request):
     return {"ok": True}
 
 
+# ── Push notifications endpoints ──────────────────────────────────────────────
+
+@app.get("/push/vapid-public-key")
+def push_vapid_key():
+    return {"key": VAPID_PUBLIC_KEY}
+
+@app.post("/push/subscribe")
+async def push_subscribe(request: Request):
+    body        = await request.json()
+    telegram_id = body.get("telegram_id")
+    sub         = body.get("subscription", {})
+    endpoint    = sub.get("endpoint")
+    p256dh      = (sub.get("keys") or {}).get("p256dh")
+    auth        = (sub.get("keys") or {}).get("auth")
+    if not all([telegram_id, endpoint, p256dh, auth]):
+        return {"ok": False, "error": "Données incomplètes"}
+    save_push_subscription(telegram_id, endpoint, p256dh, auth)
+    return {"ok": True}
+
+@app.post("/push/unsubscribe")
+async def push_unsubscribe(request: Request):
+    body     = await request.json()
+    endpoint = body.get("endpoint")
+    if endpoint:
+        delete_push_subscription(endpoint)
+    return {"ok": True}
+
 # ── Logger un verre depuis le web ─────────────────────────────────────────────
 
 @app.post("/log-drink")
@@ -628,6 +704,12 @@ async def log_drink_web(request: Request):
     update_max_bac(telegram_id, bac)
 
     await _broadcast(build_snapshot())
+
+    # Notifier les abonnés
+    bac_label_str = bac_label(bac)
+    notif_body = f"vient de boire {drink.name} · {bac:.2f} g/L ({bac_label_str})"
+    await _notify_followers(telegram_id, f"🍺 {user['username']}", notif_body, "/?tab=live")
+
     return {
         "ok": True,
         "bac": round(bac, 3),
