@@ -3145,15 +3145,15 @@ async function bjRematch() {
 async function bjLeave() {
   if (!_bjToken) { closeBlackjack(); return; }
   const state = _bjLastState;
-  const isWaiting = state && state.status === 'waiting';
+  const status = state ? state.status : null;
 
-  // Pendant la partie active : juste fermer la vue (on reste dans la session)
-  if (state && state.status === 'active') {
+  // Cartes visibles (active ou finished) → fermer sans API, aucun remboursement
+  if (status === 'active' || status === 'finished') {
     closeBlackjack();
     return;
   }
 
-  // En attente ou terminé : quitter vraiment (remboursement si waiting)
+  // Partie pas encore lancée → quitter + remboursement de la mise
   const r = await fetch(`${API}/blackjack/${_bjToken}/leave`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ telegram_id: myTid }),

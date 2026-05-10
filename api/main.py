@@ -922,22 +922,20 @@ async def bj_leave(token: str, request: Request):
     if not me:
         return {"ok": True}  # Pas dans cette session
 
-    refunded = 0
+    # Cartes pas encore distribuées → remboursement possible
     if sess["status"] == "waiting":
-        # Rembourser la mise
         add_coins(telegram_id, me["bet"], "Blackjack - remboursement mise")
-        refunded = me["bet"]
-        # Supprimer le joueur de la session
         from data.database import _execute
         _execute("DELETE FROM blackjack_players WHERE session_id=? AND telegram_id=?",
                  [sess["id"], telegram_id])
-        # Si plus personne ou si c'était le créateur → annuler la session
         remaining = [p for p in players if p["telegram_id"] != telegram_id]
         if not remaining or sess["creator_id"] == telegram_id:
             update_blackjack_session(sess["id"], status="finished")
         await _bj_broadcast(token)
+        return {"ok": True, "refunded": me["bet"]}
 
-    return {"ok": True, "refunded": refunded}
+    # Cartes visibles (active ou finished) → aucun remboursement
+    return {"ok": True, "refunded": 0}
 
 
 @app.post("/blackjack/{token}/start-web")
