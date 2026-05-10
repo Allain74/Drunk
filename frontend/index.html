@@ -265,36 +265,31 @@
     .no-session { opacity:0.45; }
 
     /* ── Graphique modal ── */
+    /* Historique — plein écran (style modal-bg4) */
     .modal-bg {
-      display:none;
       position:fixed; inset:0;
-      background:#0007;
-      z-index:100;
-      align-items:center;
-      justify-content:center;
-      padding:16px;
+      background:var(--bg);
+      z-index:510;
+      display:flex; flex-direction:column;
+      overflow:hidden;
+      transform:translateX(100%);
+      transition:transform .2s cubic-bezier(.4,0,.2,1);
     }
-
-    .modal-bg.open { display:flex; }
-
-    .modal {
-      background:var(--card);
-      border-radius:20px;
-      padding:24px;
-      width:100%;
-      max-width:560px;
-      position:relative;
+    .modal-bg.open { transform:translateX(0); }
+    .modal-chart-hd {
+      display:flex; align-items:center; gap:10px;
+      padding:0 16px; min-height:52px;
+      padding-top:max(14px,env(safe-area-inset-top));
+      padding-bottom:12px;
+      background:var(--card); border-bottom:1px solid var(--border);
+      flex-shrink:0;
     }
-
-    .modal h3 { font-size:1.1rem; font-weight:700; margin-bottom:16px; }
-    .modal-close {
-      position:absolute; top:16px; right:16px;
-      background:none; border:none; font-size:1.4rem;
-      cursor:pointer; color:var(--sub);
-    }
-    .drink-list { margin-top:16px; border-top:1px solid var(--border); padding-top:12px; }
-    .drink-list h4 { font-size:0.75rem; color:var(--sub); font-weight:600; text-transform:uppercase; margin-bottom:8px; }
-    .drink-item { display:flex; justify-content:space-between; font-size:0.82rem; padding:4px 0; border-bottom:1px solid var(--border); }
+    .modal-chart-body { flex:1; overflow-y:auto; padding:20px 16px 40px; display:flex; flex-direction:column; }
+    .modal-chart-canvas-wrap { flex:1; min-height:240px; position:relative; }
+    /* (ancien modal card — inutilisé désormais) */
+    .modal { display:none; }
+    .modal-close { display:none; }
+    .drink-list { display:none; }
     .drink-item:last-child { border-bottom:none; }
     .drink-time { color:var(--sub); font-size:0.75rem; }
 
@@ -443,11 +438,11 @@
     .session-drink-name { font-weight:700; }
     .session-drink-time { color:var(--sub); font-size:0.78rem; }
     /* Stats sociales */
-    .profile-social-row { display:flex; gap:8px; margin:10px 0; }
-    .profile-social-chip { flex:1; text-align:center; background:var(--bg); border-radius:10px; padding:8px 4px; cursor:pointer; transition:opacity .15s; }
-    .profile-social-chip:hover { opacity:.75; }
-    .profile-social-chip-val { font-size:1.1rem; font-weight:800; }
-    .profile-social-chip-lbl { font-size:0.6rem; color:var(--sub); margin-top:1px; }
+    .profile-social-row { display:flex; gap:10px; margin:14px 0; }
+    .profile-social-chip { flex:1; text-align:center; background:var(--bg); border-radius:14px; padding:14px 4px; cursor:pointer; border:1.5px solid var(--border); transition:border-color .15s,background .15s; -webkit-tap-highlight-color:transparent; }
+    .profile-social-chip:active { background:#6366f115; border-color:#6366f1; }
+    .profile-social-chip-val { font-size:1.8rem; font-weight:900; line-height:1; }
+    .profile-social-chip-lbl { font-size:0.62rem; color:var(--sub); margin-top:4px; text-transform:uppercase; letter-spacing:.6px; font-weight:700; }
     .profile-badge.admin { background:#facc15; color:#78350f; }
     .profile-badge.self  { background:#6366f1; color:#fff; }
     .profile-stats { display:flex; gap:10px; margin-bottom:16px; }
@@ -457,16 +452,16 @@
     .profile-stat.clickable { cursor:pointer; transition:opacity .15s; }
     .profile-stat.clickable:hover { opacity:.75; }
     .profile-actions { display:flex; gap:10px; margin-top:8px; }
-    /* Overlay liste sociale (abonnés / suivis d'un profil) */
+    /* Overlay liste sociale (abonnés / suivis d'un profil) — plein écran */
     /* Avatar plein écran */
     .avatar-fs-overlay { position:fixed; inset:0; z-index:3500; background:#000000cc; display:flex; align-items:center; justify-content:center; cursor:zoom-out; }
     .avatar-fs-img { width:min(80vw,320px); height:min(80vw,320px); border-radius:50%; object-fit:cover; box-shadow:0 8px 40px #0008; }
     .avatar-fs-gradient { width:min(80vw,320px); height:min(80vw,320px); border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:min(22vw,110px); font-weight:900; color:#fff; box-shadow:0 8px 40px #0008; }
-    .social-list-overlay { position:fixed; inset:0; z-index:2200; background:#00000070; display:flex; align-items:flex-end; }
-    .social-list-box { background:var(--card); border-radius:24px 24px 0 0; padding:20px 20px 32px; width:100%; max-height:75vh; overflow-y:auto; }
-    .social-list-hd { display:flex; align-items:center; gap:10px; margin-bottom:16px; }
-    .social-list-title { font-weight:900; font-size:1.05rem; flex:1; }
-    .social-list-row { display:flex; align-items:center; gap:12px; padding:10px 0; border-bottom:1px solid var(--border); }
+    .social-list-overlay { position:fixed; inset:0; z-index:2200; background:var(--bg); display:flex; flex-direction:column; overflow:hidden; }
+    .social-list-hd { display:flex; align-items:center; gap:10px; padding:0 16px; min-height:52px; padding-top:max(14px,env(safe-area-inset-top)); padding-bottom:12px; background:var(--card); border-bottom:1px solid var(--border); flex-shrink:0; }
+    .social-list-title { font-weight:900; font-size:1rem; flex:1; }
+    .social-list-box { flex:1; overflow-y:auto; padding:8px 16px 32px; }
+    .social-list-row { display:flex; align-items:center; gap:12px; padding:12px 0; border-bottom:1px solid var(--border); }
     .social-list-row:last-child { border-bottom:none; }
     .social-list-name { flex:1; font-weight:700; font-size:0.92rem; cursor:pointer; }
     .social-list-name:hover { text-decoration:underline; }
@@ -701,6 +696,8 @@
 .bj-pslot.r-lose      { border-color: rgba(239,68,68,0.4); opacity: .7; }
 .bj-pslot.r-push      { border-color: #facc15; }
 .bj-pslot.r-blackjack { border-color: #facc15; box-shadow: 0 0 20px rgba(250,204,21,0.35); }
+.bj-pslot.p-left      { opacity: .4; filter: grayscale(0.6); }
+.bj-pslot.p-waiting-next { opacity: .6; border-style: dashed; }
 @keyframes slotPulse {
   0%,100% { box-shadow: 0 0 0 3px rgba(99,102,241,0.18), 0 0 16px rgba(99,102,241,0.1); }
   50%      { box-shadow: 0 0 0 5px rgba(99,102,241,0.28), 0 0 28px rgba(99,102,241,0.25); }
@@ -885,7 +882,7 @@
       #map { height: 280px; }
 
       /* Modaux : pleine largeur sur mobile */
-      .modal, .modal2, .modal3, .modal-id, #modal-bg-edit .modal-id, #modal-bg-delete .modal-id, #modal-bg-picker .modal {
+      .modal2, .modal3, .modal-id, #modal-bg-edit .modal-id, #modal-bg-delete .modal-id, #modal-bg-picker .modal {
         max-width: 100%;
         border-radius: 20px 20px 0 0;
         position: fixed;
@@ -896,7 +893,7 @@
         max-height: 90vh;
         overflow-y: auto;
       }
-      .modal-bg, .modal-bg2, .modal-bg3, .modal-bg-id, #modal-bg-edit, #modal-bg-delete, #modal-bg-picker {
+      .modal-bg2, .modal-bg3, .modal-bg-id, #modal-bg-edit, #modal-bg-delete, #modal-bg-picker {
         align-items: flex-end;
         padding: 0;
       }
@@ -1196,12 +1193,19 @@
 </div>
 
 <!-- Modal graphique -->
-<div class="modal-bg" id="modal-bg" onclick="closeModal(event)">
-  <div class="modal">
-    <button class="modal-close" onclick="closeModal()">✕</button>
-    <h3 id="modal-title">Évolution du TAC</h3>
-    <canvas id="chart" height="200"></canvas>
-    <div class="drink-list" id="drink-list"></div>
+<div class="modal-bg" id="modal-bg">
+  <div class="modal-chart-hd">
+    <button class="modal4-back" onclick="closeModal()">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+      Retour
+    </button>
+    <span style="font-weight:900;font-size:1rem;flex:1" id="modal-title">Historique</span>
+  </div>
+  <div class="modal-chart-body">
+    <div id="chart-empty" style="display:none;color:var(--sub);text-align:center;padding:40px 0;font-size:0.9rem">Aucun verre enregistré pour le moment 🫗</div>
+    <div class="modal-chart-canvas-wrap">
+      <canvas id="chart"></canvas>
+    </div>
   </div>
 </div>
 
@@ -1418,6 +1422,8 @@
     document.querySelectorAll('.game-overlay').forEach(el => el.classList.remove('open'));
     // Profil plein écran
     document.getElementById('modal-bg4')?.classList.remove('open');
+    // Historique plein écran
+    document.getElementById('modal-bg')?.classList.remove('open');
     // Social list (créé dynamiquement)
     document.getElementById('social-list-overlay')?.remove();
     // Avatar fullscreen
@@ -1684,16 +1690,16 @@
     const overlay = document.createElement('div');
     overlay.id = 'social-list-overlay';
     overlay.className = 'social-list-overlay';
-    overlay.onclick = e => { if (e.target === overlay) closeSocialList(); };
     overlay.innerHTML = `
-      <div class="social-list-box">
-        <div class="social-list-hd">
-          <button onclick="closeSocialList()" style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:var(--sub);padding:0">←</button>
-          <div class="social-list-title">${esc(title)}</div>
-          <div style="font-size:0.78rem;color:var(--sub)">${ids.length}</div>
-        </div>
-        ${rows}
-      </div>`;
+      <div class="social-list-hd">
+        <button onclick="closeSocialList()" class="modal4-back">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+          Retour
+        </button>
+        <div class="social-list-title">${esc(title)}</div>
+        <div style="font-size:0.82rem;color:var(--sub);font-weight:700;min-width:32px;text-align:right">${ids.length}</div>
+      </div>
+      <div class="social-list-box">${rows}</div>`;
     document.body.appendChild(overlay);
   }
 
@@ -1754,8 +1760,7 @@
   }
 
   function openChartFromProfile(username) {
-    closeModal4();
-    openChart(username);
+    openChart(username); // s'ouvre par-dessus le profil (z-index 510 > 500)
   }
 
   function closeModal4() {
@@ -1949,32 +1954,31 @@
     document.getElementById('modal-title').textContent = `📈 ${username}`;
     document.getElementById('modal-bg').classList.add('open');
 
+    const emptyEl = document.getElementById('chart-empty');
+    const canvasEl = document.getElementById('chart');
+
     const history = await fetch(`${API}/history`).then(r=>r.json());
     const user = history.find(u => u.username === username);
-    const drinkList = document.getElementById('drink-list');
+
     if (!user || !user.points.length) {
-      document.getElementById('chart').style.display='none';
-      drinkList.innerHTML='';
+      emptyEl.style.display = 'block';
+      canvasEl.style.display = 'none';
+      if (chartInst) { chartInst.destroy(); chartInst = null; }
       return;
     }
+    emptyEl.style.display = 'none';
+    canvasEl.style.display = 'block';
 
-    // Liste des boissons
-    drinkList.innerHTML = `<h4>Boissons consommées</h4>` +
-      user.points.map(p => {
-        const t = new Date(p.t);
-        const heure = t.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
-        const nom = DRINK_NAMES[p.drink_key] || p.drink_key;
-        return `<div class="drink-item"><span>${nom}</span><span class="drink-time">${heure}</span></div>`;
-      }).join('');
-
-    // Calcul TAC à chaque point
-    const R = user.gender === 'homme' ? 0.68 : 0.55;
+    // Fenêtre 24 h : de (now - 24h) à now, un point toutes les 20 min (72 points)
+    const R    = user.gender === 'homme' ? 0.68 : 0.55;
     const ELIM = 0.15;
-    const ABS = 0.5;
-    const now = new Date();
+    const ABS  = 0.5;
+    const now  = Date.now();
+    const WIN  = 24 * 3600 * 1000; // 24 h en ms
+    const STEP = 20 * 60 * 1000;   // 20 min
+    const N    = WIN / STEP;       // 72 points
 
-    // Points de temps : chaque drink + maintenant
-    const times = [...user.points.map(p => new Date(p.t)), now];
+    const times  = Array.from({length: N + 1}, (_, i) => new Date(now - WIN + i * STEP));
     const labels = times.map(t => t.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}));
 
     const bacs = times.map(t => {
@@ -1987,38 +1991,50 @@
         const elim = ELIM * Math.max(0, elapsed - ABS);
         total += Math.max(0, peak - elim);
       }
-      return Math.max(0, total);
+      return +Math.max(0, total).toFixed(3);
     });
 
     if (chartInst) chartInst.destroy();
-    const ctx = document.getElementById('chart').getContext('2d');
-    document.getElementById('chart').style.display='block';
+    const ctx = canvasEl.getContext('2d');
     chartInst = new Chart(ctx, {
       type: 'line',
       data: {
         labels,
         datasets: [{
           label: 'TAC (g/L)',
-          data: bacs.map(b => b.toFixed(3)),
+          data: bacs,
           borderColor: '#6366f1',
-          backgroundColor: '#6366f122',
+          backgroundColor: 'rgba(99,102,241,0.12)',
           fill: true,
           tension: 0.4,
-          pointRadius: 4,
+          pointRadius: 0,
+          borderWidth: 2.5,
         }]
       },
       options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 400 },
         plugins: {
           legend: { display: false },
-          annotation: {}
+          tooltip: {
+            callbacks: { label: ctx => `${ctx.parsed.y.toFixed(2)} g/L` }
+          }
         },
         scales: {
           y: {
             min: 0,
-            grid: { color: '#e2e8f020' },
-            ticks: { callback: v => v + ' g/L' }
+            grid: { color: 'rgba(255,255,255,0.06)' },
+            ticks: { color: 'var(--sub)', callback: v => v.toFixed(2) + ' g/L', font:{size:11} }
           },
-          x: { grid: { display: false } }
+          x: {
+            grid: { display: false },
+            ticks: {
+              color: 'var(--sub)', font:{size:10},
+              maxRotation: 0,
+              maxTicksLimit: 8,
+            }
+          }
         }
       }
     });
@@ -2650,10 +2666,8 @@
     }
   }
 
-  function closeModal(e) {
-    if (!e || e.target === document.getElementById('modal-bg') || e.type === 'click' && !e.target.closest('.modal')) {
-      document.getElementById('modal-bg').classList.remove('open');
-    }
+  function closeModal() {
+    document.getElementById('modal-bg').classList.remove('open');
   }
 
   // ── Render ──
@@ -3434,7 +3448,8 @@
     </div>
     <!-- Modal rejoindre -->
     <div id="bj-join-modal" style="display:none;background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px;margin-top:16px">
-      <div style="font-weight:800;margin-bottom:10px">Rejoindre la table de <span id="bj-join-creator"></span></div>
+      <div style="font-weight:800;margin-bottom:6px">Rejoindre la table de <span id="bj-join-creator"></span></div>
+      <div id="bj-join-active-note" style="display:none;font-size:0.8rem;color:#f59e0b;margin-bottom:10px">⚠️ Partie en cours — tu attendras la prochaine main</div>
       <label style="font-size:0.72rem;font-weight:700;color:var(--sub);display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:.8px">Ta mise (🪙)</label>
       <input id="bj-join-bet" type="number" min="10" value="50"
         style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:10px;color:var(--text);padding:11px 14px;font-size:0.95rem;font-family:inherit;outline:none;margin-bottom:12px">
@@ -3607,9 +3622,9 @@ async function bjLoadSessions() {
       return;
     }
     el.innerHTML = open.map(s => {
-      const playerNames = s.players.map(p => p.username).join(', ');
+      const playerNames = s.players.filter(p => p.status !== 'left').map(p => p.username).join(', ');
       const statusLabel = s.status === 'waiting' ? 'En attente' : 'En cours';
-      const alreadyIn   = s.players.some(p => Number(p.telegram_id) === Number(myTid));
+      const alreadyIn   = s.players.some(p => Number(p.telegram_id) === Number(myTid) && p.status !== 'left');
       const isOwner     = Number(s.creator_id ?? 0) === Number(myTid);
       const canClose    = alreadyIn && s.status === 'waiting';
       const closeBtn    = canClose
@@ -3624,7 +3639,7 @@ async function bjLoadSessions() {
              🚀 Lancer
            </button>`
         : '';
-      return `<div class="bj-session-card" onclick="bjClickSession('${s.token}','${s.creator}',${alreadyIn})">
+      return `<div class="bj-session-card" onclick="bjClickSession('${s.token}','${s.creator}',${alreadyIn},'${s.status}')">
         <div class="bj-sc-top">
           <span class="bj-sc-creator">🃏 Table de ${_escHtml(s.creator)}</span>
           <div style="display:flex;align-items:center;gap:6px">
@@ -3652,7 +3667,7 @@ async function bjQuickStart(token) {
   bjEnterGame();
 }
 
-function bjClickSession(token, creator, alreadyIn) {
+function bjClickSession(token, creator, alreadyIn, status) {
   if (alreadyIn) {
     _bjToken = token;
     bjEnterGame();
@@ -3660,6 +3675,8 @@ function bjClickSession(token, creator, alreadyIn) {
   }
   _bjToken = token;
   document.getElementById('bj-join-creator').textContent = creator;
+  const activeNote = document.getElementById('bj-join-active-note');
+  activeNote.style.display = (status === 'active') ? 'block' : 'none';
   document.getElementById('bj-join-modal').style.display = 'block';
   document.getElementById('bj-join-modal').scrollIntoView({ behavior: 'smooth' });
 }
@@ -3683,6 +3700,7 @@ async function bjJoin() {
   }).then(r => r.json()).catch(() => ({ ok: false, error: 'Erreur réseau' }));
   if (!r.ok) { showToast('❌ ' + r.error); return; }
   document.getElementById('bj-join-modal').style.display = 'none';
+  if (r.waiting_next) showToast('⏳ Tu rejoindras à la prochaine main !');
   bjEnterGame();
 }
 
@@ -3814,8 +3832,8 @@ function _bjRender(state) {
     const realHand = hand.filter(c => c !== '?');
     const total = realHand.length ? _bjHandVal(realHand) : 0;
     const isPlaying = p.status === 'playing' && state.status === 'active';
-    const badgeCls = { playing:'b-playing', stand:'b-stand', bust:'b-bust', done:'b-done', waiting:'b-waiting' }[p.status] || 'b-waiting';
-    const badgeTxt = { playing:'🎮 À toi !', stand:'✋ Stand', bust:'💥 Bust', done:'✅', waiting:'⏳ Attend' }[p.status] || p.status;
+    const badgeCls = { playing:'b-playing', stand:'b-stand', bust:'b-bust', done:'b-done', waiting:'b-waiting', waiting_next:'b-waiting', left:'b-bust' }[p.status] || 'b-waiting';
+    const badgeTxt = { playing:'🎮 À toi !', stand:'✋ Stand', bust:'💥 Bust', done:'✅', waiting:'⏳ Attend', waiting_next:'⏳ Prochaine main', left:'🚪 Parti' }[p.status] || p.status;
     const resultMap = {
       win:       '<div class="bj-result bj-r-win">🏆 Gagné !</div>',
       lose:      '<div class="bj-result bj-r-lose">💸 Perdu</div>',
@@ -3825,6 +3843,8 @@ function _bjRender(state) {
     const slotCls = [
       'bj-pslot',
       isMe ? 'is-me' : '',
+      p.status === 'left' ? 'p-left' : '',
+      p.status === 'waiting_next' ? 'p-waiting-next' : '',
       p.result ? `r-${p.result}` : (isPlaying && isMe ? 's-playing' : ''),
     ].filter(Boolean).join(' ');
     return `<div class="${slotCls}">
@@ -3864,21 +3884,17 @@ function _bjRender(state) {
       bh.disabled = bs.disabled = false;
       bh.textContent = '🃏 Tirer'; bs.textContent = '✋ Rester';
     }
-  } else if (state.status === 'waiting' && isCreator) {
+  } else if (state.status === 'waiting') {
+    // startBar contient déjà Lancer + Quitter
     startBar.style.display = 'flex';
-    document.getElementById('bj-start-btn').disabled = false;
-    document.getElementById('bj-start-btn').textContent = '🚀 Lancer la partie';
-  } else if (state.status === 'waiting' && !isCreator) {
-    // Joueur invité en attente : montrer juste Quitter
-    quitBar.style.display = 'flex';
+    const startBtn = document.getElementById('bj-start-btn');
+    startBtn.disabled = !isCreator;
+    startBtn.textContent = isCreator ? '🚀 Lancer la partie' : '⏳ En attente du créateur…';
   } else if (state.status === 'finished') {
-    if (isCreator) {
-      rematchBar.style.display = 'flex';
-      document.getElementById('bj-rematch-btn').disabled = false;
-      document.getElementById('bj-rematch-btn').textContent = '🔄 Rejouer';
-    } else {
-      quitBar.style.display = 'flex';
-    }
+    // Rejouer + Quitter pour tous
+    rematchBar.style.display = 'flex';
+    document.getElementById('bj-rematch-btn').disabled = false;
+    document.getElementById('bj-rematch-btn').textContent = '🔄 Rejouer';
   }
 
   _bjRefreshCoins();
@@ -3923,7 +3939,7 @@ async function bjStart() {
 }
 
 async function bjRematch() {
-  const btn = document.querySelector('#bj-rematch-bar button');
+  const btn = document.getElementById('bj-rematch-btn');
   if (btn) { btn.textContent = '⏳ …'; btn.disabled = true; }
   const r = await fetch(`${API}/blackjack/${_bjToken}/rematch`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -3934,10 +3950,8 @@ async function bjRematch() {
     if (btn) { btn.textContent = '🔄 Rejouer'; btn.disabled = false; }
     return;
   }
-  _bjToken = r.token;
-  _bjLastState = null; _bjPrevDealerLen = 0;
-  if (_bjWs) _bjWs.close();
-  _bjWsConnect();
+  // Même token, même session — le WS reçoit le broadcast automatiquement
+  _bjPrevDealerLen = 0;
 }
 
 async function bjCloseTable(token) {
@@ -3953,23 +3967,13 @@ async function bjCloseTable(token) {
 
 async function bjLeave() {
   if (!_bjToken) { bjBackToLobby(); return; }
-  const state = _bjLastState;
-  const status = state ? state.status : null;
-
-  // Partie terminée → retour lobby sans appel API
-  if (status === 'finished') {
-    bjBackToLobby();
-    return;
-  }
-
-  // Waiting ou active → appel API (remboursement si waiting, clôture si active)
+  // Toujours appeler l'API pour se retirer proprement de la session
   const r = await fetch(`${API}/blackjack/${_bjToken}/leave`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ telegram_id: myTid }),
   }).then(r => r.json()).catch(() => ({ ok: true, refunded: 0 }));
 
   if (r.refunded > 0) showToast(`✅ Mise remboursée : +${r.refunded} 🪙`);
-  else if (status === 'active') showToast('🚪 Partie clôturée');
   _bjRefreshCoins();
   bjBackToLobby();
 }
