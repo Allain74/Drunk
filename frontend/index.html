@@ -2,7 +2,7 @@
 <html lang="fr" data-theme="light">
 <head>
   <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
   <title>Drunk 🍺 — Tracker de taux d'alcool</title>
 
   <!-- ── PWA ───────────────────────────────────────────────────────────────── -->
@@ -558,9 +558,10 @@
 
     /* ── Safe area iOS (notch + home indicator) ── */
     body {
+      padding-top:    max(20px, env(safe-area-inset-top));
       padding-bottom: calc(70px + env(safe-area-inset-bottom));
-      padding-left:  max(16px, env(safe-area-inset-left));
-      padding-right: max(16px, env(safe-area-inset-right));
+      padding-left:   max(16px, env(safe-area-inset-left));
+      padding-right:  max(16px, env(safe-area-inset-right));
     }
 
     /* ════════════════════════════════════════════════════════════════════════
