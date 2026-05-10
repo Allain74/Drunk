@@ -199,16 +199,6 @@ def init_db():
         following_id INTEGER NOT NULL,
         PRIMARY KEY (follower_id, following_id)
     )""")
-    # Populate: everyone follows everyone by default (idempotent)
-    _all = get_all_users()
-    _pairs = [
-        ("INSERT OR IGNORE INTO follows (follower_id, following_id) VALUES (?, ?)",
-         [u1["telegram_id"], u2["telegram_id"]])
-        for u1 in _all for u2 in _all
-        if u1["telegram_id"] != u2["telegram_id"]
-    ]
-    if _pairs:
-        _pipeline(_pairs)
 
 
 def upsert_user(telegram_id: int, username: str, weight_kg: float, gender: str):
@@ -611,6 +601,32 @@ def get_followers(following_id: int) -> list[int]:
     """Retourne les IDs de tous ceux qui suivent cet utilisateur."""
     rows = _fetchall("SELECT follower_id FROM follows WHERE following_id=?", [following_id])
     return [r["follower_id"] for r in rows]
+
+
+def get_blackjack_stats(telegram_id: int) -> dict:
+    """Retourne les stats blackjack d'un joueur : parties jouées, gagnées, perdues, égalités."""
+    rows = _fetchall(
+        "SELECT result FROM blackjack_players WHERE telegram_id=? AND result IS NOT NULL",
+        [telegram_id]
+    )
+    played = len(rows)
+    won    = sum(1 for r in rows if r["result"] in ("win", "blackjack"))
+    lost   = sum(1 for r in rows if r["result"] == "lose")
+    push   = sum(1 for r in rows if r["result"] == "push")
+    return {"played": played, "won": won, "lost": lost, "push": push}
+
+
+def get_profile_follows(telegram_id: int) -> dict:
+    """Retourne le nombre d'abonnés/abonnements + la liste de ceux que suit cet utilisateur."""
+    following_ids = get_following(telegram_id)
+    follower_ids  = get_followers(telegram_id)
+    following_users = [get_user(fid) for fid in following_ids]
+    following_users = [u for u in following_users if u]
+    return {
+        "followers_count": len(follower_ids),
+        "following_count": len(following_ids),
+        "following": [{"telegram_id": u["telegram_id"], "username": u["username"]} for u in following_users],
+    }
 
 
 # ── Push subscriptions ────────────────────────────────────────────────────────

@@ -29,6 +29,7 @@ from data.database import (
     get_session_drinks, delete_user, update_location,
     init_push_subscriptions, save_push_subscription,
     delete_push_subscription, get_push_subscriptions,
+    get_blackjack_stats, get_profile_follows,
 )
 from core.recap import build_weekly_recap
 from core.widmark import total_bac, bac_label, sober_in_hours, alcohol_grams
@@ -609,7 +610,11 @@ async def register_endpoint(request: Request):
     set_password(web_id, password)
     _ensure_session(web_id)
 
+    # Nouvel utilisateur → suit automatiquement l'admin
     admin_id = int(os.environ.get("ADMIN_ID", "0"))
+    if admin_id and admin_id != web_id:
+        follow_user(web_id, admin_id)
+
     return {
         "ok": True,
         "telegram_id": web_id,
@@ -1125,6 +1130,38 @@ async def refuse_bet_web(request: Request):
         return {"ok": False, "error": "Pari déjà traité"}
     cancel_bet(bet_id)
     return {"ok": True}
+
+
+@app.get("/profile/{telegram_id}")
+def get_profile(telegram_id: int):
+    """Retourne le profil public d'un utilisateur : abonnés/abonnements + stats BJ."""
+    user = get_user(telegram_id)
+    if not user:
+        return {"ok": False, "error": "Utilisateur introuvable"}
+    follows = get_profile_follows(telegram_id)
+    bj      = get_blackjack_stats(telegram_id)
+    return {
+        "ok": True,
+        "telegram_id": telegram_id,
+        "username": user["username"],
+        **follows,
+        "bj": bj,
+    }
+
+
+@app.get("/blackjack/stats/all")
+def get_all_bj_stats():
+    """Retourne les stats blackjack de tous les utilisateurs."""
+    users = get_all_users()
+    result = []
+    for u in users:
+        bj = get_blackjack_stats(u["telegram_id"])
+        result.append({
+            "telegram_id": u["telegram_id"],
+            "username":    u["username"],
+            **bj,
+        })
+    return result
 
 
 async def _bj_broadcast(token: str):
