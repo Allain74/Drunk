@@ -966,7 +966,7 @@
   <div class="sub-nav">
     <button class="sub-nav-btn active" id="sub-stats" onclick="showClassementSub('stats')">🏅 Palmarès</button>
     <button class="sub-nav-btn"        id="sub-thune" onclick="showClassementSub('thune')">💰 Thune</button>
-    <button class="sub-nav-btn"        id="sub-bj"    onclick="showClassementSub('bj')">🃏 Blackjack</button>
+    <button class="sub-nav-btn"        id="sub-bj"    onclick="showClassementSub('bj')">🎮 Jeux</button>
   </div>
   <div id="classement-stats">
     <div class="table-scroll">
@@ -985,11 +985,18 @@
     </div>
   </div>
   <div id="classement-bj" style="display:none">
-    <div class="table-scroll">
-      <table class="palmares-table">
-        <thead><tr><th>#</th><th>Joueur</th><th>Parties</th><th>Gagnées</th><th>Perdues</th><th>Égalités</th><th>Win%</th></tr></thead>
-        <tbody id="bj-stats-tbody"></tbody>
-      </table>
+    <!-- Sélecteur de jeu -->
+    <div class="amis-sub-nav" id="jeux-game-nav" style="margin-bottom:16px">
+      <button class="amis-sub-btn active" id="jeu-btn-blackjack" onclick="showJeuSub('blackjack')">🃏 Blackjack</button>
+    </div>
+    <!-- Classement Blackjack -->
+    <div id="jeu-blackjack">
+      <div class="table-scroll">
+        <table class="palmares-table">
+          <thead><tr><th>#</th><th>Joueur</th><th>Parties</th><th>Gagnées</th><th>Perdues</th><th>Égalités</th><th>Win%</th></tr></thead>
+          <tbody id="bj-stats-tbody"></tbody>
+        </table>
+      </div>
     </div>
   </div>
 </div>
@@ -1322,7 +1329,18 @@
     document.getElementById('classement-thune').style.display = sub === 'thune' ? '' : 'none';
     document.getElementById('classement-bj').style.display    = sub === 'bj'    ? '' : 'none';
     if (sub === 'thune') loadThune();
-    if (sub === 'bj')    loadBjStats();
+    if (sub === 'bj')    { loadBjStats(); showJeuSub('blackjack'); }
+  }
+
+  // ── Sélecteur de jeu dans "Jeux" ──
+  const _JEUX = ['blackjack']; // ajouter les futurs jeux ici
+  function showJeuSub(game) {
+    _JEUX.forEach(g => {
+      const btn = document.getElementById(`jeu-btn-${g}`);
+      const div = document.getElementById(`jeu-${g}`);
+      if (btn) btn.classList.toggle('active', g === game);
+      if (div) div.style.display = g === game ? '' : 'none';
+    });
   }
 
   // ── Cards ──
@@ -2329,9 +2347,6 @@
           </div>
         </div>`).join('') || `<div style="color:var(--sub);text-align:center;padding:20px;font-size:0.85rem">Ne suit personne</div>`;
 
-      const bj = data.bj || {};
-      const winPct = bj.played > 0 ? Math.round((bj.won / bj.played) * 100) : 0;
-
       document.getElementById('ami-profil-body').innerHTML = `
         <div style="display:flex;flex-direction:column;align-items:center;gap:12px;margin-bottom:24px">
           <div style="width:68px;height:68px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#06b6d4);display:flex;align-items:center;justify-content:center;font-size:1.8rem;font-weight:900;color:#fff">${initLetter}</div>
@@ -2345,15 +2360,6 @@
           <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px;text-align:center">
             <div style="font-size:1.8rem;font-weight:900">${data.following_count}</div>
             <div style="font-size:0.72rem;color:var(--sub);margin-top:4px">Abonnements</div>
-          </div>
-        </div>
-        <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:20px">
-          <div style="font-size:0.68rem;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#6366f1;margin-bottom:12px">🃏 Blackjack</div>
-          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;text-align:center">
-            <div><div style="font-size:1.3rem;font-weight:900">${bj.played||0}</div><div style="font-size:0.65rem;color:var(--sub)">Parties</div></div>
-            <div><div style="font-size:1.3rem;font-weight:900;color:#22c55e">${bj.won||0}</div><div style="font-size:0.65rem;color:var(--sub)">Gagnées</div></div>
-            <div><div style="font-size:1.3rem;font-weight:900;color:#ef4444">${bj.lost||0}</div><div style="font-size:0.65rem;color:var(--sub)">Perdues</div></div>
-            <div><div style="font-size:1.3rem;font-weight:900;color:#f97316">${winPct}%</div><div style="font-size:0.65rem;color:var(--sub)">Win%</div></div>
           </div>
         </div>
         <div style="font-size:0.68rem;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#6366f1;margin-bottom:12px">Abonnements</div>
