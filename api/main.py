@@ -656,6 +656,22 @@ async def admin_delete_user(request: Request):
     return {"ok": True}
 
 
+@app.post("/admin/close-all-bj")
+async def admin_close_all_bj(request: Request):
+    """Clôture toutes les parties BJ en cours (waiting + active)."""
+    body = await request.json()
+    if not _check_admin(body.get("caller_id")):
+        return {"ok": False, "error": "Non autorisé"}
+    sessions = get_active_blackjack_sessions()
+    closed = 0
+    for sess in sessions:
+        if sess["status"] in ("waiting", "active"):
+            update_blackjack_session(sess["id"], status="finished")
+            await _bj_broadcast(sess["token"])
+            closed += 1
+    return {"ok": True, "closed": closed}
+
+
 @app.get("/snapshot")
 def get_snapshot():
     return build_snapshot()
@@ -1345,7 +1361,13 @@ async def bj_leave(token: str, request: Request):
         await _bj_broadcast(token)
         return {"ok": True, "refunded": me["bet"]}
 
-    # Cartes visibles (active ou finished) → aucun remboursement
+    # Partie active → clôturer toute la session, pas de remboursement
+    if sess["status"] == "active":
+        update_blackjack_session(sess["id"], status="finished")
+        await _bj_broadcast(token)
+        return {"ok": True, "refunded": 0, "ended": True}
+
+    # finished → rien à faire
     return {"ok": True, "refunded": 0}
 
 

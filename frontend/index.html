@@ -2241,6 +2241,13 @@
             <div style="font-size:0.7rem;color:var(--sub);margin-top:4px" id="adm-bc-status"></div>
           </div>
 
+          <!-- Actions globales -->
+          <div style="margin-bottom:16px;border-top:1px solid var(--border);padding-top:12px">
+            <div class="admin-modal-label">🃏 Blackjack</div>
+            <button class="admin-action-btn danger" style="width:100%;padding:10px" onclick="adminCloseAllBJ()">🗑 Clôturer toutes les parties ouvertes</button>
+            <div style="font-size:0.7rem;color:var(--sub);margin-top:4px" id="adm-bj-status"></div>
+          </div>
+
           <!-- Liste utilisateurs -->
           <div class="admin-modal-label" style="margin-top:8px">👥 Utilisateurs</div>
           <input class="admin-modal-input" id="adm-search" placeholder="🔍 Rechercher…" oninput="adminFilterUsers(this.value)" style="margin-bottom:10px">
@@ -2418,6 +2425,21 @@
       } else {
         statusEl.textContent = '❌ ' + (res.error || 'Erreur');
       }
+    } catch(e) { statusEl.textContent = '❌ Erreur réseau'; }
+  }
+
+  async function adminCloseAllBJ() {
+    const statusEl = document.getElementById('adm-bj-status');
+    if (!confirm('Clôturer toutes les parties de Blackjack en cours ?')) return;
+    statusEl.textContent = '⏳…';
+    try {
+      const res = await fetch(`${API}/admin/close-all-bj`, {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ caller_id: myTid }),
+      }).then(r => r.json());
+      if (res.ok) statusEl.textContent = `✅ ${res.closed} partie(s) clôturée(s)`;
+      else statusEl.textContent = '❌ ' + (res.error || 'Erreur');
     } catch(e) { statusEl.textContent = '❌ Erreur réseau'; }
   }
 
@@ -3830,20 +3852,22 @@ function _bjRender(state) {
   rematchBar.style.display = 'none';
   quitBar.style.display    = 'none';
 
-  if (me && me.status === 'playing' && state.status === 'active') {
-    actionBar.style.display = 'flex';
-    const bh = document.getElementById('bj-btn-hit'), bs = document.getElementById('bj-btn-stand');
-    bh.disabled = bs.disabled = false;
-    bh.textContent = '🃏 Tirer'; bs.textContent = '✋ Rester';
+  if (state.status === 'active') {
+    // Toujours afficher "Quitter" pendant une partie active
+    quitBar.style.display = 'flex';
+    if (me && me.status === 'playing') {
+      // C'est mon tour : afficher aussi les boutons Tirer/Rester
+      actionBar.style.display = 'flex';
+      const bh = document.getElementById('bj-btn-hit'), bs = document.getElementById('bj-btn-stand');
+      bh.disabled = bs.disabled = false;
+      bh.textContent = '🃏 Tirer'; bs.textContent = '✋ Rester';
+    }
   } else if (state.status === 'waiting' && isCreator) {
     startBar.style.display = 'flex';
     document.getElementById('bj-start-btn').disabled = false;
     document.getElementById('bj-start-btn').textContent = '🚀 Lancer la partie';
   } else if (state.status === 'waiting' && !isCreator) {
     // Joueur invité en attente : montrer juste Quitter
-    quitBar.style.display = 'flex';
-  } else if (state.status === 'active' && me && me.status !== 'playing') {
-    // Partie en cours mais pas mon tour : montrer Quitter
     quitBar.style.display = 'flex';
   } else if (state.status === 'finished') {
     if (isCreator) {
@@ -3930,19 +3954,21 @@ async function bjLeave() {
   const state = _bjLastState;
   const status = state ? state.status : null;
 
-  // Cartes visibles → retour lobby, aucun remboursement
-  if (status === 'active' || status === 'finished') {
+  // Partie terminée → retour lobby sans appel API
+  if (status === 'finished') {
     bjBackToLobby();
     return;
   }
 
-  // Partie pas encore lancée → quitter + remboursement de la mise
+  // Waiting ou active → appel API (remboursement si waiting, clôture si active)
   const r = await fetch(`${API}/blackjack/${_bjToken}/leave`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ telegram_id: myTid }),
   }).then(r => r.json()).catch(() => ({ ok: true, refunded: 0 }));
 
   if (r.refunded > 0) showToast(`✅ Mise remboursée : +${r.refunded} 🪙`);
+  else if (status === 'active') showToast('🚪 Partie clôturée');
+  _bjRefreshCoins();
   bjBackToLobby();
 }
 
