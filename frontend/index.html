@@ -1759,7 +1759,6 @@
         })
       : _palmares;
     const medals = ['🥇','🥈','🥉'];
-    const tbody = document.getElementById('palmares-tbody');
     tbody.innerHTML = visible.map((u,i) => {
       const tid = getTidByName(u.username);
       const isAdm = tid && isAdmin(tid);
@@ -1884,7 +1883,6 @@
     }
     _thune = await fetch(`${API}/coins`).then(r => r.json());
     const medals = ['🥇','🥈','🥉'];
-    const tbody = document.getElementById('thune-tbody');
     tbody.innerHTML = _thune.map((u, i) => {
       const tid = getTidByName(u.username);
       const isAdm = tid && isAdmin(tid);
