@@ -400,8 +400,27 @@
     .modal-id p  { font-size:0.82rem; color:var(--sub); margin-bottom:16px; }
     .modal-id input { width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-size:0.95rem; font-family:inherit; margin-bottom:10px; box-sizing:border-box; }
     .modal-id input:focus { outline:none; border-color:#6366f1; }
-    #compte-content input { width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-size:0.95rem; font-family:inherit; margin-bottom:10px; box-sizing:border-box; }
-    #compte-content input:focus { outline:none; border-color:#6366f1; }
+    #profil-content input[type="text"],
+    #profil-content input[type="password"],
+    #profil-content input[type="number"] {
+      width: 100%;
+      padding: 14px 16px;
+      border-radius: 12px;
+      border: 1.5px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 1rem;
+      font-family: inherit;
+      margin-bottom: 10px;
+      box-sizing: border-box;
+      transition: border-color .2s;
+    }
+    #profil-content input[type="text"]:focus,
+    #profil-content input[type="password"]:focus,
+    #profil-content input[type="number"]:focus {
+      outline: none;
+      border-color: #6366f1;
+    }
     .modal-id-close { position:absolute; top:16px; right:16px; background:none; border:none; font-size:1.4rem; cursor:pointer; color:var(--sub); }
     .btn-primary { width:100%; padding:10px; border-radius:10px; background:#6366f1; color:#fff; font-weight:700; font-size:0.95rem; border:none; cursor:pointer; transition:background .2s; }
     .btn-primary:hover { background:#4f46e5; }
