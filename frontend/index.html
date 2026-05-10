@@ -426,25 +426,58 @@
     .btn-primary:hover { background:#4f46e5; }
     .modal-id-err { color:#ef4444; font-size:0.8rem; margin-top:4px; display:none; }
 
-    /* ── Abonnements panel ── */
+    /* ── Amis panel ── */
     #amis-panel { max-width:640px; margin:0 auto; }
-    .abo-empty-state { text-align:center; padding:60px 20px; color:var(--sub); }
-    .abo-empty-state .abo-icon { font-size:3rem; margin-bottom:12px; }
-    .abo-empty-state p { margin-bottom:16px; font-size:0.9rem; }
-    .abo-search { width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--card); color:var(--text); font-size:0.9rem; font-family:inherit; margin-bottom:16px; }
-    .abo-search:focus { outline:none; border-color:#6366f1; }
-    .abo-list { display:flex; flex-direction:column; gap:8px; }
-    .abo-row { display:flex; align-items:center; gap:12px; background:var(--card); border:1px solid var(--border); border-radius:12px; padding:12px 16px; }
-    .abo-row-name { flex:1; font-weight:600; font-size:0.95rem; }
-    .abo-status { font-size:0.72rem; font-weight:700; border-radius:6px; padding:2px 8px; }
-    .abo-status.following { background:#dcfce7; color:#166534; }
-    .abo-status.not-following { background:#fee2e2; color:#991b1b; }
-    [data-theme="dark"] .abo-status.following { background:#14532d; color:#86efac; }
-    [data-theme="dark"] .abo-status.not-following { background:#7f1d1d; color:#fca5a5; }
-    .abo-btn { padding:6px 14px; border-radius:8px; font-weight:700; font-size:0.8rem; cursor:pointer; border:none; transition:background .2s; }
-    .abo-btn.follow-btn { background:#22c55e; color:#fff; }
-    .abo-btn.unfollow-btn { background:#ef4444; color:#fff; }
-    .abo-btn.locked-btn { background:var(--border); color:var(--sub); cursor:not-allowed; font-size:0.85rem; }
+
+    /* Bannière d'invitation */
+    .amis-invite-wrap { position:relative; margin-bottom:16px; border-radius:18px; padding:1.5px; background:linear-gradient(135deg,#f43f5e,#8b5cf6,#06b6d4); }
+    .amis-invite-card { background:var(--card); border-radius:17px; padding:14px 16px; display:flex; align-items:center; justify-content:space-between; gap:12px; }
+    .amis-squad-icon { width:36px; height:36px; border-radius:10px; background:var(--bg); display:flex; align-items:center; justify-content:center; font-size:1.1rem; flex-shrink:0; }
+    .amis-squad-info { flex:1; }
+    .amis-squad-label { font-weight:800; font-size:0.95rem; }
+    .amis-squad-sub { font-size:0.72rem; color:var(--sub); margin-top:2px; }
+    .amis-invite-btn { display:flex; align-items:center; gap:6px; padding:8px 16px; border-radius:20px; border:none; background:#6366f118; color:#6366f1; font-weight:700; font-size:0.82rem; cursor:pointer; font-family:inherit; flex-shrink:0; transition:background .2s; }
+    .amis-invite-btn:hover { background:#6366f128; }
+
+    /* Stats cards */
+    .amis-stats-row { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:16px; }
+    .amis-stat-card { background:var(--card); border:1px solid var(--border); border-radius:18px; padding:18px 16px; }
+    .amis-stat-val { font-size:2rem; font-weight:900; line-height:1; }
+    .amis-stat-lbl { font-size:0.72rem; color:var(--sub); margin-top:6px; }
+    .amis-add-card { background:var(--card); border:1px solid var(--border); border-radius:18px; padding:18px 16px; cursor:pointer; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; color:#6366f1; font-weight:700; font-size:0.82rem; text-align:center; font-family:inherit; transition:background .2s; }
+    .amis-add-card:hover { background:var(--bg); }
+    .amis-add-card svg { width:28px; height:28px; stroke:currentColor; fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+
+    /* Sub-tabs */
+    .amis-sub-nav { display:flex; gap:6px; margin-bottom:16px; }
+    .amis-sub-btn { padding:10px 20px; border-radius:20px; border:none; background:var(--card); color:var(--sub); font-weight:700; font-size:0.85rem; cursor:pointer; font-family:inherit; transition:all .2s; border:1px solid var(--border); }
+    .amis-sub-btn.active { background:var(--text); color:var(--bg); border-color:var(--text); }
+    [data-theme="dark"] .amis-sub-btn.active { background:#fff; color:#0e1117; border-color:#fff; }
+
+    /* Recherche */
+    .amis-search { width:100%; padding:12px 16px; border-radius:12px; border:1.5px solid var(--border); background:var(--card); color:var(--text); font-size:0.9rem; font-family:inherit; margin-bottom:12px; box-sizing:border-box; transition:border-color .2s; }
+    .amis-search:focus { outline:none; border-color:#6366f1; }
+
+    /* Liste */
+    .amis-list { display:flex; flex-direction:column; gap:8px; }
+    .amis-row { display:flex; align-items:center; gap:12px; background:var(--card); border:1px solid var(--border); border-radius:14px; padding:12px 16px; }
+    .amis-row-avatar { width:38px; height:38px; border-radius:50%; background:linear-gradient(135deg,#6366f1,#06b6d4); display:flex; align-items:center; justify-content:center; font-weight:800; font-size:0.95rem; color:#fff; flex-shrink:0; }
+    .amis-row-info { flex:1; min-width:0; }
+    .amis-row-name { font-weight:700; font-size:0.92rem; }
+    .amis-row-sub { font-size:0.7rem; color:var(--sub); margin-top:2px; }
+    .amis-btn { padding:7px 16px; border-radius:10px; font-weight:700; font-size:0.78rem; cursor:pointer; border:none; transition:background .2s; font-family:inherit; flex-shrink:0; }
+    .amis-btn.follow { background:#22c55e; color:#fff; }
+    .amis-btn.unfollow { background:#ef4444; color:#fff; }
+    .amis-btn.locked { background:var(--border); color:var(--sub); cursor:not-allowed; }
+
+    /* Empty state */
+    .amis-empty { background:var(--card); border:1px solid var(--border); border-radius:18px; padding:40px 24px; text-align:center; }
+    .amis-empty-icon { font-size:2.2rem; opacity:.35; margin-bottom:14px; }
+    .amis-empty-title { font-size:1.1rem; font-weight:800; margin-bottom:8px; }
+    .amis-empty-sub { font-size:0.83rem; color:var(--sub); line-height:1.5; }
+
+    /* Compat anciennes classes (modals etc.) */
+    .abo-search { display:none; }
 
     /* ── Boutons genre (inscription / édition) ── */
     .reg-genre-btn {
@@ -1864,63 +1897,153 @@
     }
   }
 
-  // ── Abonnements ──
+  // ── Amis ──────────────────────────────────────────────────────────────────
   let _aboSearch = '';
+  let _aboSub    = 'suivis'; // 'suivis' | 'decouvrir'
 
-  async function loadAbonnements() {
-    const content = document.getElementById('abo-content');
-    if (!myTid) {
-      content.innerHTML = `
-        <div class="abo-empty-state">
-          <div class="abo-icon">👥</div>
-          <p>Identifie-toi pour gérer tes abonnements</p>
-          <button class="btn-primary" style="max-width:220px;margin:0 auto;display:block"
-                  onclick="openIdentityModal()">Se connecter</button>
-        </div>`;
-      return;
+  // Partage l'app via la feuille de partage système
+  async function shareApp() {
+    const url  = location.origin;
+    const text = `🍺 Rejoins-moi sur Drunk, l'app pour tracker ton taux d'alcool en soirée !\n\n📲 Pour l'installer sur iPhone :\n1. Ouvre ce lien dans Safari\n2. Appuie sur Partager ↑\n3. Choisis "Sur l'écran d'accueil"\n\n👉 ${url}`;
+    if (navigator.share) {
+      try { await navigator.share({ title: 'Drunk 🍺', text, url }); } catch(e) {}
+    } else {
+      try {
+        await navigator.clipboard.writeText(text);
+        showToast('📋 Message copié dans le presse-papiers !');
+      } catch(e) { showToast('👉 ' + url); }
     }
-    // Render search + list
-    const searchVal = _aboSearch || '';
-    const filtered = allUsers.filter(u =>
-      u.username.toLowerCase().includes(searchVal.toLowerCase()) && u.telegram_id !== myTid
-    );
+  }
 
-    const rowsHtml = filtered.map(u => {
-      const isAdm = isAdmin(u.telegram_id);
-      const following = followingSet.has(u.telegram_id);
-      const nameHtml = isAdm
-        ? `<span class="admin-name">${esc(u.username)}</span>`
-        : esc(u.username);
-
-      let statusBadge, actionBtn;
-      if (isAdm) {
-        statusBadge = `<span class="abo-status following">Suivi</span>`;
-        actionBtn = `<button class="abo-btn locked-btn" disabled>🔒</button>`;
-      } else if (following) {
-        statusBadge = `<span class="abo-status following">Suivi</span>`;
-        actionBtn = `<button class="abo-btn unfollow-btn" onclick="aboToggle(${u.telegram_id}, false)">Ne plus suivre</button>`;
-      } else {
-        statusBadge = `<span class="abo-status not-following">Non suivi</span>`;
-        actionBtn = `<button class="abo-btn follow-btn" onclick="aboToggle(${u.telegram_id}, true)">Suivre</button>`;
-      }
-
-      return `<div class="abo-row">
-        <div class="abo-row-name">${nameHtml}</div>
-        ${statusBadge}
-        ${actionBtn}
-      </div>`;
-    }).join('');
-
-    content.innerHTML = `
-      <input class="abo-search" type="text" placeholder="🔍 Rechercher un utilisateur…"
-             value="${esc(searchVal)}" oninput="aboSearch(this.value)" />
-      <div class="abo-list">${rowsHtml || '<p style="color:var(--sub);text-align:center;padding:20px">Aucun utilisateur trouvé.</p>'}</div>
-    `;
+  function aboSwitchSub(sub) {
+    _aboSub = sub;
+    _aboSearch = '';
+    loadAbonnements();
   }
 
   function aboSearch(val) {
     _aboSearch = val;
     loadAbonnements();
+  }
+
+  function _aboSquadStatus(count) {
+    if (count === 0) return { label: 'Solo → Squad', sub: 'Suis tes premiers amis !' };
+    if (count < 3)   return { label: `En route… → Squad`, sub: `${count} ami${count>1?'s':''} suivi${count>1?'s':''}` };
+    return { label: `Squad 🔥`, sub: `${count} amis dans ton groupe` };
+  }
+
+  function _renderAmiRow(u) {
+    const isAdm     = isAdmin(u.telegram_id);
+    const following = followingSet.has(u.telegram_id);
+    const initLetter = (u.username || '?')[0].toUpperCase();
+    const nameHtml  = isAdm ? `<span class="admin-name">${esc(u.username)}</span>` : esc(u.username);
+    const sub       = isAdm ? '⭐ Admin' : (following ? 'Suivi' : 'Joueur');
+    let btn;
+    if (isAdm)        btn = `<button class="amis-btn locked" disabled>🔒</button>`;
+    else if (following) btn = `<button class="amis-btn unfollow" onclick="aboToggle(${u.telegram_id},false)">Ne plus suivre</button>`;
+    else              btn = `<button class="amis-btn follow"   onclick="aboToggle(${u.telegram_id},true)">Suivre</button>`;
+    return `<div class="amis-row">
+      <div class="amis-row-avatar">${initLetter}</div>
+      <div class="amis-row-info">
+        <div class="amis-row-name">${nameHtml}</div>
+        <div class="amis-row-sub">${sub}</div>
+      </div>
+      ${btn}
+    </div>`;
+  }
+
+  async function loadAbonnements() {
+    const content = document.getElementById('abo-content');
+    if (!content) return;
+
+    const followingCount = followingSet.size;
+    const { label: squadLabel, sub: squadSub } = _aboSquadStatus(followingCount);
+
+    // Bannière toujours visible (même déconnecté)
+    const inviteBanner = `
+      <div class="amis-invite-wrap">
+        <div class="amis-invite-card">
+          <div class="amis-squad-icon">👥</div>
+          <div class="amis-squad-info">
+            <div class="amis-squad-label">${squadLabel}</div>
+            <div class="amis-squad-sub">${squadSub}</div>
+          </div>
+          <button class="amis-invite-btn" onclick="shareApp()">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/>
+            </svg>
+            Inviter
+          </button>
+        </div>
+      </div>`;
+
+    if (!myTid) {
+      content.innerHTML = inviteBanner + `
+        <div class="amis-stats-row">
+          <div class="amis-stat-card">
+            <div class="amis-stat-val">—</div>
+            <div class="amis-stat-lbl">Amis suivis</div>
+          </div>
+          <button class="amis-add-card" onclick="showTab('profil')">
+            <svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
+            Ajouter<br>un ami
+          </button>
+        </div>
+        <div class="amis-empty">
+          <div class="amis-empty-icon">🔐</div>
+          <div class="amis-empty-title">Connexion requise</div>
+          <div class="amis-empty-sub">Connecte-toi pour retrouver et suivre tes amis.</div>
+          <button class="btn-primary" style="margin-top:16px;max-width:200px" onclick="showTab('profil')">Se connecter</button>
+        </div>`;
+      return;
+    }
+
+    const others = allUsers.filter(u => u.telegram_id !== myTid);
+    const suivisList = others.filter(u => followingSet.has(u.telegram_id) || isAdmin(u.telegram_id));
+    const searchVal  = _aboSearch || '';
+    const decouvrirList = others.filter(u =>
+      !followingSet.has(u.telegram_id) && !isAdmin(u.telegram_id) &&
+      u.username.toLowerCase().includes(searchVal.toLowerCase())
+    );
+
+    const subNavHtml = `
+      <div class="amis-sub-nav">
+        <button class="amis-sub-btn ${_aboSub==='suivis'?'active':''}"    onclick="aboSwitchSub('suivis')">Suivis (${suivisList.length})</button>
+        <button class="amis-sub-btn ${_aboSub==='decouvrir'?'active':''}" onclick="aboSwitchSub('decouvrir')">Découvrir (${others.filter(u=>!followingSet.has(u.telegram_id)&&!isAdmin(u.telegram_id)).length})</button>
+      </div>`;
+
+    let listHtml = '';
+    if (_aboSub === 'suivis') {
+      listHtml = suivisList.length
+        ? `<div class="amis-list">${suivisList.map(_renderAmiRow).join('')}</div>`
+        : `<div class="amis-empty">
+            <div class="amis-empty-icon">👥</div>
+            <div class="amis-empty-title">Pas encore d'amis</div>
+            <div class="amis-empty-sub">Va dans "Découvrir" pour retrouver tes potes et suivre leur TAC en temps réel.</div>
+           </div>`;
+    } else {
+      listHtml = `
+        <input class="amis-search" type="text" placeholder="🔍 Rechercher un joueur…"
+               value="${esc(searchVal)}" oninput="aboSearch(this.value)"/>
+        <div class="amis-list">${decouvrirList.length
+          ? decouvrirList.map(_renderAmiRow).join('')
+          : `<div class="amis-empty"><div class="amis-empty-icon">🔍</div><div class="amis-empty-title">Aucun résultat</div><div class="amis-empty-sub">Essaie un autre pseudo.</div></div>`
+        }</div>`;
+    }
+
+    content.innerHTML = inviteBanner + `
+      <div class="amis-stats-row">
+        <div class="amis-stat-card">
+          <div class="amis-stat-val">${followingCount}</div>
+          <div class="amis-stat-lbl">Amis suivis</div>
+        </div>
+        <button class="amis-add-card" onclick="aboSwitchSub('decouvrir')">
+          <svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
+          Ajouter<br>un ami
+        </button>
+      </div>
+      ${subNavHtml}
+      ${listHtml}`;
   }
 
   async function aboToggle(tid, doFollow) {
@@ -1934,7 +2057,6 @@
     if (doFollow) followingSet.add(tid);
     else followingSet.delete(tid);
     loadAbonnements();
-    // Also re-filter live grid
     if (lastData.length) render(lastData);
   }
 
