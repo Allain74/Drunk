@@ -2190,6 +2190,24 @@
   }
   function adminDoEndSession() { adminAction('end-session'); }
   function adminDoResetPwd()   { adminAction('reset-password'); }
+  async function adminDoDeleteUser() {
+    if (!_adminTarget) return;
+    const name = _adminTarget.username;
+    if (!confirm(`Supprimer définitivement le compte de ${name} ? Cette action est irréversible.`)) return;
+    const statusEl = document.getElementById('adm-modal-status');
+    statusEl.style.color = 'var(--sub)';
+    statusEl.textContent = '⏳';
+    try {
+      const res = await fetch(`${API}/admin/delete-user`, {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ caller_id: myTid, target_id: _adminTarget.telegram_id }),
+      }).then(r => r.json());
+      if (!res.ok) { statusEl.style.color = '#ef4444'; statusEl.textContent = '❌ ' + (res.error || 'Erreur'); return; }
+      adminCloseUser();
+      await adminLoadUsers();
+      showToast(`🗑 Compte de ${name} supprimé.`);
+    } catch(e) { statusEl.style.color = '#ef4444'; statusEl.textContent = '❌ Erreur réseau'; }
+  }
   function adminDoGiveCoins() {
     const a = parseInt(document.getElementById('adm-coins-input').value);
     if (!a) return;
@@ -2408,6 +2426,16 @@
     lastData = data;
     const grid  = document.getElementById('grid');
     const empty = document.getElementById('empty');
+
+    // Détecter si l'utilisateur connecté vient d'être banni
+    if (myTid) {
+      const me = data.find(u => Number(u.telegram_id) === Number(myTid));
+      if (me && me.is_banned) {
+        showToast('🚫 Ton compte a été banni.');
+        logout();
+        return;
+      }
+    }
 
     if (!myTid) {
       grid.innerHTML = '';
@@ -3522,7 +3550,7 @@ function _bjRender(state) {
   // Players
   const playersEl = document.getElementById('bj-players');
   playersEl.innerHTML = state.players.map(p => {
-    const isMe = p.telegram_id === myTid;
+    const isMe = Number(p.telegram_id) === Number(myTid);
     const hand = p.hand || [];
     const prevP = prev ? prev.players.find(x => x.telegram_id === p.telegram_id) : null;
     const prevLen = prevP ? (prevP.hand || []).length : 0;
@@ -3557,8 +3585,8 @@ function _bjRender(state) {
   }).join('');
 
   // Action / start / rematch bars
-  const me = state.players.find(p => p.telegram_id === myTid);
-  const isCreator = myTid === state.creator_id;
+  const me = state.players.find(p => Number(p.telegram_id) === Number(myTid));
+  const isCreator = Number(myTid) === Number(state.creator_id);
   const actionBar  = document.getElementById('bj-action-bar');
   const startBar   = document.getElementById('bj-start-bar');
   const rematchBar = document.getElementById('bj-rematch-bar');
@@ -3597,15 +3625,29 @@ function _bjRender(state) {
   _bjRefreshCoins();
 }
 
-function bjAct(action) {
-  if (!_bjWs || _bjWs.readyState !== WebSocket.OPEN) return;
+async function bjAct(action) {
   // Feedback immédiat
   const hitBtn   = document.getElementById('bj-btn-hit');
   const standBtn = document.getElementById('bj-btn-stand');
   hitBtn.disabled = standBtn.disabled = true;
   if (action === 'hit')   hitBtn.textContent   = '⏳ …';
   if (action === 'stand') standBtn.textContent = '⏳ …';
-  _bjWs.send(JSON.stringify({ action, telegram_id: myTid }));
+
+  if (_bjWs && _bjWs.readyState === WebSocket.OPEN) {
+    _bjWs.send(JSON.stringify({ action, telegram_id: myTid }));
+  } else {
+    // Fallback HTTP si WebSocket non dispo
+    const r = await fetch(`${API}/blackjack/${_bjToken}/action-web`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, telegram_id: myTid }),
+    }).then(r => r.json()).catch(() => ({ ok: false }));
+    if (!r.ok) {
+      showToast('❌ ' + (r.error || 'Erreur'));
+      hitBtn.disabled = standBtn.disabled = false;
+      if (action === 'hit')   hitBtn.textContent   = '🃏 Tirer';
+      if (action === 'stand') standBtn.textContent = '✋ Rester';
+    }
+  }
 }
 
 async function bjStart() {
@@ -3805,6 +3847,11 @@ async function parisRefuse(betId) {
         <button class="admin-action-btn danger" onclick="adminDoEndSession()">⏹ Terminer session</button>
         <button class="admin-action-btn" onclick="adminDoResetPwd()">🔑 Reset mot de passe</button>
       </div>
+    </div>
+
+    <div class="admin-modal-section">
+      <div class="admin-modal-label" style="color:#ef4444">Zone dangereuse</div>
+      <button class="admin-action-btn danger" style="width:100%;padding:10px;font-size:0.85rem" onclick="adminDoDeleteUser()">🗑 Supprimer le compte définitivement</button>
     </div>
 
     <div style="margin-top:14px;min-height:20px;font-size:0.85rem;font-weight:600" id="adm-modal-status"></div>

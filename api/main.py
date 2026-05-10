@@ -232,6 +232,7 @@ def build_snapshot() -> list[dict]:
     users = {u["telegram_id"]: u for u in get_all_users()}
     drinks_by_user = get_all_active_drinks()
     now = datetime.now(timezone.utc)
+    banned_ids = {u["telegram_id"] for u in _get_banned_list()}
     result = []
     for uid, user in users.items():
         drinks = drinks_by_user.get(uid, [])
@@ -243,6 +244,7 @@ def build_snapshot() -> list[dict]:
             if b > peak_24h:
                 peak_24h = b
         result.append({
+            "telegram_id": uid,
             "username":    user["username"],
             "bac":         round(bac, 3),
             "label":       bac_label(bac),
@@ -254,6 +256,7 @@ def build_snapshot() -> list[dict]:
             "max_bac":     round(user.get("max_bac") or 0, 2),
             "peak_24h":    round(peak_24h, 2),
             "gender":      user.get("gender", "homme"),
+            "is_banned":   uid in banned_ids,
         })
     result.sort(key=lambda x: x["bac"], reverse=True)
     return result
@@ -522,7 +525,19 @@ async def admin_ban(request: Request):
     target_id = body.get("target_id")
     if not target_id:
         return {"ok": False, "error": "target_id requis"}
-    ban_user(int(target_id))
+    tid = int(target_id)
+    ban_user(tid)
+    # Virer de toute session BJ active
+    bj_sess = get_blackjack_session_by_player(tid)
+    if bj_sess:
+        token = bj_sess["token"]
+        players = get_blackjack_players(bj_sess["id"])
+        remaining = [p for p in players if p["telegram_id"] != tid]
+        if not remaining or bj_sess["creator_id"] == tid:
+            update_blackjack_session(bj_sess["id"], status="finished")
+        await _bj_broadcast(token)
+    # Diffuse le snapshot mis à jour (tous les clients voient is_banned=True)
+    await _broadcast(build_snapshot())
     return {"ok": True}
 
 
@@ -620,6 +635,25 @@ async def admin_broadcast_push(request: Request):
     for u in users:
         loop.run_in_executor(None, _send_push, u["telegram_id"], title, message, url)
     return {"ok": True, "sent_to": len(users)}
+
+
+@app.post("/admin/delete-user")
+async def admin_delete_user(request: Request):
+    body = await request.json()
+    if not _check_admin(body.get("caller_id")):
+        return {"ok": False, "error": "Non autorisé"}
+    target_id = body.get("target_id")
+    if not target_id:
+        return {"ok": False, "error": "target_id requis"}
+    tid = int(target_id)
+    # Fermer la session BJ si active
+    bj_sess = get_blackjack_session_by_player(tid)
+    if bj_sess:
+        update_blackjack_session(bj_sess["id"], status="finished")
+        await _bj_broadcast(bj_sess["token"])
+    delete_user(tid)
+    await _broadcast(build_snapshot())
+    return {"ok": True}
 
 
 @app.get("/snapshot")
@@ -821,6 +855,8 @@ async def login_endpoint(request: Request):
     user = verify_password(username, password)
     if not user:
         return {"ok": False, "error": "Pseudo ou mot de passe incorrect"}
+    if is_banned(user["telegram_id"]):
+        return {"ok": False, "error": "Compte banni 🚫"}
     admin_id = int(os.environ.get("ADMIN_ID", "0"))
     return {
         "ok": True,
@@ -1348,6 +1384,79 @@ async def bj_start_web(token: str, request: Request):
             dealer_hand=json.dumps(dealer_hand))
 
     # Notifier tous les clients WS connectés
+    await _bj_broadcast(token)
+    return {"ok": True}
+
+
+@app.post("/blackjack/{token}/action-web")
+async def bj_action_web(token: str, request: Request):
+    """Hit ou stand depuis le web (fallback HTTP si WebSocket non dispo)."""
+    body = await request.json()
+    player_id = body.get("telegram_id")
+    action    = body.get("action")
+
+    if action not in ("hit", "stand"):
+        return {"ok": False, "error": "Action invalide"}
+
+    sess = get_blackjack_session(token)
+    if not sess:
+        return {"ok": False, "error": "Session introuvable"}
+    if sess["status"] != "active":
+        return {"ok": False, "error": "Partie non active"}
+
+    players = get_blackjack_players(sess["id"])
+    player  = next((p for p in players if p["telegram_id"] == player_id), None)
+    if not player:
+        return {"ok": False, "error": "Joueur introuvable"}
+    if player["status"] != "playing":
+        return {"ok": False, "error": "Ce n'est pas ton tour"}
+
+    hand        = json.loads(player["hand"])
+    deck        = json.loads(sess["deck"])
+    dealer_hand = json.loads(sess["dealer_hand"])
+
+    if action == "hit":
+        card = deck.pop()
+        hand.append(card)
+        update_blackjack_session(sess["id"], deck=json.dumps(deck))
+        val = hand_value(hand)
+        if val > 21:
+            update_blackjack_player(sess["id"], player_id,
+                hand=json.dumps(hand), status="bust", result="lose")
+        else:
+            update_blackjack_player(sess["id"], player_id, hand=json.dumps(hand))
+
+    elif action == "stand":
+        update_blackjack_player(sess["id"], player_id,
+            hand=json.dumps(hand), status="stand")
+
+    # Check if all players done
+    players  = get_blackjack_players(sess["id"])
+    all_done = all(p["status"] in ("stand", "bust", "done") for p in players)
+
+    if all_done:
+        while hand_value(dealer_hand) < 17:
+            dealer_hand.append(deck.pop())
+        dealer_val = hand_value(dealer_hand)
+        update_blackjack_session(sess["id"],
+            dealer_hand=json.dumps(dealer_hand),
+            deck=json.dumps(deck),
+            status="finished"
+        )
+        for p in players:
+            if p["status"] == "bust":
+                continue
+            p_val = hand_value(json.loads(p["hand"]))
+            bet   = p["bet"]
+            if dealer_val > 21 or p_val > dealer_val:
+                add_coins(p["telegram_id"], bet * 2, "Blackjack gagné")
+                update_blackjack_player(sess["id"], p["telegram_id"], result="win")
+            elif p_val == dealer_val:
+                add_coins(p["telegram_id"], bet, "Blackjack égalité")
+                update_blackjack_player(sess["id"], p["telegram_id"], result="push")
+            else:
+                update_blackjack_player(sess["id"], p["telegram_id"], result="lose")
+
     await _bj_broadcast(token)
     return {"ok": True}
 
