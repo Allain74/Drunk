@@ -31,8 +31,9 @@ from data.database import (
     delete_push_subscription, get_push_subscriptions,
     get_blackjack_stats, get_profile_follows,
     set_avatar, get_all_avatars,
+    get_all_follows,
 )
-from core.recap import build_weekly_recap
+from core.recap import build_weekly_recap, build_weekly_recap_for_user
 from core.widmark import total_bac, bac_label, sober_in_hours, alcohol_grams
 from core.blackjack import new_deck, hand_value, display_hand, is_blackjack
 from core.drinks import DRINKS
@@ -95,6 +96,8 @@ _ws_clients: set[WebSocket] = set()
 _bj_clients: dict[str, set[WebSocket]] = {}
 _bot_app = None
 _danger_notified: dict[int, datetime] = {}
+# (drinker_id, follower_id) → dernière notif "ami ivre" envoyée
+_drunk_follower_notified: dict[tuple, datetime] = {}
 _last_weekly_recap_date: str = ""  # "YYYY-MM-DD" du dernier lundi envoyé
 PARIS = ZoneInfo("Europe/Paris")
 
@@ -265,45 +268,82 @@ async def _broadcast_loop():
 
 
 async def _danger_loop():
+    global _drunk_follower_notified
     while True:
         await asyncio.sleep(300)
-        now = datetime.now(timezone.utc)
+        now   = datetime.now(timezone.utc)
+        loop  = asyncio.get_event_loop()
         users = {u["telegram_id"]: u for u in get_all_users()}
         drinks_by_user = get_all_active_drinks()
+
+        # ── Construit la map follower_id → set(following_ids) ────────────────
+        all_follows = get_all_follows()
+        follower_map: dict[int, set[int]] = {}   # follower → who they follow
+        drinker_followers: dict[int, list[int]] = {}  # drinker → their followers
+        for row in all_follows:
+            follower_map.setdefault(row["follower_id"], set()).add(row["following_id"])
+            drinker_followers.setdefault(row["following_id"], []).append(row["follower_id"])
+
         for uid, user in users.items():
             drinks = drinks_by_user.get(uid, [])
-            if not drinks:
-                _danger_notified.pop(uid, None)
-                continue
-            bac = total_bac(drinks, user["weight_kg"], user["gender"], now)
-            if bac <= 1.5:
-                _danger_notified.pop(uid, None)
-                continue
-            last_drink_t = max(d[1] for d in drinks)
-            if (now - last_drink_t).total_seconds() < 1800:
-                continue
-            last_notif = _danger_notified.get(uid)
-            if last_notif and (now - last_notif).total_seconds() < 3600:
-                continue
-            _danger_notified[uid] = now
-            try:
-                await _bot_app.bot.send_message(
-                    chat_id=uid,
-                    text=f"👀 *{user['username']}*, t'es encore vivant ? {bac:.2f} g/L depuis un moment...",
-                    parse_mode="Markdown"
-                )
-            except Exception:
-                pass
+            bac    = total_bac(drinks, user["weight_kg"], user["gender"], now) if drinks else 0.0
 
-        # Notif inactivité — une fois par semaine d'absence
+            if not drinks or bac <= 0:
+                _danger_notified.pop(uid, None)
+                # Nettoie les notifs "ami ivre" expirées pour ce buveur
+                for k in list(_drunk_follower_notified):
+                    if k[0] == uid:
+                        del _drunk_follower_notified[k]
+                continue
+
+            # ── Notif Telegram au buveur lui-même (danger personnel) ─────────
+            if bac > 1.5:
+                last_drink_t = max(d[1] for d in drinks)
+                if (now - last_drink_t).total_seconds() >= 1800:
+                    last_notif = _danger_notified.get(uid)
+                    if not last_notif or (now - last_notif).total_seconds() >= 3600:
+                        _danger_notified[uid] = now
+                        try:
+                            await _bot_app.bot.send_message(
+                                chat_id=uid,
+                                text=f"👀 *{user['username']}*, t'es encore vivant ? {bac:.2f} g/L depuis un moment...",
+                                parse_mode="Markdown"
+                            )
+                        except Exception:
+                            pass
+
+            # ── Notif PUSH aux abonnés : "ami en charge" (seuil 1.5 g/L) ────
+            if bac >= 1.5:
+                gender   = user.get("gender", "homme")
+                lui_elle = "elle" if gender == "femme" else "lui"
+                name     = user["username"]
+                followers = drinker_followers.get(uid, [])
+                for fid in followers:
+                    key = (uid, fid)
+                    last_notif = _drunk_follower_notified.get(key)
+                    if last_notif and (now - last_notif).total_seconds() < 4 * 3600:
+                        continue
+                    _drunk_follower_notified[key] = now
+                    loop.run_in_executor(
+                        None, _send_push, fid,
+                        "🚨 Drunk",
+                        f"{name} est en train de se mettre une énorme charge, fais attention à {lui_elle} !",
+                        "/?tab=live"
+                    )
+
+        # ── Notif inactivité — Telegram + Push, une fois par semaine ─────────
         _INACTIVITY_MSGS = [
-            "😤 *{name}*, t'es devenu gay pour pas picoler depuis une semaine ? Allez, bois un verre ! 🍺",
-            "😶 *{name}*, deux semaines sans boire… t'as rejoint les alcooliques anonymes ou quoi ? 🤨",
-            "💀 *{name}*, trois semaines. T'es sobre. C'est honteux. Tes potes ont honte de toi. 🫵",
-            "🚨 *{name}*, un mois sans picoler. Appelle le 15, c'est une urgence médicale. 🏥",
+            ("😤 *{name}*, t'es devenu gay pour pas picoler depuis une semaine ? Allez, bois un verre ! 🍺",
+             "😤 {name}, une semaine sans boire… Allez, un verre !"),
+            ("😶 *{name}*, deux semaines sans boire… t'as rejoint les alcooliques anonymes ou quoi ? 🤨",
+             "😶 {name}, deux semaines de sobriété, t'es sérieux là ?"),
+            ("💀 *{name}*, trois semaines. T'es sobre. C'est honteux. Tes potes ont honte de toi. 🫵",
+             "💀 {name}, trois semaines sans boire. Honteux."),
+            ("🚨 *{name}*, un mois sans picoler. Appelle le 15, c'est une urgence médicale. 🏥",
+             "🚨 {name}, un mois de sobriété. Urgence médicale. 🏥"),
         ]
         for user in get_all_users():
-            uid = user["telegram_id"]
+            uid    = user["telegram_id"]
             last_t = get_last_drink_time(uid)
             if last_t is None:
                 continue
@@ -313,15 +353,23 @@ async def _danger_loop():
                 if last_notif is None or (now - last_notif).total_seconds() >= 7 * 86400:
                     set_last_inactivity_notif(uid, now)
                     weeks = int(days_inactive // 7)
-                    msg_template = _INACTIVITY_MSGS[min(weeks - 1, len(_INACTIVITY_MSGS) - 1)]
+                    idx   = min(weeks - 1, len(_INACTIVITY_MSGS) - 1)
+                    tg_tpl, push_tpl = _INACTIVITY_MSGS[idx]
+                    name = user["username"]
                     try:
                         await _bot_app.bot.send_message(
                             chat_id=uid,
-                            text=msg_template.format(name=user["username"]),
+                            text=tg_tpl.format(name=name),
                             parse_mode="Markdown"
                         )
                     except Exception:
                         pass
+                    loop.run_in_executor(
+                        None, _send_push, uid,
+                        "🍺 Drunk",
+                        push_tpl.format(name=name),
+                        "/"
+                    )
 
 
 async def _weekly_recap_loop():
@@ -329,23 +377,48 @@ async def _weekly_recap_loop():
     while True:
         await asyncio.sleep(60)
         now_paris = datetime.now(PARIS)
-        # Lundi à 9h00
-        if now_paris.weekday() == 0 and now_paris.hour == 9:
+        # Lundi à 8h00 heure de Paris
+        if now_paris.weekday() == 0 and now_paris.hour == 8:
             today_str = now_paris.strftime("%Y-%m-%d")
             if _last_weekly_recap_date != today_str:
                 _last_weekly_recap_date = today_str
                 until = datetime.now(timezone.utc)
                 since = until - timedelta(days=7)
-                msg = build_weekly_recap(since, until)
+
+                # Construit la map suivis par utilisateur
+                all_follows = get_all_follows()
+                user_following: dict[int, list[int]] = {}
+                for row in all_follows:
+                    user_following.setdefault(row["follower_id"], []).append(row["following_id"])
+
+                loop = asyncio.get_event_loop()
                 for user in get_all_users():
+                    uid      = user["telegram_id"]
+                    username = user["username"]
+                    following_ids = user_following.get(uid, [])
+
+                    # Recap personnalisé (abonnements) ou global si aucun abonnement
+                    if following_ids:
+                        tg_msg, push_body = build_weekly_recap_for_user(username, following_ids, since, until)
+                    else:
+                        tg_msg    = build_weekly_recap(since, until)
+                        push_body = "Clique pour voir le recap de la semaine 📊"
+
                     try:
                         await _bot_app.bot.send_message(
-                            chat_id=user["telegram_id"],
-                            text=msg,
+                            chat_id=uid,
+                            text=tg_msg,
                             parse_mode="Markdown"
                         )
                     except Exception:
                         pass
+
+                    loop.run_in_executor(
+                        None, _send_push, uid,
+                        "📊 Recap de la semaine",
+                        push_body,
+                        "/?tab=classement"
+                    )
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -778,6 +851,11 @@ async def log_drink_web(request: Request):
 
     drink = DRINKS[drink_key]
     _ensure_session(telegram_id)
+
+    # Vérifie si c'est le premier verre de la session AVANT d'enregistrer
+    existing_drinks = get_session_drinks(telegram_id)
+    is_first = len(existing_drinks) == 0
+
     db_log_drink(telegram_id, drink_key, alcohol_grams(drink.volume_ml, drink.abv))
     add_coins(telegram_id, 5, f"Verre bu ({drink.name})")
 
@@ -794,10 +872,44 @@ async def log_drink_web(request: Request):
 
     await _broadcast(build_snapshot())
 
-    # Notifier les abonnés
-    bac_label_str = bac_label(bac)
-    notif_body = f"vient de boire {drink.name} · {bac:.2f} g/L ({bac_label_str})"
-    await _notify_followers(telegram_id, f"🍺 {user['username']}", notif_body, "/?tab=live")
+    # ── Notifications aux abonnés ────────────────────────────────────────────
+    if is_first:
+        # Premier verre de la session → notif intelligente contextuelle
+        loop     = asyncio.get_event_loop()
+        gender   = user.get("gender", "homme")
+        le_la    = "la" if gender == "femme" else "le"
+        name     = user["username"]
+        followers = get_followers(telegram_id)
+
+        # Set des buveurs actifs AVANT ce verre (on a déjà enregistré le verre,
+        # donc on exclut telegram_id lui-même)
+        active_drinkers = set(get_all_active_drinks().keys()) - {telegram_id}
+
+        # Map follower → who they follow (pour compter leurs amis qui boivent)
+        all_follows = get_all_follows()
+        follower_following: dict[int, set[int]] = {}
+        for row in all_follows:
+            follower_following.setdefault(row["follower_id"], set()).add(row["following_id"])
+
+        for fid in followers:
+            fid_following = follower_following.get(fid, set())
+            others = [oid for oid in fid_following if oid != telegram_id and oid in active_drinkers]
+            n_others = len(others)
+
+            if n_others == 0:
+                title = "🍺 Drunk"
+                body  = f"{name} est en train de se mettre des verres, rejoins {le_la} !"
+            elif n_others == 1:
+                other_user = get_user(others[0])
+                other_name = other_user["username"] if other_user else "quelqu'un"
+                title = "🍺 Drunk"
+                body  = (f"{name} et {other_name} sont en train de se péter le cabanon, "
+                         f"sers toi un verre en urgence !")
+            else:
+                title = "🍺 Drunk"
+                body  = f"{name} s'est également envoyé un godet, tu attends quoi toi ?"
+
+            loop.run_in_executor(None, _send_push, fid, title, body, "/?tab=live")
 
     return {
         "ok": True,

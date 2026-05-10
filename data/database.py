@@ -683,6 +683,11 @@ def get_push_subscriptions(telegram_id: int) -> list[dict]:
     )
 
 
+def get_all_follows() -> list[dict]:
+    """Retourne toutes les relations de suivi : [{follower_id, following_id}]."""
+    return _fetchall("SELECT follower_id, following_id FROM follows")
+
+
 # ── Avatars ───────────────────────────────────────────────────────────────────
 
 def set_avatar(telegram_id: int, avatar: str):

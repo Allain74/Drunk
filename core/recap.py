@@ -107,3 +107,82 @@ def build_weekly_recap(since: datetime, until: datetime) -> str:
 
     lines.append("\nÀ la semaine prochaine ! 🍻")
     return "\n".join(lines)
+
+
+def build_weekly_recap_for_user(
+    username: str,
+    following_ids: list[int],
+    since: datetime,
+    until: datetime,
+) -> tuple[str, str]:
+    """
+    Construit le recap personnalisé pour un utilisateur donné.
+    Retourne (telegram_msg, push_body).
+    """
+    users = {u["telegram_id"]: u for u in get_all_users()}
+    rows  = get_weekly_drink_logs(since)
+
+    # Filtre sur les abonnements de cet utilisateur uniquement
+    followed = {uid: users[uid] for uid in following_ids if uid in users}
+
+    drinks_by_user: dict[int, list] = {}
+    for r in rows:
+        uid = r["telegram_id"]
+        if uid not in followed:
+            continue
+        t = datetime.fromisoformat(r["logged_at"]).replace(tzinfo=timezone.utc)
+        drinks_by_user.setdefault(uid, []).append((r["alc_grams"], t, r["drink_key"]))
+
+    stats = []
+    for uid, user in followed.items():
+        drinks       = drinks_by_user.get(uid, [])
+        nb_drinks    = len(drinks)
+        total_alc    = sum(d[0] for d in drinks)
+        doses        = total_alc / 10
+        peak_bac     = 0.0
+        drink_tuples = [(d[0], d[1]) for d in drinks]
+        for i in range(len(drink_tuples)):
+            b = total_bac(drink_tuples[:i+1], user["weight_kg"], user["gender"], drink_tuples[i][1])
+            if b > peak_bac:
+                peak_bac = b
+        stats.append({
+            "username":  user["username"],
+            "nb_drinks": nb_drinks,
+            "doses":     round(doses, 1),
+            "peak_bac":  round(peak_bac, 2),
+        })
+
+    stats.sort(key=lambda x: x["doses"], reverse=True)
+    drinkers = [s for s in stats if s["nb_drinks"] > 0]
+    sobres   = [s["username"] for s in stats if s["nb_drinks"] == 0]
+
+    since_p = since.astimezone(PARIS)
+    until_p = (until - timedelta(seconds=1)).astimezone(PARIS)
+
+    lines = [
+        f"📊 *Recap de la semaine — {_fmt_date(since_p)} au {_fmt_date(until_p)}*\n",
+        f"Salut *{username}* ! Voilà le classement de tes amis cette semaine :\n",
+        "🏆 *Classement :*",
+    ]
+    for i, s in enumerate(drinkers):
+        medal = MEDALS[i] if i < 3 else f"{i+1}."
+        lines.append(
+            f"{medal} {s['username']} — {s['nb_drinks']} verres • {s['doses']} doses • pic {s['peak_bac']} g/L"
+        )
+    if not drinkers:
+        lines.append("_Aucun de tes amis n'a bu cette semaine 🤔_")
+    if sobres:
+        lines.append(f"\n🏳️‍🌈 *Grands sobres de la semaine :* {', '.join(sobres)}")
+    lines.append("\nÀ la semaine prochaine ! 🍻")
+
+    tg_msg = "\n".join(lines)
+
+    # Corps court pour la notif push
+    if drinkers:
+        top3 = [f"{MEDALS[i] if i < 3 else str(i+1)+'.'} {s['username']} {s['nb_drinks']}v"
+                for i, s in enumerate(drinkers[:3])]
+        push_body = " · ".join(top3)
+    else:
+        push_body = "Aucun ami n'a bu cette semaine 🤔"
+
+    return tg_msg, push_body
