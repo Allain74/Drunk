@@ -1629,6 +1629,8 @@
   }
 
   function openSocialList(type, ids, title) {
+    // Supprimer l'éventuel overlay précédent
+    document.getElementById('social-list-overlay')?.remove();
     // Récupère les infos utilisateur pour chaque ID
     // ids peuvent être des nombres ou des strings selon la source → normaliser
     const users = ids.map(id => allUsers.find(u => Number(u.telegram_id) === Number(id))).filter(Boolean);
@@ -2889,53 +2891,6 @@
     </div>`;
   }
 
-  async function openAmiProfil(tid, username) {
-    const overlay = document.getElementById('ami-profil-overlay');
-    document.getElementById('ami-profil-title').textContent = username;
-    document.getElementById('ami-profil-body').innerHTML = `<div style="text-align:center;color:var(--sub);padding:40px">Chargement…</div>`;
-    overlay.classList.add('open');
-
-    try {
-      const data = await fetch(`${API}/profile/${tid}`).then(r => r.json());
-      if (!data.ok) throw new Error(data.error);
-
-      await loadAvatars();
-      const initLetter = (username || '?')[0].toUpperCase();
-      const followingList = (data.following || [])
-        .map(f => `<div class="amis-row" style="cursor:default">
-          <div class="amis-row-avatar">${_avatarEl(f.telegram_id, 38, (f.username||'?')[0].toUpperCase(), allUsers.find(x=>x.telegram_id===f.telegram_id)?.gender||'homme')}</div>
-          <div class="amis-row-info">
-            <div class="amis-row-name">${esc(f.username)}</div>
-          </div>
-        </div>`).join('') || `<div style="color:var(--sub);text-align:center;padding:20px;font-size:0.85rem">Ne suit personne</div>`;
-
-      document.getElementById('ami-profil-body').innerHTML = `
-        <div style="display:flex;flex-direction:column;align-items:center;gap:12px;margin-bottom:24px">
-          ${_avatarEl(tid, 68, initLetter, allUsers.find(x=>x.telegram_id===tid)?.gender||'homme')}
-          <div style="font-size:1.3rem;font-weight:900">${esc(username)}</div>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px">
-          <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px;text-align:center">
-            <div style="font-size:1.8rem;font-weight:900">${data.followers_count}</div>
-            <div style="font-size:0.72rem;color:var(--sub);margin-top:4px">Abonnés</div>
-          </div>
-          <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px;text-align:center">
-            <div style="font-size:1.8rem;font-weight:900">${data.following_count}</div>
-            <div style="font-size:0.72rem;color:var(--sub);margin-top:4px">Suivis</div>
-          </div>
-        </div>
-        <div style="font-size:0.68rem;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#6366f1;margin-bottom:12px">Suivis</div>
-        <div class="amis-list">${followingList}</div>
-      `;
-    } catch(e) {
-      document.getElementById('ami-profil-body').innerHTML = `<div style="color:#ef4444;text-align:center;padding:40px">Erreur : ${e.message}</div>`;
-    }
-  }
-
-  function closeAmiProfil() {
-    document.getElementById('ami-profil-overlay').classList.remove('open');
-  }
-
   async function loadAbonnements() {
     const content = document.getElementById('abo-content');
     if (!content) return;
@@ -3541,22 +3496,6 @@
   </div>
 </div>
 
-<!-- ══════════════════════════════════════════════════════════════
-     OVERLAY — PROFIL AMI
-═══════════════════════════════════════════════════════════════ -->
-<div id="ami-profil-overlay" class="game-overlay">
-  <div class="go-header">
-    <button class="go-back" onclick="closeAmiProfil()">
-      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
-      Retour
-    </button>
-    <span class="go-title" id="ami-profil-title">Profil</span>
-    <span></span>
-  </div>
-  <div class="go-body" id="ami-profil-body" style="max-width:520px;margin:0 auto;width:100%">
-    <div style="text-align:center;color:var(--sub);padding:40px">Chargement…</div>
-  </div>
-</div>
 
 <script>
 // ══════════════════════════════════════════════════════════════
