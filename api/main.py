@@ -353,6 +353,27 @@ async def ping():
     return {"ok": True}
 
 
+@app.post("/admin/set-coins")
+async def admin_set_coins(request: Request):
+    """Endpoint admin : définit le solde exact d'un utilisateur."""
+    body = await request.json()
+    secret = body.get("secret", "")
+    if secret != os.environ.get("ADMIN_SECRET", ""):
+        return {"ok": False, "error": "Non autorisé"}
+    username = body.get("username", "").strip()
+    amount   = body.get("amount")
+    if not username or amount is None:
+        return {"ok": False, "error": "username et amount requis"}
+    user = get_user_by_username(username)
+    if not user:
+        return {"ok": False, "error": f"Utilisateur '{username}' introuvable"}
+    current = get_coins(user["telegram_id"])
+    delta = int(amount) - current
+    if delta != 0:
+        add_coins(user["telegram_id"], delta, f"Admin set-coins → {amount}")
+    return {"ok": True, "username": user["username"], "before": current, "after": int(amount)}
+
+
 @app.get("/snapshot")
 def get_snapshot():
     return build_snapshot()
