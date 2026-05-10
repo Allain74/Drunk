@@ -21,10 +21,15 @@ from data.database import (
     update_blackjack_player, create_blackjack_session, add_blackjack_player,
     follow_user, unfollow_user, is_following, get_following,
     verify_password,
+    log_drink as db_log_drink, start_session, end_session,
+    upsert_user, set_password, get_user_by_username,
+    delete_last_drink, update_max_bac, is_username_taken,
+    get_session_drinks,
 )
 from core.recap import build_weekly_recap
-from core.widmark import total_bac, bac_label, sober_in_hours
+from core.widmark import total_bac, bac_label, sober_in_hours, alcohol_grams
 from core.blackjack import new_deck, hand_value, display_hand, is_blackjack
+from core.drinks import DRINKS
 
 load_dotenv()
 
@@ -90,7 +95,7 @@ async def lifespan(app: FastAPI):
         BotCommand("cidre",      "🍎 Cidre 25cl"),
         BotCommand("sangria",    "🍷 Sangria 20cl"),
         BotCommand("bucket",     "🪣 Bucket thaïlandais (125ml, 40°)"),
-        BotCommand("solde",      "🪙 Voir ton solde de BeerCoins"),
+        BotCommand("solde",      "🪙 Voir ton solde de pièces"),
         BotCommand("offrir",     "🎁 Offrir des coins  →  /offrir Prénom 50"),
         BotCommand("pari",       "🎰 Lancer un pari"),
         BotCommand("accepter",   "✅ Accepter un pari"),
@@ -484,6 +489,184 @@ async def login_endpoint(request: Request):
         "username": user["username"],
         "is_admin": user["telegram_id"] == admin_id,
     }
+
+
+def _ensure_session(telegram_id: int):
+    if not get_active_session(telegram_id):
+        start_session(telegram_id)
+
+
+# ── Inscription web ───────────────────────────────────────────────────────────
+
+@app.post("/register")
+async def register_endpoint(request: Request):
+    import random as _rand
+    body     = await request.json()
+    username = body.get("username", "").strip()
+    password = body.get("password", "").strip()
+    gender   = body.get("gender", "").strip()
+    weight   = body.get("weight")
+
+    if not all([username, password, gender, weight]):
+        return {"ok": False, "error": "Tous les champs sont requis"}
+    if len(username) < 2 or len(username) > 30:
+        return {"ok": False, "error": "Pseudo invalide (2–30 caractères)"}
+    if len(password) < 4:
+        return {"ok": False, "error": "Mot de passe trop court (min. 4 caractères)"}
+    if gender not in ("homme", "femme"):
+        return {"ok": False, "error": "Genre invalide"}
+    try:
+        weight = float(weight)
+        assert 30 < weight < 250
+    except Exception:
+        return {"ok": False, "error": "Poids invalide (30–250 kg)"}
+
+    if get_user_by_username(username):
+        return {"ok": False, "error": "Ce pseudo est déjà utilisé"}
+
+    # ID web : grand entier pour éviter tout conflit avec les Telegram IDs
+    web_id = _rand.randint(10**12, 9 * 10**12)
+
+    upsert_user(web_id, username, weight, gender)
+    set_password(web_id, password)
+    _ensure_session(web_id)
+
+    # Abonnements mutuels avec tous les utilisateurs existants
+    all_users = get_all_users()
+    for u in all_users:
+        if u["telegram_id"] != web_id:
+            follow_user(web_id, u["telegram_id"])
+            follow_user(u["telegram_id"], web_id)
+
+    admin_id = int(os.environ.get("ADMIN_ID", "0"))
+    return {
+        "ok": True,
+        "telegram_id": web_id,
+        "username": username,
+        "is_admin": web_id == admin_id,
+    }
+
+
+# ── Modification de profil ────────────────────────────────────────────────────
+
+@app.post("/update-profile")
+async def update_profile_endpoint(request: Request):
+    body          = await request.json()
+    telegram_id   = body.get("telegram_id")
+    current_pwd   = body.get("current_password", "").strip()
+    new_gender    = body.get("gender")
+    new_weight    = body.get("weight")
+    new_password  = body.get("new_password", "").strip()
+
+    if not telegram_id:
+        return {"ok": False, "error": "Non authentifié"}
+
+    user = get_user(telegram_id)
+    if not user:
+        return {"ok": False, "error": "Utilisateur introuvable"}
+
+    if not verify_password(user["username"], current_pwd):
+        return {"ok": False, "error": "Mot de passe incorrect"}
+
+    if new_gender or new_weight:
+        gender = new_gender if new_gender in ("homme", "femme") else user["gender"]
+        try:
+            w = float(new_weight) if new_weight else user["weight_kg"]
+            assert 30 < w < 250
+        except Exception:
+            return {"ok": False, "error": "Poids invalide (30–250 kg)"}
+        upsert_user(telegram_id, user["username"], w, gender)
+
+    if new_password:
+        if len(new_password) < 4:
+            return {"ok": False, "error": "Nouveau mot de passe trop court (min. 4 caractères)"}
+        set_password(telegram_id, new_password)
+
+    return {"ok": True}
+
+
+# ── Logger un verre depuis le web ─────────────────────────────────────────────
+
+@app.post("/log-drink")
+async def log_drink_web(request: Request):
+    body        = await request.json()
+    telegram_id = body.get("telegram_id")
+    drink_key   = body.get("drink_key")
+
+    if not telegram_id or not drink_key:
+        return {"ok": False, "error": "Paramètres manquants"}
+
+    user = get_user(telegram_id)
+    if not user:
+        return {"ok": False, "error": "Utilisateur introuvable"}
+    if drink_key not in DRINKS:
+        return {"ok": False, "error": "Boisson inconnue"}
+
+    drink = DRINKS[drink_key]
+    _ensure_session(telegram_id)
+    db_log_drink(telegram_id, drink_key, alcohol_grams(drink.volume_ml, drink.abv))
+    add_coins(telegram_id, 5, f"Verre bu ({drink.name})")
+
+    drinks_data = get_session_drinks(telegram_id)
+    bac = total_bac(drinks_data, user["weight_kg"], user["gender"])
+    update_max_bac(telegram_id, bac)
+
+    await _broadcast(build_snapshot())
+    return {
+        "ok": True,
+        "bac": round(bac, 3),
+        "nb_drinks": len(drinks_data),
+        "label": bac_label(bac),
+    }
+
+
+# ── Annuler le dernier verre ──────────────────────────────────────────────────
+
+@app.post("/undo-drink")
+async def undo_drink_web(request: Request):
+    body        = await request.json()
+    telegram_id = body.get("telegram_id")
+
+    if not telegram_id:
+        return {"ok": False, "error": "Non authentifié"}
+
+    user = get_user(telegram_id)
+    if not user:
+        return {"ok": False, "error": "Utilisateur introuvable"}
+
+    if not delete_last_drink(telegram_id):
+        return {"ok": False, "error": "Aucun verre à annuler"}
+
+    drinks_data = get_session_drinks(telegram_id)
+    bac = total_bac(drinks_data, user["weight_kg"], user["gender"])
+
+    await _broadcast(build_snapshot())
+    return {
+        "ok": True,
+        "bac": round(bac, 3),
+        "nb_drinks": len(drinks_data),
+        "label": bac_label(bac),
+    }
+
+
+# ── Remettre les compteurs à zéro ────────────────────────────────────────────
+
+@app.post("/reset-session")
+async def reset_session_web(request: Request):
+    body        = await request.json()
+    telegram_id = body.get("telegram_id")
+
+    if not telegram_id:
+        return {"ok": False, "error": "Non authentifié"}
+
+    if not get_user(telegram_id):
+        return {"ok": False, "error": "Utilisateur introuvable"}
+
+    end_session(telegram_id)
+    start_session(telegram_id)
+
+    await _broadcast(build_snapshot())
+    return {"ok": True}
 
 
 @app.websocket("/ws/blackjack/{token}")

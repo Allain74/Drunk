@@ -744,7 +744,7 @@ async def cmd_solde(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     tid = update.effective_user.id
     coins = get_coins(tid)
     txs = get_transactions(tid, 5)
-    lines = [f"🪙 *Ton solde : {coins} BeerCoins*\n", "*Dernières transactions :*"]
+    lines = [f"🪙 *Ton solde : {coins} pièces*\n", "*Dernières transactions :*"]
     for t in txs:
         sign = "+" if t["amount"] > 0 else ""
         lines.append(f"{sign}{t['amount']} 🪙 — {t['reason']}")
