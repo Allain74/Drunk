@@ -638,7 +638,7 @@
 .game-overlay {
   position: fixed; inset: 0; z-index: 200;
   background: var(--bg); display: flex; flex-direction: column;
-  transform: translateX(100%); transition: transform .28s cubic-bezier(.4,0,.2,1);
+  transform: translateX(100%); transition: transform .2s cubic-bezier(.4,0,.2,1);
   overflow: hidden;
 }
 .game-overlay.open { transform: translateX(0); }
@@ -1398,6 +1398,9 @@
   const NAV_TABS = ['menu','live','classement','amis','profil'];
 
   function showTab(name) {
+    // Fermer de force tous les overlays pour éviter d'être bloqué
+    _forceCloseAllOverlays();
+
     document.querySelectorAll('.nav-item').forEach((btn, i) => {
       btn.classList.toggle('active', NAV_TABS[i] === name);
     });
@@ -1408,6 +1411,25 @@
     if (name === 'amis')       { loadAbonnements(); }
     if (name === 'profil')     { loadProfil(); }
     if (name === 'menu')       { loadMenu(); }
+  }
+
+  function _forceCloseAllOverlays() {
+    // Overlays plein écran (game-overlay)
+    document.querySelectorAll('.game-overlay').forEach(el => el.classList.remove('open'));
+    // Profil plein écran
+    document.getElementById('modal-bg4')?.classList.remove('open');
+    // Social list (créé dynamiquement)
+    document.getElementById('social-list-overlay')?.remove();
+    // Avatar fullscreen
+    document.getElementById('avatar-fs-overlay')?.remove();
+    // BJ : nettoyer l'état WS pour éviter la boucle de reconnexion
+    if (_bjToken) {
+      if (_bjWs) { _bjWs.onclose = null; _bjWs.onerror = null; _bjWs.close(); _bjWs = null; }
+      _bjToken = null; _bjLastState = null;
+      _bjStopPoll();
+      document.getElementById('bj-lobby').style.display = '';
+      document.getElementById('bj-game-view').style.display = 'none';
+    }
   }
 
   function showClassementSub(sub) {
@@ -2144,8 +2166,9 @@
     const label  = LABELS[lvl];
     const initLetter = (myName || '?')[0].toUpperCase();
 
-    // Charge les avatars (cache 60s) avant le rendu
-    await loadAvatars();
+    // Rendu immédiat avec le cache existant ; si les avatars se rafraîchissent, re-render une seule fois
+    const _avTs = _avatarCacheTs;
+    loadAvatars().then(() => { if (_avatarCacheTs !== _avTs && document.getElementById('profil-content')) loadProfil(); });
     const myGender  = allUsers.find(x => x.telegram_id === myTid)?.gender || me?.gender || 'homme';
     const myAvatar  = _avatarCache[String(myTid)];
     const myGradient = myGender === 'femme' ? 'linear-gradient(135deg,#ec4899,#f97316)' : 'linear-gradient(135deg,#6366f1,#06b6d4)';
@@ -2571,14 +2594,9 @@
   // ── Palmarès ──
   let _palmares = [];
 
-  async function loadPalmares() {
+  function _renderPalmares() {
     const tbody = document.getElementById('palmares-tbody');
-    if (!myTid) {
-      if (tbody) tbody.innerHTML = `<tr><td colspan="7">${_loginCta('Classement réservé aux membres')}</td></tr>`;
-      return;
-    }
-    _palmares = await fetch(`${API}/alltime`).then(r=>r.json());
-    // Filtre par follows (comme le Live et le Défi)
+    if (!tbody) return;
     const visible = myTid
       ? _palmares.filter(u => {
           const tid = getTidByName(u.username);
@@ -2590,20 +2608,28 @@
     tbody.innerHTML = visible.map((u,i) => {
       const tid = getTidByName(u.username);
       const isAdm = tid && isAdmin(tid);
-      const nameHtml = isAdm
-        ? `<span class="admin-name">${esc(u.username)}</span>`
-        : `<strong>${esc(u.username)}</strong>`;
-      return `
-      <tr onclick="openModal2('${esc(u.username)}')">
-        <td>${medals[i]||i+1}</td>
-        <td>${nameHtml}</td>
-        <td>${(u.total_alc_g/10).toFixed(1)}</td>
-        <td>${u.avg_doses_per_day}</td>
-        <td style="color:#f97316;font-weight:700">${u.max_bac > 0 ? u.max_bac + ' g/L' : '—'}</td>
+      const nameHtml = isAdm ? `<span class="admin-name">${esc(u.username)}</span>` : `<strong>${esc(u.username)}</strong>`;
+      return `<tr onclick="openModal2('${esc(u.username)}')">
+        <td>${medals[i]||i+1}</td><td>${nameHtml}</td>
+        <td>${(u.total_alc_g/10).toFixed(1)}</td><td>${u.avg_doses_per_day}</td>
+        <td style="color:#f97316;font-weight:700">${u.max_bac > 0 ? u.max_bac+' g/L' : '—'}</td>
         <td>${u.total_drinks}</td>
         <td>${u.total_alc_g.toFixed(0)}g</td>
       </tr>`;
-    }).join('');
+    }).join('') || `<tr><td colspan="7" style="text-align:center;color:var(--sub)">Aucune donnée</td></tr>`;
+  }
+
+  async function loadPalmares() {
+    const tbody = document.getElementById('palmares-tbody');
+    if (!myTid) {
+      if (tbody) tbody.innerHTML = `<tr><td colspan="7">${_loginCta('Classement réservé aux membres')}</td></tr>`;
+      return;
+    }
+    // Affichage immédiat avec cache
+    if (_palmares.length) _renderPalmares();
+    // Fetch en arrière-plan puis re-render
+    _palmares = await fetch(`${API}/alltime`).then(r=>r.json());
+    _renderPalmares();
   }
 
   function openModal2(username) {
@@ -2902,7 +2928,9 @@
     const content = document.getElementById('abo-content');
     if (!content) return;
 
-    await loadAvatars();
+    // Rendu immédiat avec cache ; re-render si avatars se rafraîchissent
+    const _avTs = _avatarCacheTs;
+    loadAvatars().then(() => { if (_avatarCacheTs !== _avTs && document.getElementById('abo-content')) loadAbonnements(); });
     const followingCount = followingSet.size;
     const { label: squadLabel, sub: squadSub } = _aboSquadStatus(followingCount);
 
