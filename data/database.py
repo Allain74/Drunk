@@ -147,6 +147,10 @@ def init_db():
         _execute("ALTER TABLE users ADD COLUMN password_hash TEXT DEFAULT ''")
     except Exception:
         pass
+    try:
+        _execute("ALTER TABLE users ADD COLUMN avatar TEXT DEFAULT NULL")
+    except Exception:
+        pass
     _pipeline([
         ("""CREATE TABLE IF NOT EXISTS users (
             telegram_id INTEGER PRIMARY KEY,
@@ -677,6 +681,18 @@ def get_push_subscriptions(telegram_id: int) -> list[dict]:
         "SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE telegram_id=?",
         [telegram_id]
     )
+
+
+# ── Avatars ───────────────────────────────────────────────────────────────────
+
+def set_avatar(telegram_id: int, avatar: str):
+    """Stocke un avatar (data URL base64) pour un utilisateur."""
+    _execute("UPDATE users SET avatar=? WHERE telegram_id=?", [avatar, telegram_id])
+
+
+def get_all_avatars() -> list[dict]:
+    """Retourne tous les avatars non-null sous forme [{telegram_id, avatar}]."""
+    return _fetchall("SELECT telegram_id, avatar FROM users WHERE avatar IS NOT NULL")
 
 
 def delete_user(telegram_id: int):

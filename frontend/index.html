@@ -169,7 +169,12 @@
     /* ── Profil — cartes style app ── */
     .p-card { background: var(--card); border-radius: 20px; padding: 20px; margin-bottom: 12px; border: 1px solid var(--border); }
     .p-card-label { font-size: 0.75rem; font-weight: 700; color: var(--sub); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 14px; }
-    .p-avatar { width: 80px; height: 80px; border-radius: 50%; background: linear-gradient(135deg,#6366f1,#06b6d4); display: flex; align-items: center; justify-content: center; font-size: 2.2rem; font-weight: 900; color: #fff; margin: 0 auto 10px; }
+    .p-avatar { width: 80px; height: 80px; border-radius: 50%; background: linear-gradient(135deg,#6366f1,#06b6d4); display: flex; align-items: center; justify-content: center; font-size: 2.2rem; font-weight: 900; color: #fff; margin: 0 auto 10px; overflow:hidden; }
+    .p-avatar img { width:100%; height:100%; object-fit:cover; border-radius:50%; }
+    .p-avatar-wrap { position:relative; width:80px; margin:0 auto 10px; cursor:pointer; }
+    .p-avatar-wrap .p-avatar { margin:0; }
+    .p-avatar-edit { position:absolute; bottom:0; right:0; width:26px; height:26px; border-radius:50%; background:#6366f1; display:flex; align-items:center; justify-content:center; font-size:0.75rem; border:2px solid var(--card); }
+    .p-avatar-wrap:hover .p-avatar { opacity:0.85; }
     .p-username { font-size: 1.2rem; font-weight: 800; color: #6366f1; text-align: center; }
     .p-stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 4px; }
     .p-stat { background: var(--bg); border-radius: 14px; padding: 14px; text-align: center; }
@@ -486,7 +491,8 @@
     /* Liste */
     .amis-list { display:flex; flex-direction:column; gap:8px; }
     .amis-row { display:flex; align-items:center; gap:12px; background:var(--card); border:1px solid var(--border); border-radius:14px; padding:12px 16px; }
-    .amis-row-avatar { width:38px; height:38px; border-radius:50%; background:linear-gradient(135deg,#6366f1,#06b6d4); display:flex; align-items:center; justify-content:center; font-weight:800; font-size:0.95rem; color:#fff; flex-shrink:0; }
+    .amis-row-avatar { width:38px; height:38px; border-radius:50%; background:linear-gradient(135deg,#6366f1,#06b6d4); display:flex; align-items:center; justify-content:center; font-weight:800; font-size:0.95rem; color:#fff; flex-shrink:0; overflow:hidden; }
+    .amis-row-avatar img { width:100%; height:100%; object-fit:cover; border-radius:50%; }
     .amis-row-info { flex:1; min-width:0; }
     .amis-row-name { font-weight:700; font-size:0.92rem; }
     .amis-row-sub { font-size:0.7rem; color:var(--sub); margin-top:2px; }
@@ -1363,11 +1369,12 @@
     const pct = Math.min(100,(u.bac/2)*100).toFixed(1);
     const tid = getTidByName(u.username);
     const adminClass = (tid && isAdmin(tid)) ? ' admin-name' : '';
+    const avHtml = _avatarEl(tid, 32, (u.username||'?')[0].toUpperCase(), 'flex-shrink:0;');
     return `
     <div class="card ${!u.has_session?'no-session':''}" onclick="openProfile('${esc(u.username)}')">
       <div class="card-stripe" style="background:${color}"></div>
       <div class="card-head">
-        <div class="card-name${adminClass}">${esc(u.username)}</div>
+        <div style="display:flex;align-items:center;gap:8px;min-width:0">${avHtml}<div class="card-name${adminClass}" style="min-width:0">${esc(u.username)}</div></div>
         <div class="card-emoji">${EMOJIS[lvl]}</div>
       </div>
       <div class="bac-block">
@@ -1416,6 +1423,10 @@
     const color = COLORS[lvl];
     const soberIn = snapshotUser && snapshotUser.bac > 0 ? snapshotUser.sober_in_h + 'h' : '—';
 
+    await loadAvatars();
+    const initLetter = (username || '?')[0].toUpperCase();
+    const avatarHtml = _avatarEl(tid, 64, initLetter, 'margin:0 auto 10px;display:block;');
+
     let followBtn = '';
     if (!myTid) {
       followBtn = '';
@@ -1432,6 +1443,7 @@
     // Affichage provisoire avant fetch des coins
     const renderModal = (coins) => {
       document.getElementById('modal4-content').innerHTML = `
+        <div style="text-align:center;margin-bottom:8px">${avatarHtml}</div>
         <div class="profile-name">${nameHtml}</div>
         ${badgeHtml}
         <div class="profile-stats">
@@ -1778,6 +1790,75 @@
     if (note) note.style.display = myTid ? 'none' : 'block';
   }
 
+  // ── Avatars cache ────────────────────────────────────────────────────────────
+  let _avatarCache = {};
+  let _avatarCacheTs = 0;
+
+  async function loadAvatars(force = false) {
+    const now = Date.now();
+    if (!force && now - _avatarCacheTs < 60000 && Object.keys(_avatarCache).length) return;
+    try {
+      _avatarCache = await fetch(`${API}/avatars`).then(r => r.json());
+      _avatarCacheTs = now;
+    } catch(e) {}
+  }
+
+  /** Génère le HTML d'un avatar : photo si dispo, sinon initiale sur gradient */
+  function _avatarEl(telegramId, sizePx, initLetter, extraStyle = '') {
+    const av = telegramId ? _avatarCache[String(telegramId)] : null;
+    if (av) {
+      return `<img src="${av}" style="width:${sizePx}px;height:${sizePx}px;border-radius:50%;object-fit:cover;${extraStyle}">`;
+    }
+    const fs = Math.round(sizePx * 0.38);
+    return `<div style="width:${sizePx}px;height:${sizePx}px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#06b6d4);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:${fs}px;color:#fff;flex-shrink:0;${extraStyle}">${initLetter}</div>`;
+  }
+
+  /** Redimensionne une image via canvas et renvoie un data URL JPEG compressé */
+  function _resizeImage(file, maxPx = 200, quality = 0.7) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = e => {
+        const img = new Image();
+        img.onload = () => {
+          const side = Math.min(img.width, img.height);
+          const sx   = (img.width  - side) / 2;
+          const sy   = (img.height - side) / 2;
+          const canvas = document.createElement('canvas');
+          canvas.width = canvas.height = maxPx;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, sx, sy, side, side, 0, 0, maxPx, maxPx);
+          resolve(canvas.toDataURL('image/jpeg', quality));
+        };
+        img.onerror = reject;
+        img.src = e.target.result;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function handleAvatarUpload(input) {
+    const file = input.files[0];
+    if (!file) return;
+    if (!myTid) { showToast('❌ Non connecté'); return; }
+    showToast('⏳ Traitement…');
+    try {
+      const dataUrl = await _resizeImage(file, 200, 0.72);
+      const res = await fetch(`${API}/profile/avatar`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ telegram_id: myTid, avatar: dataUrl }),
+      }).then(r => r.json());
+      if (!res.ok) { showToast('❌ ' + (res.error || 'Erreur')); return; }
+      // Met à jour le cache immédiatement
+      _avatarCache[String(myTid)] = dataUrl;
+      _avatarCacheTs = Date.now();
+      showToast('✅ Photo de profil mise à jour !');
+      loadProfil();
+    } catch(e) { showToast('❌ Erreur lors du traitement'); }
+    input.value = '';
+  }
+
   // ── Profil tab ──
   async function loadProfil() {
     const box = document.getElementById('profil-content');
@@ -1842,6 +1923,13 @@
     const label  = LABELS[lvl];
     const initLetter = (myName || '?')[0].toUpperCase();
 
+    // Charge les avatars (cache 60s) avant le rendu
+    await loadAvatars();
+    const myAvatar = _avatarCache[String(myTid)];
+    const avatarInner = myAvatar
+      ? `<img src="${myAvatar}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+      : initLetter;
+
     // Rendu immédiat avec poids vide → mis à jour après fetch
     box.innerHTML = `
       <div class="page-hd">
@@ -1853,8 +1941,13 @@
 
         <!-- Avatar + pseudo -->
         <div class="p-card" style="text-align:center;padding-bottom:24px">
-          <div class="p-avatar">${initLetter}</div>
+          <input type="file" id="avatar-file-input" accept="image/*" style="display:none" onchange="handleAvatarUpload(this)">
+          <div class="p-avatar-wrap" onclick="document.getElementById('avatar-file-input').click()" title="Changer la photo de profil">
+            <div class="p-avatar">${avatarInner}</div>
+            <div class="p-avatar-edit">📷</div>
+          </div>
           <div class="p-username">@${esc(myName)}</div>
+          <div style="font-size:0.72rem;color:var(--sub);margin-top:4px">Appuie sur la photo pour la changer</div>
         </div>
 
         <!-- Infos -->
@@ -2151,6 +2244,12 @@
       return;
     }
 
+    // Charge les avatars en arrière-plan puis re-render si besoin
+    const tsBeforeLoad = _avatarCacheTs;
+    loadAvatars().then(() => {
+      if (_avatarCacheTs !== tsBeforeLoad) render(lastData);
+    });
+
     // Uniquement les joueurs suivis qui boivent ACTUELLEMENT (bac > 0)
     const filtered = filterSnapshot(data).filter(u => u.bac > 0);
 
@@ -2332,7 +2431,7 @@
     else if (following) btn = `<button class="amis-btn unfollow" onclick="event.stopPropagation();aboToggle(${u.telegram_id},false)">Ne plus suivre</button>`;
     else              btn = `<button class="amis-btn follow"   onclick="event.stopPropagation();aboToggle(${u.telegram_id},true)">Suivre</button>`;
     return `<div class="amis-row" onclick="openAmiProfil(${u.telegram_id},'${esc(u.username)}')" style="cursor:pointer">
-      <div class="amis-row-avatar">${initLetter}</div>
+      <div class="amis-row-avatar">${_avatarEl(u.telegram_id, 38, initLetter)}</div>
       <div class="amis-row-info">
         <div class="amis-row-name">${nameHtml}</div>
         <div class="amis-row-sub">${sub}</div>
@@ -2351,10 +2450,11 @@
       const data = await fetch(`${API}/profile/${tid}`).then(r => r.json());
       if (!data.ok) throw new Error(data.error);
 
+      await loadAvatars();
       const initLetter = (username || '?')[0].toUpperCase();
       const followingList = (data.following || [])
         .map(f => `<div class="amis-row" style="cursor:default">
-          <div class="amis-row-avatar">${(f.username||'?')[0].toUpperCase()}</div>
+          <div class="amis-row-avatar">${_avatarEl(f.telegram_id, 38, (f.username||'?')[0].toUpperCase())}</div>
           <div class="amis-row-info">
             <div class="amis-row-name">${esc(f.username)}</div>
           </div>
@@ -2362,7 +2462,7 @@
 
       document.getElementById('ami-profil-body').innerHTML = `
         <div style="display:flex;flex-direction:column;align-items:center;gap:12px;margin-bottom:24px">
-          <div style="width:68px;height:68px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#06b6d4);display:flex;align-items:center;justify-content:center;font-size:1.8rem;font-weight:900;color:#fff">${initLetter}</div>
+          ${_avatarEl(tid, 68, initLetter)}
           <div style="font-size:1.3rem;font-weight:900">${esc(username)}</div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px">
@@ -2391,6 +2491,7 @@
     const content = document.getElementById('abo-content');
     if (!content) return;
 
+    await loadAvatars();
     const followingCount = followingSet.size;
     const { label: squadLabel, sub: squadSub } = _aboSquadStatus(followingCount);
 

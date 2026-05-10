@@ -30,6 +30,7 @@ from data.database import (
     init_push_subscriptions, save_push_subscription,
     delete_push_subscription, get_push_subscriptions,
     get_blackjack_stats, get_profile_follows,
+    set_avatar, get_all_avatars,
 )
 from core.recap import build_weekly_recap
 from core.widmark import total_bac, bac_label, sober_in_hours, alcohol_grams
@@ -1192,6 +1193,33 @@ def get_profile(telegram_id: int):
         **follows,
         "bj": bj,
     }
+
+
+@app.get("/avatars")
+def get_avatars():
+    """Retourne tous les avatars : {telegram_id: data_url}."""
+    rows = get_all_avatars()
+    return {str(r["telegram_id"]): r["avatar"] for r in rows}
+
+
+@app.post("/profile/avatar")
+async def upload_avatar(request: Request):
+    """Sauvegarde l'avatar (data URL base64) d'un utilisateur."""
+    body = await request.json()
+    tid    = body.get("telegram_id")
+    avatar = body.get("avatar", "")
+    if not tid or not avatar:
+        return {"ok": False, "error": "Données manquantes"}
+    user = get_user(int(tid))
+    if not user:
+        return {"ok": False, "error": "Utilisateur introuvable"}
+    # Limite à ~80 Ko en base64 (≈ 60 Ko image réelle)
+    if len(avatar) > 100_000:
+        return {"ok": False, "error": "Image trop grande (max 60 Ko)"}
+    if not avatar.startswith("data:image/"):
+        return {"ok": False, "error": "Format invalide"}
+    set_avatar(int(tid), avatar)
+    return {"ok": True}
 
 
 @app.get("/blackjack/stats/all")
