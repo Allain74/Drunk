@@ -328,7 +328,22 @@
     /* ── Map ── */
     #map-section { max-width:1000px; margin:24px auto 0; }
     #map-section h2 { font-size:.9rem; font-weight:700; color:var(--sub); margin-bottom:10px; text-transform:uppercase; }
-    #map { height:300px; border-radius:16px; border:1px solid var(--border); overflow:hidden; }
+    #map { height:360px; border-radius:20px; border:none; overflow:hidden; box-shadow:0 4px 32px #0000001a; }
+    .map-marker-pin {
+      display:flex; align-items:center; gap:6px;
+      padding:6px 12px; border-radius:99px;
+      font-weight:700; font-size:12px; color:#fff; white-space:nowrap;
+      box-shadow:0 3px 12px #0004; border:2px solid rgba(255,255,255,0.35);
+      backdrop-filter:blur(4px);
+    }
+    .map-marker-dot { width:8px; height:8px; border-radius:50%; background:#fff; flex-shrink:0; }
+    .leaflet-popup-content-wrapper { border-radius:16px!important; box-shadow:0 4px 24px #0003!important; padding:0!important; }
+    .leaflet-popup-content { margin:0!important; }
+    .map-popup { padding:14px 16px; min-width:160px; }
+    .map-popup-name { font-weight:800; font-size:1rem; margin-bottom:8px; }
+    .map-popup-row { display:flex; justify-content:space-between; gap:16px; font-size:0.78rem; color:var(--sub); margin-bottom:3px; }
+    .map-popup-val { font-weight:700; color:var(--text); }
+    .leaflet-popup-tip-container { display:none; }
 
     /* ── Empty ── */
     #empty { text-align:center; color:var(--sub); margin-top:80px; }
@@ -792,8 +807,8 @@
       .podium { flex-direction: column; align-items: center; }
       .podium-item { width: 100%; max-width: 320px; padding: 12px 20px; }
 
-      /* Carte map plus petite */
-      #map { height: 220px; }
+      /* Carte map mobile */
+      #map { height: 280px; }
 
       /* Modaux : pleine largeur sur mobile */
       .modal, .modal2, .modal3, .modal4, .modal-id, #modal-bg-edit .modal-id, #modal-bg-delete .modal-id, #modal-bg-picker .modal {
@@ -923,23 +938,20 @@
     </div>
     <button id="theme-btn" onclick="toggleTheme()" style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:8px 12px;cursor:pointer;font-size:1rem;color:var(--text);margin-top:4px">🌙</button>
   </div>
-  <div id="grid"></div>
-  <div id="empty" style="display:none"><div class="icon">🫗</div><p>Aucune session active.</p></div>
 
-  <!-- Classement en direct (ex-Défi) -->
-  <div id="ranking-section" style="margin-top:32px">
-    <div style="font-size:0.68rem;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#6366f1;margin-bottom:16px">CLASSEMENT EN DIRECT</div>
+  <!-- 1. Classement en direct — TOP 3 seulement, joueurs actifs -->
+  <div id="ranking-section" style="margin-bottom:28px">
+    <div style="font-size:0.68rem;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#6366f1;margin-bottom:14px">CLASSEMENT EN DIRECT</div>
     <div class="podium" id="podium"></div>
-    <div class="table-scroll">
-      <table class="defi-table">
-        <thead><tr><th>#</th><th>Joueur</th><th>TAC</th><th>Record</th><th>Verres</th><th>Sobre dans</th></tr></thead>
-        <tbody id="defi-tbody"></tbody>
-      </table>
-    </div>
   </div>
 
-  <div id="map-section" style="display:none;margin-top:24px">
-    <div style="font-size:0.68rem;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#6366f1;margin-bottom:12px">POSITIONS</div>
+  <!-- 2. Sessions actives -->
+  <div id="grid"></div>
+  <div id="empty" style="display:none"><div class="icon">🫗</div><p>Personne ne boit actuellement.</p></div>
+
+  <!-- 3. Carte — tout en bas -->
+  <div id="map-section" style="display:none;margin-top:32px">
+    <div style="font-size:0.68rem;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#6366f1;margin-bottom:14px">📍 POSITIONS</div>
     <div id="map"></div>
   </div>
 </div>
@@ -1275,6 +1287,10 @@
     html.setAttribute('data-theme', dark ? 'light' : 'dark');
     document.getElementById('theme-btn').textContent = dark ? '🌙' : '☀️';
     localStorage.setItem('theme', dark ? 'light' : 'dark');
+    // Met à jour les tuiles de la carte si elle est chargée
+    if (map && lastData) {
+      updateMap(filterSnapshot(lastData).filter(u => u.lat && u.lon && u.bac > 0));
+    }
   }
 
   const saved = localStorage.getItem('theme');
@@ -1531,71 +1547,102 @@
   }
 
   // ── Défi ──
-  function renderDefi(data) {
-    const sorted = [...data].sort((a,b) => b.bac - a.bac);
-    const medals = ['🥇','🥈','🥉'];
+  function renderDefi(active) {
+    // active = uniquement joueurs avec bac > 0
+    const sorted = [...active].sort((a, b) => b.bac - a.bac);
+    const medals = ['🥇', '🥈', '🥉'];
     const podium = document.getElementById('podium');
-    const tbody  = document.getElementById('defi-tbody');
+    const rankSection = document.getElementById('ranking-section');
 
-    podium.innerHTML = sorted.slice(0,3).map((u,i) => {
+    if (!sorted.length) {
+      if (rankSection) rankSection.style.display = 'none';
+      return;
+    }
+    if (rankSection) rankSection.style.display = '';
+
+    podium.innerHTML = sorted.slice(0, 3).map((u, i) => {
       const color = COLORS[level(u.bac)];
       const tid = getTidByName(u.username);
       const isAdm = tid && isAdmin(tid);
       const nameHtml = isAdm
         ? `<span class="admin-name">${esc(u.username)}</span>`
         : esc(u.username);
-      return `<div class="podium-item">
-        <div class="podium-medal">${medals[i]||''}</div>
+      return `<div class="podium-item" onclick="openProfile('${esc(u.username)}')" style="cursor:pointer">
+        <div class="podium-medal">${medals[i] || ''}</div>
         <div class="podium-name">${nameHtml}</div>
         <div class="podium-bac" style="color:${color}">${u.bac.toFixed(2)}</div>
-        <div class="podium-lbl">g/L — ${LABELS[level(u.bac)]}</div>
+        <div class="podium-lbl">g/L · ${u.nb_drinks} verre${u.nb_drinks > 1 ? 's' : ''}</div>
       </div>`;
-    }).join('');
-
-    tbody.innerHTML = sorted.map((u,i) => {
-      const color = COLORS[level(u.bac)];
-      const tid = getTidByName(u.username);
-      const isAdm = tid && isAdmin(tid);
-      const nameHtml = isAdm
-        ? `<span class="admin-name">${esc(u.username)}</span>`
-        : `<strong>${esc(u.username)}</strong>`;
-      return `<tr>
-        <td>${medals[i]||i+1}</td>
-        <td>${nameHtml}</td>
-        <td style="color:${color};font-weight:700">${u.bac.toFixed(2)} g/L</td>
-        <td style="color:#f97316;font-weight:700">${u.peak_24h > 0 ? u.peak_24h + ' g/L' : '—'}</td>
-        <td>${u.nb_drinks}</td>
-        <td>${u.sober_in_h}h</td>
-      </tr>`;
     }).join('');
   }
 
   // ── Carte ──
   let map = null, markers = {};
 
-  function updateMap(data) {
-    const withLoc = data.filter(u => u.lat && u.lon);
+  function updateMap(withLoc) {
     const section = document.getElementById('map-section');
-    if (!withLoc.length) { section.style.display='none'; return; }
+    if (!withLoc.length) { section.style.display = 'none'; return; }
     section.style.display = 'block';
+
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const tileUrl = isDark
+      ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+      : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
+    const attr = '© <a href="https://carto.com/">CARTO</a>';
+
     if (!map) {
-      map = L.map('map').setView([46.8,2.3],5);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OSM'}).addTo(map);
+      map = L.map('map', { zoomControl: false, attributionControl: false }).setView([46.8, 2.3], 6);
+      L.control.zoom({ position: 'bottomright' }).addTo(map);
+      L.control.attribution({ position: 'bottomleft', prefix: false }).addAttribution(attr).addTo(map);
+      map._tileLayer = L.tileLayer(tileUrl, { maxZoom: 19 }).addTo(map);
+    } else {
+      // Met à jour les tiles si le thème change
+      const currentUrl = map._tileLayer._url;
+      if (currentUrl !== tileUrl) {
+        map.removeLayer(map._tileLayer);
+        map._tileLayer = L.tileLayer(tileUrl, { maxZoom: 19 }).addTo(map);
+      }
     }
+
     withLoc.forEach(u => {
       const color = COLORS[level(u.bac)];
+      const lvl   = level(u.bac);
+      const emoji = EMOJIS[lvl];
       const icon = L.divIcon({
-        className:'',
-        html:`<div style="background:${color};color:#fff;font-weight:700;font-size:11px;
-              padding:4px 9px;border-radius:99px;white-space:nowrap;
-              box-shadow:0 2px 8px #0004;border:2px solid #fff">
-              ${esc(u.username)} ${u.bac.toFixed(2)}g/L</div>`,
-        iconAnchor:[0,0]
+        className: '',
+        html: `<div class="map-marker-pin" style="background:${color}">
+                 <div class="map-marker-dot"></div>
+                 ${esc(u.username)} ${u.bac.toFixed(2)}g/L
+               </div>`,
+        iconAnchor: [0, 16],
       });
-      if (markers[u.username]) markers[u.username].setLatLng([u.lat,u.lon]).setIcon(icon);
-      else markers[u.username] = L.marker([u.lat,u.lon],{icon}).addTo(map);
+      const popup = L.popup({ closeButton: false, offset: [80, -8] }).setContent(
+        `<div class="map-popup">
+          <div class="map-popup-name">${esc(u.username)} ${emoji}</div>
+          <div class="map-popup-row"><span>TAC</span><span class="map-popup-val" style="color:${color}">${u.bac.toFixed(2)} g/L</span></div>
+          <div class="map-popup-row"><span>Verres</span><span class="map-popup-val">${u.nb_drinks}</span></div>
+          <div class="map-popup-row"><span>Sobre dans</span><span class="map-popup-val">${u.sober_in_h}h</span></div>
+         </div>`
+      );
+      if (markers[u.username]) {
+        markers[u.username].setLatLng([u.lat, u.lon]).setIcon(icon).bindPopup(popup);
+      } else {
+        markers[u.username] = L.marker([u.lat, u.lon], { icon })
+          .bindPopup(popup).addTo(map);
+      }
     });
-    map.fitBounds(L.latLngBounds(withLoc.map(u=>[u.lat,u.lon])),{padding:[40,40]});
+
+    // Retire les anciens marqueurs des joueurs qui n'ont plus de position
+    const names = new Set(withLoc.map(u => u.username));
+    Object.keys(markers).forEach(name => {
+      if (!names.has(name)) { map.removeLayer(markers[name]); delete markers[name]; }
+    });
+
+    if (withLoc.length === 1) {
+      map.setView([withLoc[0].lat, withLoc[0].lon], 14);
+    } else {
+      map.fitBounds(L.latLngBounds(withLoc.map(u => [u.lat, u.lon])), { padding: [50, 50] });
+    }
   }
 
   // ── Noms boissons ──
@@ -2069,24 +2116,24 @@
       grid.innerHTML = '';
       empty.style.display = 'block';
       empty.innerHTML = _loginCta('Live réservé aux membres');
-      // Vide aussi le classement en direct
       const podium = document.getElementById('podium');
-      const tbody  = document.getElementById('defi-tbody');
       if (podium) podium.innerHTML = '';
-      if (tbody)  tbody.innerHTML  = '';
       return;
     }
 
-    const filtered = filterSnapshot(data);
+    // Uniquement les joueurs suivis qui boivent ACTUELLEMENT (bac > 0)
+    const filtered = filterSnapshot(data).filter(u => u.bac > 0);
+
+    renderDefi(filtered);   // podium top 3 – toujours affiché (vide si personne)
+    updateMap(filterSnapshot(data).filter(u => u.lat && u.lon && u.bac > 0));
+
     if (!filtered.length) {
       grid.innerHTML = '';
-      empty.innerHTML = '<div class="icon">🫗</div><p>Aucune session active.</p>';
+      empty.innerHTML = '<div class="icon">🫗</div><p>Personne ne boit actuellement.</p>';
       empty.style.display = 'block';
     } else {
       empty.style.display = 'none';
       grid.innerHTML = filtered.map(renderCard).join('');
-      renderDefi(filtered);
-      updateMap(filtered);
     }
     // Rafraîchit les onglets dynamiques si ouverts
     const profilPanel = document.getElementById('profil-panel');
