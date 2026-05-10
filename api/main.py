@@ -531,13 +531,6 @@ async def register_endpoint(request: Request):
     set_password(web_id, password)
     _ensure_session(web_id)
 
-    # Abonnements mutuels avec tous les utilisateurs existants
-    all_users = get_all_users()
-    for u in all_users:
-        if u["telegram_id"] != web_id:
-            follow_user(web_id, u["telegram_id"])
-            follow_user(u["telegram_id"], web_id)
-
     admin_id = int(os.environ.get("ADMIN_ID", "0"))
     return {
         "ok": True,
