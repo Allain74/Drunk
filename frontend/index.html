@@ -55,7 +55,7 @@
       background: var(--bg);
       color: var(--text);
       min-height: 100vh;
-      padding: 24px 16px 80px;
+      padding: 24px 16px max(80px, calc(64px + env(safe-area-inset-bottom, 0px)));
       transition: background .3s, color .3s;
     }
 
@@ -326,7 +326,7 @@
     }
 
     /* ── Map ── */
-    #map-section { max-width:1000px; margin:24px auto 0; }
+    #map-section { max-width:1000px; margin:24px auto 0; padding-bottom:8px; }
     #map-section h2 { font-size:.9rem; font-weight:700; color:var(--sub); margin-bottom:10px; text-transform:uppercase; }
     #map { height:360px; border-radius:20px; border:none; overflow:hidden; box-shadow:0 4px 32px #0000001a; }
     .map-marker-pin {
@@ -791,7 +791,10 @@
     @media (max-width: 640px) {
 
       /* Corps */
-      body { padding-top: max(16px, env(safe-area-inset-top)); }
+      body {
+        padding-top:    max(16px, env(safe-area-inset-top));
+        padding-bottom: max(88px, calc(64px + env(safe-area-inset-bottom, 0px)));
+      }
 
       /* Grid : 1 colonne sur très petit écran */
       #grid {
