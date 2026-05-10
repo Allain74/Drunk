@@ -372,6 +372,8 @@
     .modal-id p  { font-size:0.82rem; color:var(--sub); margin-bottom:16px; }
     .modal-id input { width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-size:0.95rem; font-family:inherit; margin-bottom:10px; box-sizing:border-box; }
     .modal-id input:focus { outline:none; border-color:#6366f1; }
+    #compte-content input { width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-size:0.95rem; font-family:inherit; margin-bottom:10px; box-sizing:border-box; }
+    #compte-content input:focus { outline:none; border-color:#6366f1; }
     .modal-id-close { position:absolute; top:16px; right:16px; background:none; border:none; font-size:1.4rem; cursor:pointer; color:var(--sub); }
     .btn-primary { width:100%; padding:10px; border-radius:10px; background:#6366f1; color:#fff; font-weight:700; font-size:0.95rem; border:none; cursor:pointer; transition:background .2s; }
     .btn-primary:hover { background:#4f46e5; }
@@ -601,6 +603,8 @@
   <button class="tab" onclick="showTab('palmares')">🏅 Palmarès</button>
   <button class="tab" onclick="showTab('thune')">💰 Ma thune</button>
   <button class="tab" onclick="showTab('abonnements')">👥 Abonnements</button>
+  <button class="tab" onclick="showTab('boissons')">🍺 Boissons</button>
+  <button class="tab" onclick="showTab('compte')">👤 Mon compte</button>
 </div>
 
 <!-- Live -->
@@ -647,6 +651,64 @@
 <!-- Abonnements -->
 <div id="abonnements-panel" class="panel">
   <div id="abo-content"></div>
+</div>
+
+<!-- Boissons -->
+<div id="boissons-panel" class="panel">
+  <div id="boissons-note" style="display:none;background:var(--card);border-radius:14px;padding:14px 16px;margin-bottom:16px;font-size:0.88rem;color:var(--sub);text-align:center">
+    👋 <strong>Connecte-toi</strong> pour enregistrer tes verres.
+    <button style="background:none;border:none;color:#6366f1;font-weight:700;cursor:pointer;font-size:0.88rem" onclick="showTab('compte')">Se connecter →</button>
+  </div>
+  <div class="picker-section"><div class="picker-label">🍺 Bières</div>
+    <div class="picker-grid">
+      <button class="picker-btn" onclick="quickDrink('demi')">Demi<span>25cl · 5%</span></button>
+      <button class="picker-btn" onclick="quickDrink('pinte')">Pinte<span>50cl · 5%</span></button>
+      <button class="picker-btn" onclick="quickDrink('demif')">Demi forte<span>25cl · 8.5%</span></button>
+      <button class="picker-btn" onclick="quickDrink('pintef')">Pinte forte<span>50cl · 8.5%</span></button>
+      <button class="picker-btn" onclick="quickDrink('cidre')">Cidre<span>25cl · 5%</span></button>
+    </div>
+  </div>
+  <div class="picker-section"><div class="picker-label">🍷 Vins</div>
+    <div class="picker-grid">
+      <button class="picker-btn" onclick="quickDrink('vin')">Vin<span>12cl · 12.5%</span></button>
+      <button class="picker-btn" onclick="quickDrink('champagne')">Champagne<span>10cl · 12%</span></button>
+      <button class="picker-btn" onclick="quickDrink('sangria')">Sangria<span>20cl · 10%</span></button>
+    </div>
+  </div>
+  <div class="picker-section"><div class="picker-label">🥃 Shots & Spiritueux</div>
+    <div class="picker-grid">
+      <button class="picker-btn" onclick="quickDrink('vodka')">Vodka<span>4cl · 40%</span></button>
+      <button class="picker-btn" onclick="quickDrink('whisky')">Whisky<span>4cl · 40%</span></button>
+      <button class="picker-btn" onclick="quickDrink('tequila')">Tequila<span>4cl · 40%</span></button>
+      <button class="picker-btn" onclick="quickDrink('rhum')">Rhum<span>4cl · 40%</span></button>
+      <button class="picker-btn" onclick="quickDrink('shot96')">Shot 96°<span>4cl · 96%</span></button>
+    </div>
+  </div>
+  <div class="picker-section"><div class="picker-label">🍹 Cocktails</div>
+    <div class="picker-grid">
+      <button class="picker-btn" onclick="quickDrink('mojito')">Mojito<span>20cl · 10%</span></button>
+      <button class="picker-btn" onclick="quickDrink('gin')">Gin Tonic<span>20cl · 8%</span></button>
+      <button class="picker-btn" onclick="quickDrink('aperol')">Aperol<span>20cl · 8%</span></button>
+      <button class="picker-btn" onclick="quickDrink('longisland')">Long Island<span>30cl · 16%</span></button>
+    </div>
+  </div>
+  <div class="picker-section"><div class="picker-label">🌿 Autres</div>
+    <div class="picker-grid">
+      <button class="picker-btn" onclick="quickDrink('ricard')">Ricard<span>2.5cl · 45%</span></button>
+      <button class="picker-btn" onclick="quickDrink('perroquet')">Perroquet<span>2.5cl · 22.5%</span></button>
+      <button class="picker-btn" onclick="quickDrink('get27')">Get 27<span>4cl · 21%</span></button>
+      <button class="picker-btn" onclick="quickDrink('bucket')">Bucket<span>12.5cl · 40%</span></button>
+    </div>
+  </div>
+  <div style="display:flex;gap:10px;margin-top:8px">
+    <button class="db-action-btn" style="flex:1" onclick="undoDrink()">↩️ Annuler le dernier</button>
+    <button class="db-action-btn db-action-reset" style="flex:1" onclick="resetSession()">🔄 Reset session</button>
+  </div>
+</div>
+
+<!-- Mon compte -->
+<div id="compte-panel" class="panel">
+  <div id="compte-content"></div>
 </div>
 
 <!-- ── Barre de verres (fixée en bas, visible quand connecté) ── -->
@@ -932,14 +994,16 @@
 
   // ── Tabs ──
   function showTab(name) {
-    const tabs = ['live','defi','palmares','thune','abonnements'];
+    const tabs = ['live','defi','palmares','thune','abonnements','boissons','compte'];
     document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', tabs[i]===name));
     tabs.forEach(tab => {
       document.getElementById(tab+'-panel').classList.toggle('active', tab===name);
     });
-    if (name === 'palmares') loadPalmares();
-    if (name === 'thune') loadThune();
+    if (name === 'palmares')    loadPalmares();
+    if (name === 'thune')       loadThune();
     if (name === 'abonnements') loadAbonnements();
+    if (name === 'boissons')    loadBoissons();
+    if (name === 'compte')      loadCompte();
   }
 
   // ── Cards ──
@@ -1160,6 +1224,7 @@
     render(lastData);
     const aboPanel = document.getElementById('abonnements-panel');
     if (aboPanel.classList.contains('active')) loadAbonnements();
+    loadCompte();
   }
 
   // ── Défi ──
@@ -1327,6 +1392,167 @@
     });
   }
 
+  // ── Boissons tab ──
+  function loadBoissons() {
+    const note = document.getElementById('boissons-note');
+    if (note) note.style.display = myTid ? 'none' : 'block';
+  }
+
+  // ── Mon compte tab ──
+  async function loadCompte() {
+    const box = document.getElementById('compte-content');
+    if (!box) return;
+
+    if (!myTid) {
+      // ── Non connecté : formulaires login + inscription ──
+      box.innerHTML = `
+        <div style="max-width:400px;margin:0 auto">
+          <div id="ct-panel-login">
+            <h2 style="margin-bottom:4px">👤 Connexion</h2>
+            <p style="color:var(--sub);font-size:0.85rem;margin-bottom:16px">Entre ton pseudo et ton mot de passe.</p>
+            <input type="text"     id="ct-login-pseudo" placeholder="Pseudo…" autocomplete="off"
+                   onkeydown="if(event.key==='Enter') document.getElementById('ct-login-pwd').focus()"/>
+            <input type="password" id="ct-login-pwd"    placeholder="Mot de passe…" style="margin-top:8px"
+                   onkeydown="if(event.key==='Enter') ctSubmitLogin()"/>
+            <div class="modal-id-err" id="ct-login-err"></div>
+            <button class="btn-primary" onclick="ctSubmitLogin()">Se connecter</button>
+            <p style="text-align:center;margin-top:12px;font-size:0.82rem;color:var(--sub)">
+              Pas encore de compte ?
+              <button style="background:none;border:none;color:#6366f1;font-weight:700;cursor:pointer;font-size:0.82rem"
+                      onclick="ctSwitchPanel('register')">Créer un compte →</button>
+            </p>
+          </div>
+
+          <div id="ct-panel-register" style="display:none">
+            <h2 style="margin-bottom:4px">✨ Créer un compte</h2>
+            <p style="color:var(--sub);font-size:0.85rem;margin-bottom:16px">Crée ton compte pour suivre ton TAC depuis le site.</p>
+            <input type="text"     id="ct-reg-pseudo"  placeholder="Pseudo (2–30 caractères)…" autocomplete="off"/>
+            <div style="display:flex;gap:8px;margin-top:8px">
+              <button id="ct-reg-btn-homme" class="reg-genre-btn active" onclick="ctSelectGenre('homme')">👨 Homme</button>
+              <button id="ct-reg-btn-femme" class="reg-genre-btn"        onclick="ctSelectGenre('femme')">👩 Femme</button>
+            </div>
+            <input type="number"   id="ct-reg-poids"   placeholder="Poids (kg)…" min="30" max="250" style="margin-top:8px"/>
+            <input type="password" id="ct-reg-pwd"     placeholder="Mot de passe…" style="margin-top:8px"/>
+            <input type="password" id="ct-reg-pwd2"    placeholder="Confirmer le mot de passe…" style="margin-top:8px"
+                   onkeydown="if(event.key==='Enter') ctSubmitRegister()"/>
+            <div class="modal-id-err" id="ct-reg-err"></div>
+            <button class="btn-primary" onclick="ctSubmitRegister()">Créer mon compte</button>
+            <p style="text-align:center;margin-top:10px;font-size:0.82rem">
+              <button style="background:none;border:none;color:var(--sub);cursor:pointer;font-size:0.82rem"
+                      onclick="ctSwitchPanel('login')">← Retour à la connexion</button>
+            </p>
+          </div>
+        </div>`;
+      // Initialise le genre sélectionné (défaut Homme)
+      window._ctGenre = 'homme';
+      return;
+    }
+
+    // ── Connecté : profil ──
+    const me = lastData ? lastData.find(u => u.username === myName) : null;
+    const bac       = me ? me.bac        : 0;
+    const nbDrinks  = me ? me.nb_drinks  : 0;
+    const soberIn   = me ? me.sober_in_h : 0;
+    const peak      = me ? me.peak_24h   : 0;
+    const lvl       = level(bac);
+    const color     = COLORS[lvl];
+    const emoji     = EMOJIS[lvl];
+    const label     = LABELS[lvl];
+
+    box.innerHTML = `
+      <div style="max-width:420px;margin:0 auto">
+        <div style="background:var(--card);border-radius:20px;padding:24px;margin-bottom:16px">
+          <div style="font-size:2.5rem;text-align:center;margin-bottom:4px">${emoji}</div>
+          <div style="font-size:1.6rem;font-weight:900;text-align:center;margin-bottom:2px">${esc(myName)}</div>
+          <div style="text-align:center;margin-bottom:16px">
+            <span style="font-size:0.72rem;font-weight:700;background:#6366f1;color:#fff;border-radius:6px;padding:2px 8px">Moi</span>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px">
+            <div style="background:var(--bg);border-radius:12px;padding:12px;text-align:center">
+              <div style="font-size:1.3rem;font-weight:800;color:${color}">${bac.toFixed(2)} g/L</div>
+              <div style="font-size:0.65rem;color:var(--sub);margin-top:2px">TAC actuel · ${label}</div>
+            </div>
+            <div style="background:var(--bg);border-radius:12px;padding:12px;text-align:center">
+              <div style="font-size:1.3rem;font-weight:800">${nbDrinks}</div>
+              <div style="font-size:0.65rem;color:var(--sub);margin-top:2px">Verre(s) bu(s)</div>
+            </div>
+            <div style="background:var(--bg);border-radius:12px;padding:12px;text-align:center">
+              <div style="font-size:1.3rem;font-weight:800;color:#f97316">${peak > 0 ? peak + ' g/L' : '—'}</div>
+              <div style="font-size:0.65rem;color:var(--sub);margin-top:2px">Record 24h</div>
+            </div>
+            <div style="background:var(--bg);border-radius:12px;padding:12px;text-align:center">
+              <div style="font-size:1.3rem;font-weight:800" id="ct-coins">…</div>
+              <div style="font-size:0.65rem;color:var(--sub);margin-top:2px">🪙 Pièces</div>
+            </div>
+          </div>
+          <button class="btn-history" style="width:100%;margin-bottom:8px" onclick="openEditModal()">✏️ Modifier mon profil</button>
+          <button class="btn-history" style="width:100%;margin-bottom:8px;background:#ef4444;color:#fff;border-color:#ef4444" onclick="openDeleteModal()">🗑️ Supprimer mon compte</button>
+          <button class="btn-history" style="width:100%;color:var(--sub)" onclick="logout();showTab('compte')">🚪 Se déconnecter</button>
+        </div>
+      </div>`;
+
+    // Charge les pièces en arrière-plan
+    try {
+      const coinsData = await fetch(`${API}/coins`).then(r => r.json());
+      const entry = coinsData.find(c => c.username.toLowerCase() === myName.toLowerCase());
+      const el = document.getElementById('ct-coins');
+      if (el) el.textContent = entry !== undefined ? entry.coins : '—';
+    } catch(e) {}
+  }
+
+  function ctSwitchPanel(panel) {
+    document.getElementById('ct-panel-login').style.display    = panel === 'login'    ? '' : 'none';
+    document.getElementById('ct-panel-register').style.display = panel === 'register' ? '' : 'none';
+  }
+
+  function ctSelectGenre(g) {
+    window._ctGenre = g;
+    document.getElementById('ct-reg-btn-homme').classList.toggle('active', g === 'homme');
+    document.getElementById('ct-reg-btn-femme').classList.toggle('active', g === 'femme');
+  }
+
+  async function ctSubmitLogin() {
+    const username = document.getElementById('ct-login-pseudo').value.trim();
+    const password = document.getElementById('ct-login-pwd').value.trim();
+    const err      = document.getElementById('ct-login-err');
+    err.style.display = 'none';
+    if (!username || !password) return;
+    try {
+      const data = await fetch(`${API}/login`, {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({username, password}),
+      }).then(r => r.json());
+      if (!data.ok) { err.textContent = data.error || 'Pseudo ou mot de passe incorrect.'; err.style.display = 'block'; return; }
+      myTid = data.telegram_id; myName = data.username;
+      localStorage.setItem('myTid', String(myTid)); localStorage.setItem('myName', myName); localStorage.setItem('authV', '2');
+      await loadFollowing(); updateIdentityBtn(); updateDrinkBar(); render(lastData);
+      loadCompte();
+    } catch(e) { err.textContent = 'Erreur réseau.'; err.style.display = 'block'; }
+  }
+
+  async function ctSubmitRegister() {
+    const pseudo = document.getElementById('ct-reg-pseudo').value.trim();
+    const poids  = document.getElementById('ct-reg-poids').value;
+    const pwd    = document.getElementById('ct-reg-pwd').value.trim();
+    const pwd2   = document.getElementById('ct-reg-pwd2').value.trim();
+    const err    = document.getElementById('ct-reg-err');
+    err.style.display = 'none';
+    if (!pseudo || !poids || !pwd) { err.textContent = 'Tous les champs sont requis.'; err.style.display = 'block'; return; }
+    if (pwd !== pwd2) { err.textContent = 'Les mots de passe ne correspondent pas.'; err.style.display = 'block'; return; }
+    try {
+      const data = await fetch(`${API}/register`, {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({username: pseudo, password: pwd, gender: window._ctGenre || 'homme', weight: parseFloat(poids)}),
+      }).then(r => r.json());
+      if (!data.ok) { err.textContent = data.error; err.style.display = 'block'; return; }
+      myTid = data.telegram_id; myName = data.username;
+      localStorage.setItem('myTid', String(myTid)); localStorage.setItem('myName', myName); localStorage.setItem('authV', '2');
+      await loadFollowing(); updateIdentityBtn(); updateDrinkBar(); render(lastData);
+      showToast('✅ Compte créé ! Bienvenue 🍺');
+      loadCompte();
+    } catch(e) { err.textContent = 'Erreur réseau.'; err.style.display = 'block'; }
+  }
+
   // ── Palmarès ──
   let _palmares = [];
 
@@ -1394,11 +1620,18 @@
     const filtered = filterSnapshot(data);
     const grid  = document.getElementById('grid');
     const empty = document.getElementById('empty');
-    if (!filtered.length) { grid.innerHTML=''; empty.style.display='block'; return; }
-    empty.style.display = 'none';
-    grid.innerHTML = filtered.map(renderCard).join('');
-    renderDefi(filtered);
-    updateMap(filtered);
+    if (!filtered.length) { grid.innerHTML=''; empty.style.display='block'; }
+    else {
+      empty.style.display = 'none';
+      grid.innerHTML = filtered.map(renderCard).join('');
+      renderDefi(filtered);
+      updateMap(filtered);
+    }
+    // Rafraîchit les onglets dynamiques si ouverts
+    const comptePanel = document.getElementById('compte-panel');
+    if (comptePanel && comptePanel.classList.contains('active')) loadCompte();
+    const boissonsPanel = document.getElementById('boissons-panel');
+    if (boissonsPanel && boissonsPanel.classList.contains('active')) loadBoissons();
   }
 
   // ── WebSocket ──
@@ -1675,6 +1908,7 @@
 
       closeEditModal();
       showToast('✅ Profil mis à jour !');
+      loadCompte();
     } catch(e) {
       err.textContent = 'Erreur réseau.'; err.style.display = 'block';
     }
@@ -1711,14 +1945,16 @@
       if (!data.ok) { err.textContent = data.error; err.style.display = 'block'; return; }
 
       // Déconnexion locale
-      myTid = null; myUsername = null; myIsAdmin = false;
-      localStorage.removeItem('drunk_tid');
-      localStorage.removeItem('drunk_username');
-      localStorage.removeItem('drunk_admin');
+      myTid = 0; myName = '';
+      localStorage.removeItem('myTid');
+      localStorage.removeItem('myName');
+      followingSet = new Set();
       closeDeleteModal();
       showToast('✅ Compte supprimé.');
+      updateIdentityBtn();
       updateDrinkBar();
-      render();
+      render(lastData);
+      loadCompte();
     } catch(e) {
       err.textContent = 'Erreur réseau.'; err.style.display = 'block';
     }
