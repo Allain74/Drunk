@@ -115,6 +115,22 @@ def verify_password(username: str, password: str) -> dict | None:
 
 
 def init_db():
+    # ── Migration flags (one-shot migrations) ────────────────────────────────
+    try:
+        _execute("CREATE TABLE IF NOT EXISTS _migration_flags (key TEXT PRIMARY KEY)")
+    except Exception:
+        pass
+    try:
+        done = _fetchone("SELECT 1 FROM _migration_flags WHERE key='bj_reset_2026_05'")
+        if not done:
+            _pipeline([
+                ("DELETE FROM blackjack_players", []),
+                ("DELETE FROM blackjack_sessions", []),
+            ])
+            _execute("INSERT INTO _migration_flags (key) VALUES ('bj_reset_2026_05')")
+    except Exception:
+        pass
+
     try:
         _execute("ALTER TABLE users ADD COLUMN max_bac REAL DEFAULT 0")
     except Exception:
