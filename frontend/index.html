@@ -1530,11 +1530,7 @@
     const label  = LABELS[lvl];
     const initLetter = (myName || '?')[0].toUpperCase();
 
-    // Pré-remplissage immédiat depuis lastData (pas besoin d'attendre un fetch)
-    const currentGender = (me && me.gender) ? me.gender : (window._profilGenre || 'homme');
-    const currentWeight = (me && me.weight_kg) ? me.weight_kg : '';
-    window._profilGenre = currentGender;
-
+    // Rendu immédiat avec poids vide → mis à jour après fetch
     box.innerHTML = `
       <div class="page-hd">
         <div class="page-hd-label">PROFIL</div>
@@ -1555,16 +1551,9 @@
           <div class="p-field-label">Pseudo</div>
           <input type="text" id="profil-pseudo" value="${esc(myName)}" placeholder="Pseudo…" autocomplete="off"
                  style="width:100%;padding:10px 14px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.95rem;font-family:inherit;box-sizing:border-box;margin-bottom:14px"/>
-          <div class="p-field-label">Sexe biologique</div>
-          <div class="p-toggle" id="profil-genre-toggle">
-            <button class="p-toggle-btn ${currentGender==='homme'?'active':''}" id="profil-btn-homme" onclick="profilSelectGenre('homme')">Homme</button>
-            <button class="p-toggle-btn ${currentGender==='femme'?'active':''}"  id="profil-btn-femme" onclick="profilSelectGenre('femme')">Femme</button>
-          </div>
-          <div style="margin-top:14px">
-            <div class="p-field-label">Poids (kg)</div>
-            <input type="number" id="profil-poids" value="${currentWeight}" placeholder="ex: 75" min="30" max="250"
-                   style="width:100%;padding:10px 14px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.95rem;font-family:inherit;box-sizing:border-box"/>
-          </div>
+          <div class="p-field-label">Poids (kg)</div>
+          <input type="number" id="profil-poids" value="" placeholder="Chargement…" min="30" max="250"
+                 style="width:100%;padding:10px 14px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.95rem;font-family:inherit;box-sizing:border-box"/>
           <div style="margin-top:14px">
             <div class="p-field-label">Mot de passe actuel <span style="color:var(--sub);font-weight:400">(vide si pas encore défini)</span></div>
             <input type="password" id="profil-cur-pwd" placeholder="Mot de passe actuel…"
@@ -1628,7 +1617,20 @@
     // Mise à jour du bouton notifications
     updatePushBtn();
 
-    // Charge les pièces (seul fetch encore nécessaire)
+    // Fetch snapshot → poids réel garanti
+    try {
+      const snap = await fetch(`${API}/snapshot`).then(r => r.json());
+      const u = snap.find(x => x.username.toLowerCase() === myName.toLowerCase());
+      if (u) {
+        const poidsEl = document.getElementById('profil-poids');
+        if (poidsEl && u.weight_kg) {
+          poidsEl.value = u.weight_kg;
+          poidsEl.placeholder = 'ex: 75';
+        }
+      }
+    } catch(e) {}
+
+    // Fetch pièces
     try {
       const coinsData = await fetch(`${API}/coins`).then(r => r.json());
       const entry = coinsData.find(c => c.username.toLowerCase() === myName.toLowerCase());
@@ -1655,7 +1657,6 @@
     // pwd peut être vide pour les anciens comptes sans mot de passe
     try {
       const body = { telegram_id: myTid, current_password: pwd };
-      if (window._profilGenre) body.gender = window._profilGenre;
       if (poids) body.weight = parseFloat(poids);
       if (pseudo && pseudo !== myName) body.new_username = pseudo;
       const data = await fetch(`${API}/update-profile`, {
