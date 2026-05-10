@@ -421,12 +421,31 @@
     .tx-time { color:var(--sub); font-size:0.72rem; }
 
     /* ── Modal profile ── */
-    .modal-bg4 { display:none; position:fixed; inset:0; background:#0007; z-index:100; align-items:center; justify-content:center; padding:16px; }
+    .modal-bg4 { display:none; position:fixed; inset:0; background:#0007; z-index:100; align-items:flex-end; justify-content:center; padding:0; }
     .modal-bg4.open { display:flex; }
-    .modal4 { background:var(--card); border-radius:20px; padding:24px; width:100%; max-width:420px; position:relative; }
+    .modal4 { background:var(--card); border-radius:24px 24px 0 0; padding:24px 20px 32px; width:100%; max-width:480px; position:relative; max-height:88vh; overflow-y:auto; }
     .modal4-close { position:absolute; top:16px; right:16px; background:none; border:none; font-size:1.4rem; cursor:pointer; color:var(--sub); }
-    .profile-name { font-size:1.5rem; font-weight:900; margin-bottom:4px; }
-    .profile-badge { display:inline-block; font-size:0.72rem; font-weight:700; border-radius:6px; padding:2px 8px; margin-bottom:12px; }
+    .profile-name { font-size:1.4rem; font-weight:900; margin-bottom:2px; }
+    .profile-badge { display:inline-block; font-size:0.72rem; font-weight:700; border-radius:6px; padding:2px 8px; margin-bottom:10px; }
+    /* Bloc TAC actif */
+    .profile-bac-block { text-align:center; margin:12px 0 8px; }
+    .profile-bac-big { font-size:3rem; font-weight:900; line-height:1; }
+    .profile-bac-unit { font-size:0.85rem; color:var(--sub); margin-top:2px; }
+    .profile-bac-label { display:inline-block; font-size:0.72rem; font-weight:800; border-radius:20px; padding:3px 12px; margin-top:6px; color:#fff; letter-spacing:.5px; }
+    .profile-sober-chip { display:flex; align-items:center; justify-content:center; gap:6px; margin:10px 0; font-size:0.9rem; font-weight:700; }
+    .profile-peak-chip { text-align:center; font-size:0.78rem; color:var(--sub); margin-bottom:12px; }
+    /* Timeline session */
+    .session-section-lbl { font-size:0.68rem; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:var(--sub); margin:12px 0 8px; border-top:1px solid var(--border); padding-top:12px; }
+    .session-timeline { display:flex; flex-direction:column; gap:6px; margin-bottom:12px; max-height:180px; overflow-y:auto; }
+    .session-drink-row { display:flex; align-items:center; justify-content:space-between; padding:7px 10px; background:var(--bg); border-radius:10px; font-size:0.88rem; }
+    .session-drink-name { font-weight:700; }
+    .session-drink-time { color:var(--sub); font-size:0.78rem; }
+    /* Stats sociales */
+    .profile-social-row { display:flex; gap:8px; margin:10px 0; }
+    .profile-social-chip { flex:1; text-align:center; background:var(--bg); border-radius:10px; padding:8px 4px; cursor:pointer; transition:opacity .15s; }
+    .profile-social-chip:hover { opacity:.75; }
+    .profile-social-chip-val { font-size:1.1rem; font-weight:800; }
+    .profile-social-chip-lbl { font-size:0.6rem; color:var(--sub); margin-top:1px; }
     .profile-badge.admin { background:#facc15; color:#78350f; }
     .profile-badge.self  { background:#6366f1; color:#fff; }
     .profile-stats { display:flex; gap:10px; margin-bottom:16px; }
@@ -437,6 +456,10 @@
     .profile-stat.clickable:hover { opacity:.75; }
     .profile-actions { display:flex; gap:10px; margin-top:8px; }
     /* Overlay liste sociale (abonnés / suivis d'un profil) */
+    /* Avatar plein écran */
+    .avatar-fs-overlay { position:fixed; inset:0; z-index:3500; background:#000000cc; display:flex; align-items:center; justify-content:center; cursor:zoom-out; }
+    .avatar-fs-img { width:min(80vw,320px); height:min(80vw,320px); border-radius:50%; object-fit:cover; box-shadow:0 8px 40px #0008; }
+    .avatar-fs-gradient { width:min(80vw,320px); height:min(80vw,320px); border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:min(22vw,110px); font-weight:900; color:#fff; box-shadow:0 8px 40px #0008; }
     .social-list-overlay { position:fixed; inset:0; z-index:2200; background:#00000070; display:flex; align-items:flex-end; }
     .social-list-box { background:var(--card); border-radius:24px 24px 0 0; padding:20px 20px 32px; width:100%; max-height:75vh; overflow-y:auto; }
     .social-list-hd { display:flex; align-items:center; gap:10px; margin-bottom:16px; }
@@ -1037,6 +1060,7 @@
     <!-- Sélecteur de jeu -->
     <div class="amis-sub-nav" id="jeux-game-nav" style="margin-bottom:16px">
       <button class="amis-sub-btn active" id="jeu-btn-blackjack" onclick="showJeuSub('blackjack')">🃏 Blackjack</button>
+      <button class="amis-sub-btn"        id="jeu-btn-paris"     onclick="showJeuSub('paris')">🎰 Paris</button>
     </div>
     <!-- Classement Blackjack -->
     <div id="jeu-blackjack">
@@ -1044,6 +1068,15 @@
         <table class="palmares-table">
           <thead><tr><th>#</th><th>Joueur</th><th>Parties</th><th>Gagnées</th><th>Perdues</th><th>Égalités</th><th>Win%</th></tr></thead>
           <tbody id="bj-stats-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+    <!-- Classement Paris -->
+    <div id="jeu-paris" style="display:none">
+      <div class="table-scroll">
+        <table class="palmares-table">
+          <thead><tr><th>#</th><th>Joueur</th><th>Paris</th><th>Gagnés</th><th>Perdus</th><th>Win%</th><th>Net 🪙</th></tr></thead>
+          <tbody id="paris-stats-tbody"></tbody>
         </table>
       </div>
     </div>
@@ -1382,7 +1415,7 @@
   }
 
   // ── Sélecteur de jeu dans "Jeux" ──
-  const _JEUX = ['blackjack']; // ajouter les futurs jeux ici
+  const _JEUX = ['blackjack', 'paris'];
   function showJeuSub(game) {
     _JEUX.forEach(g => {
       const btn = document.getElementById(`jeu-btn-${g}`);
@@ -1390,6 +1423,7 @@
       if (btn) btn.classList.toggle('active', g === game);
       if (div) div.style.display = g === game ? '' : 'none';
     });
+    if (game === 'paris') loadParisStats();
   }
 
   // ── Cards ──
@@ -1427,112 +1461,156 @@
     </div>`;
   }
 
+  // ── Mapping drink_key → [emoji, nom] ──
+  const DRINK_LABELS = {
+    demi:'🍺 Demi', pinte:'🍺 Pinte', demif:'🍺 Demi forte', pintef:'🍺 Pinte forte', cidre:'🍺 Cidre',
+    vin:'🍷 Vin', champagne:'🍾 Champagne', sangria:'🍷 Sangria',
+    vodka:'🥃 Vodka', whisky:'🥃 Whisky', tequila:'🥃 Tequila', rhum:'🥃 Rhum', shot96:'💥 Shot 96°',
+    mojito:'🍹 Mojito', gin:'🍹 Gin Tonic', aperol:'🧡 Aperol', longisland:'🍹 Long Island',
+    ricard:'🌿 Ricard', perroquet:'🦜 Perroquet', get27:'🌿 Get 27', bucket:'🪣 Bucket',
+  };
+
   // ── Profile modal ──
   let _profileUsername = '';
+  let _profileGen = 0;
 
   async function openProfile(username) {
     _profileUsername = username;
-    const tid = getTidByName(username);
+    const gen = ++_profileGen;
+    const tid          = getTidByName(username);
     const snapshotUser = lastData.find(u => u.username === username);
+    const isActive     = snapshotUser && snapshotUser.bac > 0;
 
     const isAdminUser = tid && isAdmin(tid);
-    const isSelf = tid && tid === myTid;
-    const following = tid ? followingSet.has(tid) : false;
+    const isSelf      = tid && tid === myTid;
+    const following   = tid ? followingSet.has(tid) : false;
 
-    const nameHtml = isAdminUser
-      ? `<span class="admin-name">${esc(username)}</span>`
-      : esc(username);
-
+    const nameHtml = isAdminUser ? `<span class="admin-name">${esc(username)}</span>` : esc(username);
     let badgeHtml = '';
     if (isAdminUser) badgeHtml = '<span class="profile-badge admin">⭐ Admin</span>';
     else if (isSelf) badgeHtml = '<span class="profile-badge self">C\'est toi</span>';
 
-    const bac = snapshotUser ? snapshotUser.bac.toFixed(2) : '—';
-    const nb  = snapshotUser ? snapshotUser.nb_drinks : '—';
-    const lvl = snapshotUser ? level(snapshotUser.bac) : 0;
+    const lvl   = snapshotUser ? level(snapshotUser.bac) : 0;
     const color = COLORS[lvl];
-    const soberIn = snapshotUser && snapshotUser.bac > 0 ? snapshotUser.sober_in_h + 'h' : '—';
 
     await loadAvatars();
     const initLetter    = (username || '?')[0].toUpperCase();
     const profileGender = allUsers.find(x => x.telegram_id === tid)?.gender || 'homme';
-    const avatarHtml    = _avatarEl(tid, 64, initLetter, profileGender, 'margin:0 auto 10px;display:block;');
+    const avatarHtml    = `<div onclick="openAvatarFullscreen(${tid || 0},'${initLetter}','${profileGender}')" style="cursor:zoom-in;display:inline-block">${_avatarEl(tid, 72, initLetter, profileGender, 'margin:0 auto 10px;display:block;')}</div>`;
 
     let followBtn = '';
-    if (!myTid) {
-      followBtn = '';
-    } else if (isSelf) {
-      followBtn = '';
-    } else if (isAdminUser) {
-      followBtn = `<button class="btn-follow locked" disabled>🔒 Admin</button>`;
-    } else if (following) {
-      followBtn = `<button class="btn-follow following" onclick="toggleFollow(${tid}, false)">➖ Ne plus suivre</button>`;
-    } else {
-      followBtn = `<button class="btn-follow not-following" onclick="toggleFollow(${tid}, true)">➕ Suivre</button>`;
-    }
+    if      (!myTid || isSelf) followBtn = '';
+    else if (isAdminUser)      followBtn = `<button class="btn-follow locked" disabled>🔒 Admin</button>`;
+    else if (following)        followBtn = `<button class="btn-follow following" onclick="toggleFollow(${tid},false)">➖ Ne plus suivre</button>`;
+    else                       followBtn = `<button class="btn-follow not-following" onclick="toggleFollow(${tid},true)">➕ Suivre</button>`;
 
-    // Affichage (re-appelé quand coins/social arrivent)
-    const renderModal = (coins, socialInfo) => {
-      const nbFollowers = socialInfo ? socialInfo.followers.length : '…';
-      const nbFollowing = socialInfo ? socialInfo.following.length : '…';
+    // ─── Rendu du modal (rappelé quand les données arrivent) ───
+    const renderModal = (coins, socialInfo, sessionDrinks) => {
+      if (_profileGen !== gen) return;
+
+      const nbFollowers  = socialInfo ? socialInfo.followers.length : '…';
+      const nbFollowing  = socialInfo ? socialInfo.following.length : '…';
       const followersIds = socialInfo ? socialInfo.followers : [];
       const followingIds = socialInfo ? socialInfo.following : [];
-      document.getElementById('modal4-content').innerHTML = `
-        <div style="text-align:center;margin-bottom:8px">${avatarHtml}</div>
-        <div class="profile-name">${nameHtml}</div>
-        ${badgeHtml}
-        <div class="profile-stats">
-          <div class="profile-stat">
-            <div class="profile-stat-val" style="color:${color}">${bac}</div>
-            <div class="profile-stat-lbl">g/L TAC</div>
+
+      const socialRow = `
+        <div class="profile-social-row">
+          <div class="profile-social-chip" onclick="openSocialList('followers',${JSON.stringify(followersIds)},'Abonnés de ${esc(username)}')">
+            <div class="profile-social-chip-val">${nbFollowers}</div>
+            <div class="profile-social-chip-lbl">abonnés</div>
           </div>
-          <div class="profile-stat">
-            <div class="profile-stat-val">${nb}</div>
-            <div class="profile-stat-lbl">verre(s)</div>
+          <div class="profile-social-chip" onclick="openSocialList('following',${JSON.stringify(followingIds)},'${esc(username)} suit')">
+            <div class="profile-social-chip-val">${nbFollowing}</div>
+            <div class="profile-social-chip-lbl">suivis</div>
           </div>
-          <div class="profile-stat">
-            <div class="profile-stat-val">${soberIn}</div>
-            <div class="profile-stat-lbl">sobre dans</div>
-          </div>
-          ${snapshotUser && snapshotUser.max_bac > 0 ? `
-          <div class="profile-stat">
-            <div class="profile-stat-val" style="color:#f97316">${snapshotUser.max_bac}</div>
-            <div class="profile-stat-lbl">record</div>
-          </div>` : ''}
-          ${coins !== null ? `
-          <div class="profile-stat">
-            <div class="profile-stat-val" style="color:#facc15">${coins}</div>
-            <div class="profile-stat-lbl">🪙 pièces</div>
-          </div>` : ''}
-          <div class="profile-stat clickable" onclick="openSocialList('followers', ${JSON.stringify(followersIds)}, 'Abonnés de ${esc(username)}')">
-            <div class="profile-stat-val">${nbFollowers}</div>
-            <div class="profile-stat-lbl">abonnés</div>
-          </div>
-          <div class="profile-stat clickable" onclick="openSocialList('following', ${JSON.stringify(followingIds)}, '${esc(username)} suit')">
-            <div class="profile-stat-val">${nbFollowing}</div>
-            <div class="profile-stat-lbl">suivis</div>
-          </div>
-        </div>
-        <div class="profile-actions">
+        </div>`;
+
+      const actions = `
+        <div class="profile-actions" style="margin-top:12px">
           <button class="btn-history" onclick="openChartFromProfile('${esc(username)}')">📈 Historique</button>
           ${followBtn}
         </div>
         ${isSelf ? `
           <button class="btn-history" style="width:100%;margin-top:8px" onclick="openEditModal()">✏️ Modifier mon profil</button>
           <button class="btn-history" style="width:100%;margin-top:8px;background:#ef4444;color:#fff;border-color:#ef4444" onclick="openDeleteModal()">🗑️ Supprimer mon compte</button>
-        ` : ''}
+        ` : ''}`;
+
+      let body = '';
+
+      if (isActive && snapshotUser) {
+        // ── Vue buveur actif ──────────────────────────────────────────
+        const bac       = snapshotUser.bac.toFixed(2);
+        const bacLabel  = snapshotUser.label || '';
+        const peak      = snapshotUser.peak_24h > 0 ? snapshotUser.peak_24h.toFixed(2) : null;
+        const soberDate = new Date(Date.now() + snapshotUser.sober_in_h * 3600000);
+        const soberAt   = `${soberDate.getHours()}h${String(soberDate.getMinutes()).padStart(2,'0')}`;
+
+        // Timeline des verres
+        let timelineHtml = '';
+        if (sessionDrinks === null) {
+          timelineHtml = '<div style="color:var(--sub);font-size:0.8rem;text-align:center">Chargement…</div>';
+        } else if (sessionDrinks.length === 0) {
+          timelineHtml = '<div style="color:var(--sub);font-size:0.8rem;text-align:center">Aucun verre enregistré</div>';
+        } else {
+          timelineHtml = sessionDrinks.map(d => {
+            const label = DRINK_LABELS[d.drink_key] || ('🍹 ' + d.drink_key);
+            const t = new Date(d.logged_at + 'Z');
+            const timeStr = `${t.getHours()}h${String(t.getMinutes()).padStart(2,'0')}`;
+            return `<div class="session-drink-row">
+              <span class="session-drink-name">${label}</span>
+              <span class="session-drink-time">${timeStr}</span>
+            </div>`;
+          }).join('');
+        }
+
+        body = `
+          <div class="profile-bac-block">
+            <div class="profile-bac-big" style="color:${color}">${bac}</div>
+            <div class="profile-bac-unit">g/L de TAC</div>
+            <div class="profile-bac-label" style="background:${color}">${bacLabel}</div>
+          </div>
+          <div class="profile-sober-chip">🕐 Sobre vers <strong>${soberAt}</strong></div>
+          ${peak ? `<div class="profile-peak-chip">📊 Pic de la soirée : <strong>${peak} g/L</strong></div>` : ''}
+          <div class="session-section-lbl">Session en cours · ${snapshotUser.nb_drinks} verre${snapshotUser.nb_drinks > 1 ? 's' : ''}</div>
+          <div class="session-timeline">${timelineHtml}</div>
+          ${socialRow}
+          ${actions}`;
+
+      } else {
+        // ── Vue utilisateur non-actif ─────────────────────────────────
+        const record = snapshotUser?.max_bac > 0 ? snapshotUser.max_bac.toFixed(2) : null;
+        body = `
+          <div style="text-align:center;color:var(--sub);font-size:0.85rem;margin:12px 0 16px">💤 Pas en train de boire</div>
+          <div class="profile-stats" style="margin-bottom:10px">
+            ${record ? `<div class="profile-stat"><div class="profile-stat-val" style="color:#f97316">${record}</div><div class="profile-stat-lbl">record g/L</div></div>` : ''}
+            ${coins !== null ? `<div class="profile-stat"><div class="profile-stat-val" style="color:#facc15">${coins}</div><div class="profile-stat-lbl">🪙 pièces</div></div>` : ''}
+          </div>
+          ${socialRow}
+          ${actions}`;
+      }
+
+      document.getElementById('modal4-content').innerHTML = `
+        <div style="text-align:center;margin-bottom:6px">${avatarHtml}</div>
+        <div class="profile-name" style="text-align:center">${nameHtml}</div>
+        <div style="text-align:center">${badgeHtml}</div>
+        ${body}
       `;
     };
 
-    renderModal(null, null);
+    renderModal(null, null, isActive ? null : []);
     document.getElementById('modal-bg4').classList.add('open');
 
-    // Fetch coins + social en parallèle
-    const [coinsData, followingData, followersData] = await Promise.allSettled([
+    // Fetch en parallèle : coins + social + (session si actif)
+    const fetches = [
       fetch(`${API}/coins`).then(r => r.json()),
       tid ? fetch(`${API}/following/${tid}`).then(r => r.json()) : Promise.resolve({ following: [] }),
       tid ? fetch(`${API}/followers/${tid}`).then(r => r.json()) : Promise.resolve({ followers: [] }),
-    ]);
+      isActive && tid ? fetch(`${API}/session/${tid}`).then(r => r.json()) : Promise.resolve({ drinks: [] }),
+    ];
+    const [coinsData, followingData, followersData, sessionData] = await Promise.allSettled(fetches);
+
+    if (_profileGen !== gen) return;
+
     const userCoins = coinsData.status === 'fulfilled'
       ? (coinsData.value.find(c => c.username.toLowerCase() === username.toLowerCase())?.coins ?? null)
       : null;
@@ -1540,7 +1618,11 @@
       following: followingData.status === 'fulfilled' ? (followingData.value.following || []) : [],
       followers: followersData.status === 'fulfilled' ? (followersData.value.followers || []) : [],
     };
-    renderModal(userCoins, socialInfo);
+    const sessionDrinks = sessionData.status === 'fulfilled'
+      ? (sessionData.value.drinks || [])
+      : [];
+
+    renderModal(userCoins, socialInfo, sessionDrinks);
   }
 
   function openSocialList(type, ids, title) {
@@ -1580,6 +1662,25 @@
 
   function closeSocialList() {
     document.getElementById('social-list-overlay')?.remove();
+  }
+
+  function openAvatarFullscreen(tid, initLetter, gender) {
+    const existingOverlay = document.getElementById('avatar-fs-overlay');
+    if (existingOverlay) existingOverlay.remove();
+    const overlay = document.createElement('div');
+    overlay.id = 'avatar-fs-overlay';
+    overlay.className = 'avatar-fs-overlay';
+    overlay.onclick = () => overlay.remove();
+    const avatarData = tid ? _avatarCache[String(tid)] : null;
+    const gradient = gender === 'femme'
+      ? 'linear-gradient(135deg,#ec4899,#f97316)'
+      : 'linear-gradient(135deg,#6366f1,#06b6d4)';
+    if (avatarData) {
+      overlay.innerHTML = `<img class="avatar-fs-img" src="${avatarData}" alt="avatar">`;
+    } else {
+      overlay.innerHTML = `<div class="avatar-fs-gradient" style="background:${gradient}">${initLetter}</div>`;
+    }
+    document.body.appendChild(overlay);
   }
 
   async function socialListToggleFollow(tid, doFollow) {
@@ -2639,6 +2740,42 @@
     }).join('') || `<tr><td colspan="7" style="text-align:center;color:var(--sub);padding:24px">Aucune partie jouée pour l'instant.</td></tr>`;
   }
 
+  // ── Paris Stats ──
+  async function loadParisStats() {
+    const tbody = document.getElementById('paris-stats-tbody');
+    if (!tbody) return;
+    if (!myTid) {
+      tbody.innerHTML = `<tr><td colspan="7">${_loginCta('Classement réservé aux membres')}</td></tr>`;
+      return;
+    }
+    const all = await fetch(`${API}/bets/stats/all`).then(r => r.json()).catch(() => []);
+    const visible = all.filter(u => {
+      if (!u.telegram_id) return false;
+      return u.telegram_id === myTid || followingSet.has(u.telegram_id) || isAdmin(u.telegram_id);
+    });
+    const medals = ['🥇','🥈','🥉'];
+    tbody.innerHTML = visible.map((u, i) => {
+      const isAdm = isAdmin(u.telegram_id);
+      const nameHtml = isAdm
+        ? `<span class="admin-name">${esc(u.username)}</span>`
+        : `<strong>${esc(u.username)}</strong>`;
+      const winPct = u.played > 0 ? Math.round((u.won / u.played) * 100) : 0;
+      const color  = winPct >= 60 ? '#22c55e' : winPct >= 40 ? '#f97316' : '#ef4444';
+      const net    = u.coins_gained;
+      const netCol = net >= 0 ? '#22c55e' : '#ef4444';
+      const netStr = (net >= 0 ? '+' : '') + net + ' 🪙';
+      return `<tr>
+        <td>${medals[i] || i+1}</td>
+        <td>${nameHtml}</td>
+        <td>${u.played}</td>
+        <td style="color:#22c55e;font-weight:700">${u.won}</td>
+        <td style="color:#ef4444;font-weight:700">${u.lost}</td>
+        <td style="color:${color};font-weight:700">${winPct}%</td>
+        <td style="color:${netCol};font-weight:700">${netStr}</td>
+      </tr>`;
+    }).join('') || `<tr><td colspan="7" style="text-align:center;color:var(--sub);padding:24px">Aucun pari joué pour l'instant.</td></tr>`;
+  }
+
   function openModal3(username) {
     const user = _thune.find(u => u.username === username);
     if (!user) return;
@@ -3450,8 +3587,10 @@ async function _bjRefreshCoins() {
 async function _bjCheckExistingSession() {
   try {
     const sessions = await fetch(`${API}/blackjack/sessions`).then(r => r.json());
-    const mine = sessions.find(s => s.players.some(p => p.telegram_id === myTid));
-    if (mine && (mine.status === 'waiting' || mine.status === 'active')) {
+    const mine = sessions.find(s => s.players.some(p => Number(p.telegram_id) === Number(myTid)));
+    // Auto-rejoindre UNIQUEMENT si la partie est déjà lancée (reconnexion mi-partie)
+    // Si en attente → on reste dans le lobby, l'utilisateur choisit
+    if (mine && mine.status === 'active') {
       _bjToken = mine.token;
       bjEnterGame();
     }

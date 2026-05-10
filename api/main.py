@@ -27,7 +27,7 @@ from data.database import (
     log_drink as db_log_drink, start_session, end_session,
     upsert_user, set_password, get_user_by_username, rename_user,
     delete_last_drink, update_max_bac, is_username_taken,
-    get_session_drinks, delete_user, update_location,
+    get_session_drinks, get_session_drinks_detail, delete_user, update_location,
     init_push_subscriptions, save_push_subscription,
     delete_push_subscription, get_push_subscriptions,
     get_blackjack_stats, get_profile_follows,
@@ -1261,10 +1261,18 @@ async def bj_create_web(request: Request):
     coins = get_coins(telegram_id)
     if coins < bet:
         return {"ok": False, "error": f"Solde insuffisant ({coins} 🪙)"}
-    # Une session en attente à la fois par créateur
     existing = get_blackjack_session_by_player(telegram_id)
     if existing:
-        return {"ok": True, "token": existing["token"]}
+        if existing["status"] == "active":
+            # Partie en cours → impossible de créer, renvoyer l'erreur
+            return {"ok": False, "error": "Tu es déjà dans une partie active — rejoins-la !"}
+        # Session en attente → la fermer et rembourser la mise du joueur
+        players = get_blackjack_players(existing["id"])
+        old_me = next((p for p in players if p["telegram_id"] == telegram_id), None)
+        if old_me and old_me["bet"] > 0:
+            add_coins(telegram_id, old_me["bet"], "Blackjack - remboursement ancienne table")
+        update_blackjack_session(existing["id"], status="finished")
+        await _bj_broadcast(existing["token"])
     token = secrets.token_urlsafe(8)
     session_id = create_blackjack_session(telegram_id, token)
     add_blackjack_player(session_id, telegram_id, bet)
@@ -1599,6 +1607,18 @@ def get_profile(telegram_id: int):
     }
 
 
+@app.get("/session/{telegram_id}")
+def get_user_session_drinks(telegram_id: int):
+    """Verres de la session active d'un utilisateur, avec heures."""
+    detail = get_session_drinks_detail(telegram_id)
+    return {
+        "drinks": [
+            {"drink_key": d["drink_key"], "logged_at": d["logged_at"]}
+            for d in detail
+        ]
+    }
+
+
 @app.get("/avatars")
 def get_avatars():
     """Retourne tous les avatars : {telegram_id: data_url}."""
@@ -1624,6 +1644,35 @@ async def upload_avatar(request: Request):
         return {"ok": False, "error": "Format invalide"}
     set_avatar(int(tid), avatar)
     return {"ok": True}
+
+
+@app.get("/bets/stats/all")
+def get_all_bets_stats():
+    """Stats de paris (settleduniquement) pour le classement."""
+    from data.database import _fetchall as _fa
+    bets  = _fa("SELECT * FROM bets WHERE status='settled'")
+    users = {u["telegram_id"]: u for u in get_all_users()}
+    stats: dict[int, dict] = {}
+    for b in bets:
+        for uid in [b["challenger_id"], b["opponent_id"]]:
+            if uid not in stats:
+                u = users.get(uid)
+                stats[uid] = {
+                    "telegram_id": uid,
+                    "username":    u["username"] if u else "?",
+                    "played": 0, "won": 0, "lost": 0,
+                    "coins_gained": 0,
+                }
+            stats[uid]["played"] += 1
+            if b["winner_id"] == uid:
+                stats[uid]["won"]         += 1
+                stats[uid]["coins_gained"] += b["amount"]
+            else:
+                stats[uid]["lost"]         += 1
+                stats[uid]["coins_gained"] -= b["amount"]
+    result = list(stats.values())
+    result.sort(key=lambda x: (-x["won"], x["lost"]))
+    return result
 
 
 @app.get("/blackjack/stats/all")
