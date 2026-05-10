@@ -22,7 +22,7 @@ from data.database import (
     follow_user, unfollow_user, is_following, get_following, get_followers,
     verify_password,
     log_drink as db_log_drink, start_session, end_session,
-    upsert_user, set_password, get_user_by_username,
+    upsert_user, set_password, get_user_by_username, rename_user,
     delete_last_drink, update_max_bac, is_username_taken,
     get_session_drinks, delete_user,
     init_push_subscriptions, save_push_subscription,
@@ -599,6 +599,7 @@ async def update_profile_endpoint(request: Request):
     new_gender    = body.get("gender")
     new_weight    = body.get("weight")
     new_password  = body.get("new_password", "").strip()
+    new_username  = body.get("new_username", "").strip()
 
     if not telegram_id:
         return {"ok": False, "error": "Non authentifié"}
@@ -610,6 +611,19 @@ async def update_profile_endpoint(request: Request):
     if not verify_password(user["username"], current_pwd):
         return {"ok": False, "error": "Mot de passe incorrect"}
 
+    response_username = None
+
+    # Changement de pseudo
+    if new_username and new_username != user["username"]:
+        if len(new_username) < 2 or len(new_username) > 30:
+            return {"ok": False, "error": "Pseudo invalide (2–30 caractères)"}
+        if is_username_taken(new_username, telegram_id):
+            return {"ok": False, "error": "Ce pseudo est déjà pris"}
+        rename_user(telegram_id, new_username)
+        response_username = new_username
+
+    # Mise à jour genre / poids
+    current_username = response_username or user["username"]
     if new_gender or new_weight:
         gender = new_gender if new_gender in ("homme", "femme") else user["gender"]
         try:
@@ -617,14 +631,16 @@ async def update_profile_endpoint(request: Request):
             assert 30 < w < 250
         except Exception:
             return {"ok": False, "error": "Poids invalide (30–250 kg)"}
-        upsert_user(telegram_id, user["username"], w, gender)
+        upsert_user(telegram_id, current_username, w, gender)
 
+    # Nouveau mot de passe
     if new_password:
         if len(new_password) < 4:
             return {"ok": False, "error": "Nouveau mot de passe trop court (min. 4 caractères)"}
         set_password(telegram_id, new_password)
 
-    return {"ok": True}
+    await _broadcast(build_snapshot())
+    return {"ok": True, **({"new_username": response_username} if response_username else {})}
 
 
 # ── Suppression de compte ─────────────────────────────────────────────────────
