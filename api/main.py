@@ -50,8 +50,10 @@ VAPID_CLAIMS      = {"sub": "mailto:admin@drunk.app"}
 def _send_push(telegram_id: int, title: str, body: str, url: str = "/"):
     """Envoie une notification push à tous les appareils d'un utilisateur."""
     if not _PUSH_ENABLED or not VAPID_PRIVATE_KEY:
+        print(f"[PUSH] désactivé — PUSH_ENABLED={_PUSH_ENABLED} KEY={'oui' if VAPID_PRIVATE_KEY else 'non'}")
         return
     subs = get_push_subscriptions(telegram_id)
+    print(f"[PUSH] envoi à {telegram_id} — {len(subs)} subscription(s)")
     for sub in subs:
         try:
             webpush(
@@ -63,7 +65,9 @@ def _send_push(telegram_id: int, title: str, body: str, url: str = "/"):
                 vapid_private_key=VAPID_PRIVATE_KEY,
                 vapid_claims=VAPID_CLAIMS,
             )
+            print(f"[PUSH] ✅ envoyé à {sub['endpoint'][:60]}…")
         except Exception as e:
+            print(f"[PUSH] ❌ erreur : {e}")
             # Subscription expirée → on la supprime
             try:
                 resp = getattr(e, "response", None)
@@ -676,13 +680,15 @@ def push_vapid_key():
 async def push_subscribe(request: Request):
     body        = await request.json()
     telegram_id = body.get("telegram_id")
-    sub         = body.get("subscription", {})
-    endpoint    = sub.get("endpoint")
-    p256dh      = (sub.get("keys") or {}).get("p256dh")
-    auth        = (sub.get("keys") or {}).get("auth")
+    # Le frontend envoie endpoint/p256dh/auth à plat
+    endpoint = body.get("endpoint")
+    p256dh   = body.get("p256dh")
+    auth     = body.get("auth")
     if not all([telegram_id, endpoint, p256dh, auth]):
+        print(f"[PUSH/subscribe] données incomplètes : {list(body.keys())}")
         return {"ok": False, "error": "Données incomplètes"}
     save_push_subscription(telegram_id, endpoint, p256dh, auth)
+    print(f"[PUSH/subscribe] ✅ tid={telegram_id} endpoint={endpoint[:60]}…")
     return {"ok": True}
 
 @app.post("/push/unsubscribe")
@@ -691,6 +697,18 @@ async def push_unsubscribe(request: Request):
     endpoint = body.get("endpoint")
     if endpoint:
         delete_push_subscription(endpoint)
+    return {"ok": True}
+
+@app.post("/push/test")
+async def push_test(request: Request):
+    """Envoie une notif de test à soi-même."""
+    body        = await request.json()
+    telegram_id = body.get("telegram_id")
+    if not telegram_id:
+        return {"ok": False, "error": "Non authentifié"}
+    import asyncio
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, _send_push, telegram_id, "🍺 Test Drunk", "Les notifications fonctionnent !", "/")
     return {"ok": True}
 
 # ── Logger un verre depuis le web ─────────────────────────────────────────────

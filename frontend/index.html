@@ -1616,6 +1616,7 @@
         <div class="p-card">
           <div class="p-card-label">Compte</div>
           <button class="p-action-btn" id="push-btn" onclick="togglePush()">🔔 Activer les notifications</button>
+          <button class="p-action-btn" id="push-test-btn" onclick="testPush()" style="display:none">📨 Envoyer une notif test</button>
           <button class="p-action-btn" onclick="toggleTheme()">🌙 Changer le thème</button>
           <button class="p-action-btn" onclick="logout();showTab('profil')">🚪 Se déconnecter</button>
           <button class="p-action-btn danger" onclick="openDeleteModal()">🗑️ Supprimer mon compte</button>
@@ -2347,7 +2348,8 @@
   }
 
   async function updatePushBtn() {
-    const btn = document.getElementById('push-btn');
+    const btn     = document.getElementById('push-btn');
+    const testBtn = document.getElementById('push-test-btn');
     if (!btn) return;
     if (!('PushManager' in window)) {
       btn.textContent = '🔕 Notifications non supportées';
@@ -2356,6 +2358,22 @@
     }
     const sub = await getPushSub();
     btn.textContent = sub ? '🔕 Désactiver les notifications' : '🔔 Activer les notifications';
+    if (testBtn) testBtn.style.display = sub ? '' : 'none';
+  }
+
+  async function testPush() {
+    if (!myTid) return;
+    const btn = document.getElementById('push-test-btn');
+    if (btn) btn.textContent = '⏳ Envoi…';
+    try {
+      const r = await fetch(`${API}/push/test`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ telegram_id: myTid }),
+      }).then(r => r.json());
+      showToast(r.ok ? '📨 Notif envoyée ! Vérifie ton téléphone.' : '❌ ' + r.error);
+    } catch(e) { showToast('❌ Erreur réseau'); }
+    if (btn) btn.textContent = '📨 Envoyer une notif test';
   }
 
   async function togglePush() {
