@@ -3567,8 +3567,6 @@ function openBlackjack() {
     return;
   }
   bjLoadSessions();
-  // Si pas de token mémorisé, chercher une session existante
-  _bjCheckExistingSession();
 }
 
 function closeBlackjack() {
@@ -3610,16 +3608,6 @@ async function _bjRefreshCoins() {
   document.getElementById('bj-coins-disp').textContent = `${bal} 🪙`;
 }
 
-async function _bjCheckExistingSession() {
-  // Utilise le nouvel endpoint dédié qui retourne n'importe quel statut (waiting/active/finished)
-  try {
-    const s = await fetch(`${API}/blackjack/my-session/${myTid}`).then(r => r.json());
-    if (s.ok && s.token) {
-      _bjToken = s.token;
-      bjEnterGame();
-    }
-  } catch(e) {}
-}
 
 async function bjLoadSessions() {
   const el = document.getElementById('bj-sessions-list');
