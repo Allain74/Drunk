@@ -3878,14 +3878,15 @@ function _bjRender(state) {
   quitBar.style.display    = 'none';
 
   if (state.status === 'active') {
-    // Toujours afficher "Quitter" pendant une partie active
-    quitBar.style.display = 'flex';
     if (me && me.status === 'playing') {
-      // C'est mon tour : afficher aussi les boutons Tirer/Rester
+      // Mon tour : Tirer / Rester (pas de Quitter — deux barres au même bottom se superposeraient)
       actionBar.style.display = 'flex';
       const bh = document.getElementById('bj-btn-hit'), bs = document.getElementById('bj-btn-stand');
       bh.disabled = bs.disabled = false;
       bh.textContent = '🃏 Tirer'; bs.textContent = '✋ Rester';
+    } else {
+      // Pas mon tour : juste Quitter
+      quitBar.style.display = 'flex';
     }
   } else if (state.status === 'waiting') {
     // startBar contient déjà Lancer + Quitter
