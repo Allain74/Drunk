@@ -54,13 +54,13 @@ VAPID_PUBLIC_KEY  = os.environ.get("VAPID_PUBLIC_KEY", "")
 VAPID_CLAIMS      = {"sub": "mailto:admin@drunk.app"}
 
 
-def _send_push(telegram_id: int, title: str, body: str, url: str = "/"):
+def _send_push(user_id: int, title: str, body: str, url: str = "/"):
     """Envoie une notification push à tous les appareils d'un utilisateur."""
     if not _PUSH_ENABLED or not VAPID_PRIVATE_KEY:
         print(f"[PUSH] désactivé — PUSH_ENABLED={_PUSH_ENABLED} KEY={'oui' if VAPID_PRIVATE_KEY else 'non'}")
         return
-    subs = get_push_subscriptions(telegram_id)
-    print(f"[PUSH] envoi à {telegram_id} — {len(subs)} subscription(s)")
+    subs = get_push_subscriptions(user_id)
+    print(f"[PUSH] envoi à {user_id} — {len(subs)} subscription(s)")
     for sub in subs:
         try:
             webpush(
@@ -229,10 +229,10 @@ async def telegram_webhook(request: Request):
 # ── Helpers dashboard ─────────────────────────────────────────────────────────
 
 def build_snapshot() -> list[dict]:
-    users = {u["telegram_id"]: u for u in get_all_users()}
+    users = {u["user_id"]: u for u in get_all_users()}
     drinks_by_user = get_all_active_drinks()
     now = datetime.now(timezone.utc)
-    banned_ids = {u["telegram_id"] for u in _get_banned_list()}
+    banned_ids = {u["user_id"] for u in _get_banned_list()}
     result = []
     for uid, user in users.items():
         drinks = drinks_by_user.get(uid, [])
@@ -244,7 +244,7 @@ def build_snapshot() -> list[dict]:
             if b > peak_24h:
                 peak_24h = b
         result.append({
-            "telegram_id": uid,
+            "user_id":     uid,
             "username":    user["username"],
             "bac":         round(bac, 3),
             "label":       bac_label(bac),
@@ -1319,8 +1319,6 @@ async def bj_create_web(request: Request):
     user = get_user(telegram_id)
     if not user:
         return {"ok": False, "error": "Utilisateur introuvable"}
-    if bet < 10:
-        return {"ok": False, "error": "Mise minimum : 10 🪙"}
     coins = get_coins(telegram_id)
     if coins < bet:
         return {"ok": False, "error": f"Solde insuffisant ({coins} 🪙)"}
@@ -1359,8 +1357,6 @@ async def bj_join_web(token: str, request: Request):
     me = next((p for p in players if p["telegram_id"] == telegram_id), None)
     if me and me["status"] != "left":
         return {"ok": True, "token": token}
-    if bet < 10:
-        return {"ok": False, "error": "Mise minimum : 10 🪙"}
     coins = get_coins(telegram_id)
     if coins < bet:
         return {"ok": False, "error": f"Solde insuffisant ({coins} 🪙)"}

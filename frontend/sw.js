@@ -65,13 +65,29 @@ self.addEventListener("push", (event) => {
   if (!event.data) return;
   let data = {};
   try { data = event.data.json(); } catch(e) { data = { title: "Drunk 🍺", body: event.data.text() }; }
+
+  const notif = {
+    id: Date.now() + Math.random(),
+    title: data.title || "Drunk 🍺",
+    body: data.body || "",
+    url: data.url || "/",
+    at: Date.now(),
+    read: false,
+  };
+
   event.waitUntil(
-    self.registration.showNotification(data.title || "Drunk 🍺", {
-      body:  data.body  || "",
-      icon:  "/icons/icon-192.png",
-      badge: "/icons/icon-192.png",
-      data:  { url: data.url || "/" },
-    })
+    Promise.all([
+      self.registration.showNotification(notif.title, {
+        body: notif.body,
+        icon:  "/icons/icon-192.png",
+        badge: "/icons/icon-192.png",
+        data:  { url: notif.url },
+      }),
+      // Transmet la notif à toutes les pages ouvertes pour stockage localStorage
+      self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(clients => {
+        clients.forEach(c => c.postMessage({ type: "PUSH_NOTIF", notif }));
+      }),
+    ])
   );
 });
 
