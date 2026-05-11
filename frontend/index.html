@@ -3577,9 +3577,17 @@ function closeBlackjack() {
   document.getElementById('bj-overlay').classList.remove('open');
   if (!_bjToken) {
     // Lobby sans session active → cleanup complet
+    _bjHideAllBars();
     document.getElementById('bj-lobby').style.display = '';
     document.getElementById('bj-join-modal').style.display = 'none';
   }
+}
+
+function _bjHideAllBars() {
+  ['bj-action-bar','bj-start-bar','bj-rematch-bar','bj-quit-bar'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
 }
 
 function bjBackToLobby() {
@@ -3587,6 +3595,7 @@ function bjBackToLobby() {
   _bjStopPoll();
   if (_bjWs) { _bjWs.onclose = null; _bjWs.onerror = null; _bjWs.close(); _bjWs = null; }
   _bjToken = null; _bjLastState = null;
+  _bjHideAllBars();
   document.getElementById('bj-lobby').style.display = '';
   document.getElementById('bj-game-view').style.display = 'none';
   document.getElementById('bj-join-modal').style.display = 'none';
