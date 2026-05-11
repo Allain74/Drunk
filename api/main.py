@@ -303,6 +303,7 @@ def build_snapshot() -> list[dict]:
             "max_bac":     round(user.get("max_bac") or 0, 2),
             "peak_24h":    round(peak_24h, 2),
             "gender":      user.get("gender", "homme"),
+            "weight_kg":   user.get("weight_kg"),
             "is_premium":  uid == admin_id or bool(user.get("is_premium")),
             "is_banned":   uid in banned_ids,
         })
@@ -1063,8 +1064,9 @@ async def update_profile_endpoint(request: Request):
     if not user:
         return {"ok": False, "error": "Utilisateur introuvable"}
 
-    if not verify_password(user["username"], current_pwd):
-        return {"ok": False, "error": "Mot de passe incorrect"}
+    # Le mot de passe actuel est exigé uniquement pour changer le mot de passe.
+    if new_password and not verify_password(user["username"], current_pwd):
+        return {"ok": False, "error": "Mot de passe actuel incorrect"}
 
     response_username = None
 
