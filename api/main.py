@@ -1779,35 +1779,48 @@ def get_all_bj_stats():
 
 async def _resolve_hand(sess_id: int, token: str):
     """Résout la main du croupier et distribue les gains. Passe la session en 'finished'."""
-    sess = get_blackjack_session_by_id(sess_id)
-    if not sess:
-        return
-    players = get_blackjack_players(sess_id)
-    # Seuls les joueurs qui ont joué cette main (pas waiting_next / left / waiting)
-    hand_players = [p for p in players if p["status"] in ("stand", "bust", "done")]
-    dealer_hand = json.loads(sess["dealer_hand"])
-    deck = json.loads(sess["deck"])
-    while hand_value(dealer_hand) < 17:
-        dealer_hand.append(deck.pop())
-    dealer_val = hand_value(dealer_hand)
-    update_blackjack_session(sess_id,
-        dealer_hand=json.dumps(dealer_hand),
-        deck=json.dumps(deck),
-        status="finished",
-    )
-    for p in hand_players:
-        if p["status"] == "bust":
-            continue
-        p_val = hand_value(json.loads(p["hand"]))
-        bet = p["bet"]
-        if dealer_val > 21 or p_val > dealer_val:
-            add_coins(p["telegram_id"], bet * 2, "Blackjack gagné")
-            update_blackjack_player(sess_id, p["telegram_id"], result="win")
-        elif p_val == dealer_val:
-            add_coins(p["telegram_id"], bet, "Blackjack égalité")
-            update_blackjack_player(sess_id, p["telegram_id"], result="push")
-        else:
-            update_blackjack_player(sess_id, p["telegram_id"], result="lose")
+    try:
+        sess = get_blackjack_session_by_id(sess_id)
+        if not sess:
+            return
+        # Idempotence : si déjà terminé, juste broadcaster l'état actuel
+        if sess["status"] == "finished":
+            await _bj_broadcast(token)
+            return
+        players = get_blackjack_players(sess_id)
+        # Seuls les joueurs qui ont joué cette main (pas waiting_next / left / waiting)
+        hand_players = [p for p in players if p["status"] in ("stand", "bust", "done")]
+        dealer_hand = json.loads(sess["dealer_hand"])
+        deck = json.loads(sess["deck"])
+        # Le croupier tire jusqu'à 17 (s'arrête si le deck est vide par sécurité)
+        while hand_value(dealer_hand) < 17 and deck:
+            dealer_hand.append(deck.pop())
+        dealer_val = hand_value(dealer_hand)
+        update_blackjack_session(sess_id,
+            dealer_hand=json.dumps(dealer_hand),
+            deck=json.dumps(deck),
+            status="finished",
+        )
+        for p in hand_players:
+            if p["status"] == "bust":
+                continue
+            p_val = hand_value(json.loads(p["hand"]))
+            bet = p["bet"]
+            if dealer_val > 21 or p_val > dealer_val:
+                add_coins(p["telegram_id"], bet * 2, "Blackjack gagné")
+                update_blackjack_player(sess_id, p["telegram_id"], result="win")
+            elif p_val == dealer_val:
+                add_coins(p["telegram_id"], bet, "Blackjack égalité")
+                update_blackjack_player(sess_id, p["telegram_id"], result="push")
+            else:
+                update_blackjack_player(sess_id, p["telegram_id"], result="lose")
+    except Exception as e:
+        print(f"[_resolve_hand error] {e}")
+        # En cas d'erreur partielle, forcer 'finished' et broadcaster quand même
+        try:
+            update_blackjack_session(sess_id, status="finished")
+        except Exception:
+            pass
     await _bj_broadcast(token)
 
 
@@ -1869,43 +1882,49 @@ async def blackjack_ws(ws: WebSocket, token: str):
             player_id = msg.get("telegram_id")
 
             if action in ("hit", "stand") and player_id:
-                sess = get_blackjack_session(token)
-                players = get_blackjack_players(sess["id"])
-                player = next((p for p in players if p["telegram_id"] == player_id), None)
-
-                if player and player["status"] == "playing":
-                    hand = json.loads(player["hand"])
-                    deck = json.loads(sess["deck"])
-                    dealer_hand = json.loads(sess["dealer_hand"])
-
-                    if action == "hit":
-                        card = deck.pop()
-                        hand.append(card)
-                        update_blackjack_session(sess["id"], deck=json.dumps(deck))
-                        val = hand_value(hand)
-                        if val > 21:
-                            update_blackjack_player(sess["id"], player_id,
-                                hand=json.dumps(hand), status="bust", result="lose")
-                        else:
-                            update_blackjack_player(sess["id"], player_id, hand=json.dumps(hand))
-
-                    elif action == "stand":
-                        update_blackjack_player(sess["id"], player_id,
-                            hand=json.dumps(hand), status="stand")
-
-                    # Check if all active players done (exclure waiting_next / left)
+                try:
+                    sess = get_blackjack_session(token)
                     players = get_blackjack_players(sess["id"])
-                    active = [p for p in players
-                              if p["status"] not in ("waiting_next", "left", "waiting")]
-                    all_done = bool(active) and all(
-                        p["status"] in ("stand", "bust", "done") for p in active
-                    )
+                    player = next((p for p in players if p["telegram_id"] == player_id), None)
 
-                    if all_done:
-                        await _resolve_hand(sess["id"], token)
-                    else:
-                        await _bj_broadcast(token)
+                    if player and player["status"] == "playing":
+                        hand = json.loads(player["hand"])
+                        deck = json.loads(sess["deck"])
 
+                        if action == "hit":
+                            if deck:
+                                card = deck.pop()
+                                hand.append(card)
+                                update_blackjack_session(sess["id"], deck=json.dumps(deck))
+                            val = hand_value(hand)
+                            if val > 21:
+                                update_blackjack_player(sess["id"], player_id,
+                                    hand=json.dumps(hand), status="bust", result="lose")
+                            else:
+                                update_blackjack_player(sess["id"], player_id, hand=json.dumps(hand))
+
+                        elif action == "stand":
+                            update_blackjack_player(sess["id"], player_id,
+                                hand=json.dumps(hand), status="stand")
+
+                        # Check if all active players done (exclure waiting_next / left)
+                        players = get_blackjack_players(sess["id"])
+                        active = [p for p in players
+                                  if p["status"] not in ("waiting_next", "left", "waiting")]
+                        all_done = bool(active) and all(
+                            p["status"] in ("stand", "bust", "done") for p in active
+                        )
+
+                        if all_done:
+                            await _resolve_hand(sess["id"], token)
+                        else:
+                            await _bj_broadcast(token)
+                except Exception as e:
+                    print(f"[BJ WS action error] {e}")
+                    await _bj_broadcast(token)  # broadcast quand même pour synchro client
+
+    except WebSocketDisconnect:
+        pass
     except Exception:
         pass
     finally:

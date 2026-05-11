@@ -3734,19 +3734,18 @@ function _bjWsConnect() {
   _bjWs.onerror   = () => { if (_bjWs) { _bjWs.onclose = null; _bjWs.close(); _bjWs = null; } setTimeout(() => { if (_bjToken) _bjWsConnect(); }, 1200); };
 }
 
-// Polling de secours pour les non-créateurs bloqués en "waiting"
+// Polling de secours (toujours actif — filet de sécurité si le WS rate un message)
 let _bjPollTimer = null;
+async function _bjFetchState() {
+  if (!_bjToken) return;
+  try {
+    const d = await fetch(`${API}/blackjack/${_bjToken}/state`).then(r => r.json());
+    if (d.ok) _bjRender(d);
+  } catch(e) {}
+}
 function _bjStartPoll() {
   _bjStopPoll();
-  _bjPollTimer = setInterval(async () => {
-    if (!_bjToken) { _bjStopPoll(); return; }
-    // Si le WS reçoit des messages on n'a pas besoin de poller — on poll seulement si le WS est mort
-    if (_bjWs && _bjWs.readyState === WebSocket.OPEN) return;
-    try {
-      const d = await fetch(`${API}/blackjack/${_bjToken}/state`).then(r => r.json());
-      if (d.ok) _bjRender(d);
-    } catch(e) {}
-  }, 3000);
+  _bjPollTimer = setInterval(() => { if (!_bjToken) { _bjStopPoll(); return; } _bjFetchState(); }, 3000);
 }
 function _bjStopPoll() {
   if (_bjPollTimer) { clearInterval(_bjPollTimer); _bjPollTimer = null; }
@@ -3913,6 +3912,9 @@ async function bjAct(action) {
 
   if (_bjWs && _bjWs.readyState === WebSocket.OPEN) {
     _bjWs.send(JSON.stringify({ action, telegram_id: myTid }));
+    // Filet de sécurité : si le broadcast WS rate, le poll HTTP prend le relais
+    setTimeout(() => _bjFetchState(), 1500);
+    setTimeout(() => _bjFetchState(), 3500);
   } else {
     // Fallback HTTP si WebSocket non dispo
     const r = await fetch(`${API}/blackjack/${_bjToken}/action-web`, {
