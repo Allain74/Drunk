@@ -531,6 +531,26 @@ def add_coins(user_id: int, amount: int, reason: str) -> int:
     return get_coins(user_id)
 
 
+def try_debit_coins(user_id: int, amount: int, reason: str) -> bool:
+    """Tente de débiter `amount` coins de manière atomique.
+    Retourne True si le débit a eu lieu, False si le solde était insuffisant.
+    Empêche les double-spend (deux requêtes parallèles ne peuvent pas
+    descendre le solde sous 0 toutes les deux)."""
+    if amount <= 0:
+        return False
+    res = _execute(
+        "UPDATE users SET coins = coins - ? WHERE user_id=? AND coins >= ?",
+        [amount, user_id, amount]
+    )
+    if not res.get("affected_row_count"):
+        return False
+    _execute(
+        "INSERT INTO transactions (user_id, amount, reason) VALUES (?, ?, ?)",
+        [user_id, -amount, reason]
+    )
+    return True
+
+
 def get_transactions(user_id: int, limit: int = 20) -> list[dict]:
     return _fetchall(
         "SELECT amount, reason, created_at FROM transactions WHERE user_id=? ORDER BY created_at DESC LIMIT ?",

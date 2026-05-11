@@ -17,7 +17,7 @@ from data.database import (
     init_db, get_all_users, get_all_active_drinks, get_active_session,
     get_drinks_by_session, get_all_time_stats, get_last_drink_time,
     set_last_inactivity_notif, get_last_inactivity_notif,
-    get_active_bets, settle_bet, get_bet, get_user, add_coins, get_coins,
+    get_active_bets, settle_bet, get_bet, get_user, add_coins, get_coins, try_debit_coins,
     create_bet, get_pending_bet_for, accept_bet, cancel_bet,
     get_user_bets, get_all_balances, get_transactions,
     get_blackjack_session, get_blackjack_session_by_id, get_blackjack_session_by_player,
@@ -131,11 +131,17 @@ async def lifespan(app: FastAPI):
     await _bot_app.initialize()
     await _bot_app.start()
 
-    # Webhook : Telegram envoie les messages à notre URL
-    await _bot_app.bot.set_webhook(
-        url=f"{RENDER_URL}/telegram-webhook",
-        drop_pending_updates=True,
-    )
+    # Webhook : Telegram envoie les messages à notre URL.
+    # secret_token : Telegram joindra le header X-Telegram-Bot-Api-Secret-Token
+    # à chaque update, qu'on valide côté handler pour bloquer les faux POST.
+    _tg_secret = os.environ.get("TELEGRAM_WEBHOOK_SECRET", "")
+    set_webhook_kwargs = {
+        "url": f"{RENDER_URL}/telegram-webhook",
+        "drop_pending_updates": True,
+    }
+    if _tg_secret:
+        set_webhook_kwargs["secret_token"] = _tg_secret
+    await _bot_app.bot.set_webhook(**set_webhook_kwargs)
 
     from telegram import BotCommand, BotCommandScopeDefault, BotCommandScopeChat
 
@@ -217,11 +223,19 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="AlcooTracker API", lifespan=lifespan)
 
+_DEFAULT_ALLOWED_ORIGINS = [
+    "https://drunk-weld.vercel.app",
+    "http://localhost:3000",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+]
+_extra_origins = [o.strip() for o in os.environ.get("ALLOWED_ORIGINS", "").split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=_DEFAULT_ALLOWED_ORIGINS + _extra_origins,
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
 
@@ -234,10 +248,32 @@ _RATE_SKIP_PREFIXES = ("/stripe/webhook", "/telegram-webhook")
 
 
 def _client_ip(request: Request) -> str:
+    # Sur Render, l'IP réelle du client est le DERNIER élément de X-Forwarded-For
+    # (le proxy Render ajoute l'IP réelle après les IPs spoofées par l'attaquant).
     fwd = request.headers.get("x-forwarded-for", "")
     if fwd:
-        return fwd.split(",")[0].strip()
+        parts = [p.strip() for p in fwd.split(",") if p.strip()]
+        if parts:
+            return parts[-1]
     return request.client.host if request.client else "unknown"
+
+
+_rate_last_cleanup = 0.0
+
+
+def _cleanup_rate_buckets(now: float):
+    """Supprime les buckets vides (IPs inactives) pour éviter une fuite mémoire."""
+    global _rate_last_cleanup
+    if now - _rate_last_cleanup < 300:  # toutes les 5 min max
+        return
+    _rate_last_cleanup = now
+    cutoff = now - RATE_LIMIT_WINDOW
+    for ip in list(_rate_buckets.keys()):
+        b = _rate_buckets[ip]
+        while b and b[0] < cutoff:
+            b.pop(0)
+        if not b:
+            del _rate_buckets[ip]
 
 
 @app.middleware("http")
@@ -247,8 +283,8 @@ async def rate_limit_middleware(request: Request, call_next):
     ):
         ip = _client_ip(request)
         now = time.time()
+        _cleanup_rate_buckets(now)
         bucket = _rate_buckets[ip]
-        # Purge des entrées trop vieilles
         cutoff = now - RATE_LIMIT_WINDOW
         while bucket and bucket[0] < cutoff:
             bucket.pop(0)
@@ -266,6 +302,11 @@ async def rate_limit_middleware(request: Request, call_next):
 
 @app.post("/telegram-webhook")
 async def telegram_webhook(request: Request):
+    expected = os.environ.get("TELEGRAM_WEBHOOK_SECRET", "")
+    if expected:
+        received = request.headers.get("x-telegram-bot-api-secret-token", "")
+        if received != expected:
+            return Response(status_code=403)
     data = await request.json()
     update = Update.de_json(data, _bot_app.bot)
     await _bot_app.process_update(update)
@@ -298,12 +339,12 @@ def build_snapshot() -> list[dict]:
             "sober_in_h":  round(sober_in_hours(bac), 1),
             "nb_drinks":   len(drinks),
             "has_session": uid in drinks_by_user,
-            "lat":         user["latitude"],
-            "lon":         user["longitude"],
+            # lat/lon/weight_kg ne sont plus dans le snapshot public.
+            # Pour la carte : utiliser /locations/{telegram_id} (filtré par suivis).
+            # Pour le poids perso : /me/{telegram_id}.
             "max_bac":     round(user.get("max_bac") or 0, 2),
             "peak_24h":    round(peak_24h, 2),
             "gender":      user.get("gender", "homme"),
-            "weight_kg":   user.get("weight_kg"),
             "is_premium":  uid == admin_id or bool(user.get("is_premium")),
             "is_banned":   uid in banned_ids,
         })
@@ -782,6 +823,65 @@ def _invalidate_alltime_cache():
     _alltime_cache["ts"] = 0.0
 
 
+@app.get("/me/{telegram_id}")
+def get_me(telegram_id: int):
+    """Renvoie les infos perso d'un user (poids, gender, premium).
+    Pas d'auth pour l'instant — vulnérable IDOR mineur (poids accessible si on
+    devine un telegram_id). Sera fixé par le système de session tokens."""
+    user = get_user(telegram_id)
+    if not user:
+        return {"ok": False}
+    admin_id = int(os.environ.get("ADMIN_ID", "0"))
+    uid = user.get("user_id") or user.get("telegram_id")
+    return {
+        "ok": True,
+        "telegram_id": uid,
+        "username": user.get("username"),
+        "weight_kg": user.get("weight_kg"),
+        "gender": user.get("gender", "homme"),
+        "coins": user.get("coins", 0),
+        "is_admin": uid == admin_id,
+        "is_premium": uid == admin_id or bool(user.get("is_premium")),
+    }
+
+
+@app.get("/locations/{telegram_id}")
+def get_locations(telegram_id: int):
+    """Renvoie les positions [{username, lat, lon, bac}] uniquement pour les
+    users que telegram_id suit (+ lui-même + admin). Évite de fuiter les GPS
+    de tous les users à n'importe quel client WebSocket."""
+    user = get_user(telegram_id)
+    if not user:
+        return []
+    admin_id = int(os.environ.get("ADMIN_ID", "0"))
+    following_ids = set(get_following(telegram_id))
+    visible_ids = following_ids | {telegram_id}
+    if admin_id:
+        visible_ids.add(admin_id)
+    drinks_by_user = get_all_active_drinks()
+    now = datetime.now(timezone.utc)
+    result = []
+    for u in get_all_users():
+        uid = u.get("user_id") or u.get("telegram_id")
+        if uid not in visible_ids:
+            continue
+        if not u.get("latitude") or not u.get("longitude"):
+            continue
+        drinks = drinks_by_user.get(uid, [])
+        bac = total_bac(drinks, u["weight_kg"], u["gender"], now) if drinks else 0.0
+        if bac <= 0:
+            continue
+        result.append({
+            "username": u["username"],
+            "lat": u["latitude"],
+            "lon": u["longitude"],
+            "bac": round(bac, 3),
+            "nb_drinks": len(drinks),
+            "sober_in_h": round(sober_in_hours(bac), 1),
+        })
+    return result
+
+
 @app.get("/alltime")
 def get_alltime():
     now = time.time()
@@ -847,8 +947,9 @@ async def _bet_settlement_loop():
             winner = get_user(winner_id)
             loser = get_user(loser_id)
             amount = bet["amount"]
-            add_coins(winner_id, amount, f"Pari gagné contre {loser['username']}")
-            add_coins(loser_id, -amount, f"Pari perdu contre {winner['username']}")
+            # Les deux mises ont déjà été escrow à la création/accept.
+            # Le winner récupère 2x amount (sa mise + celle du perdant).
+            add_coins(winner_id, amount * 2, f"Pari gagné contre {loser['username']}")
 
             msg = (
                 f"🏁 *Résultat du pari !* {detail}\n\n"
@@ -1420,13 +1521,11 @@ async def bj_create_web(request: Request):
     user = get_user(telegram_id)
     if not user:
         return {"ok": False, "error": "Utilisateur introuvable"}
-    coins = get_coins(telegram_id)
-    if coins < bet:
-        return {"ok": False, "error": f"Solde insuffisant ({coins} 🪙)"}
+    if bet <= 0:
+        return {"ok": False, "error": "Mise invalide"}
     existing = get_blackjack_session_by_player(telegram_id)
     if existing:
         if existing["status"] == "active":
-            # Partie en cours → impossible de créer, renvoyer l'erreur
             return {"ok": False, "error": "Tu es déjà dans une partie active — rejoins-la !"}
         # Session en attente → la fermer et rembourser la mise du joueur
         players = get_blackjack_players(existing["id"])
@@ -1435,10 +1534,12 @@ async def bj_create_web(request: Request):
             add_coins(telegram_id, old_me["bet"], "Blackjack - remboursement ancienne table")
         update_blackjack_session(existing["id"], status="finished")
         await _bj_broadcast(existing["token"])
+    # Débit atomique de la mise — empêche les double-spends parallèles
+    if not try_debit_coins(telegram_id, bet, "Blackjack - mise"):
+        return {"ok": False, "error": f"Solde insuffisant ({get_coins(telegram_id)} 🪙)"}
     token = secrets.token_urlsafe(8)
     session_id = create_blackjack_session(telegram_id, token)
     add_blackjack_player(session_id, telegram_id, bet)
-    add_coins(telegram_id, -bet, "Blackjack - mise")
     return {"ok": True, "token": token}
 
 
@@ -1458,21 +1559,22 @@ async def bj_join_web(token: str, request: Request):
     me = next((p for p in players if p["telegram_id"] == telegram_id), None)
     if me and me["status"] != "left":
         return {"ok": True, "token": token}
-    coins = get_coins(telegram_id)
-    if coins < bet:
-        return {"ok": False, "error": f"Solde insuffisant ({coins} 🪙)"}
+    if bet <= 0:
+        return {"ok": False, "error": "Mise invalide"}
 
     if sess["status"] == "waiting":
         # Salle d'attente → rejoindre normalement et payer la mise
         non_left = [p for p in players if p["status"] != "left"]
         if len(non_left) >= 6:
             return {"ok": False, "error": "Table complète (6 joueurs max)"}
+        # Débit atomique avant d'ajouter le joueur — pas de double-spend possible
+        if not try_debit_coins(telegram_id, bet, "Blackjack - mise"):
+            return {"ok": False, "error": f"Solde insuffisant ({get_coins(telegram_id)} 🪙)"}
         if me:  # était "left" → réactiver
             update_blackjack_player(sess["id"], telegram_id,
                 bet=bet, status="waiting", hand="[]", result=None)
         else:
             add_blackjack_player(sess["id"], telegram_id, bet)
-        add_coins(telegram_id, -bet, "Blackjack - mise")
         await _bj_broadcast(token)
         return {"ok": True, "token": token}
 
@@ -1712,10 +1814,14 @@ async def create_bet_web(request: Request):
     if opponent["telegram_id"] == challenger_id:
         return {"ok": False, "error": "Tu ne peux pas parier contre toi-même"}
 
-    if get_coins(challenger_id) < amount:
-        return {"ok": False, "error": f"Solde insuffisant ({get_coins(challenger_id)} 🪙)"}
     if get_coins(opponent["telegram_id"]) < amount:
         return {"ok": False, "error": f"{opponent['username']} n'a pas assez de 🪙"}
+
+    # Escrow : on débite le challenger IMMÉDIATEMENT et on stocke l'argent
+    # dans le pari. À la résolution, le winner récupère 2x amount. En cas de
+    # refus, on rembourse.
+    if not try_debit_coins(challenger_id, amount, f"Pari créé contre {opponent['username']}"):
+        return {"ok": False, "error": f"Solde insuffisant ({get_coins(challenger_id)} 🪙)"}
 
     bet_id = create_bet(challenger_id, opponent["telegram_id"], bet_type, amount, end_time or None)
 
@@ -1748,15 +1854,17 @@ async def accept_bet_web(request: Request):
     if bet["status"] != "pending":
         return {"ok": False, "error": "Pari déjà traité"}
 
-    # Coinflip : résoudre immédiatement
+    # Escrow opponent : on débite sa mise (le challenger a déjà été débité à la création)
+    if not try_debit_coins(telegram_id, bet["amount"], "Pari accepté"):
+        return {"ok": False, "error": f"Solde insuffisant ({get_coins(telegram_id)} 🪙)"}
+
+    # Coinflip : résoudre immédiatement → winner reçoit les 2 mises
     if bet["bet_type"] == "coinflip":
         import random
         winner_id = random.choice([bet["challenger_id"], bet["opponent_id"]])
-        loser_id  = bet["opponent_id"] if winner_id == bet["challenger_id"] else bet["challenger_id"]
         accept_bet(bet_id)
         settle_bet(bet_id, winner_id)
-        add_coins(winner_id,  bet["amount"],  f"Coinflip gagné")
-        add_coins(loser_id,  -bet["amount"],  f"Coinflip perdu")
+        add_coins(winner_id, bet["amount"] * 2, "Coinflip gagné")
         winner = get_user(winner_id)
         return {"ok": True, "coinflip": True, "winner": winner["username"] if winner else "?"}
 
@@ -1779,6 +1887,8 @@ async def refuse_bet_web(request: Request):
     if bet["status"] != "pending":
         return {"ok": False, "error": "Pari déjà traité"}
     cancel_bet(bet_id)
+    # Rembourse le challenger qui avait été débité à la création
+    add_coins(bet["challenger_id"], bet["amount"], "Pari refusé - remboursement")
     return {"ok": True}
 
 
@@ -1832,8 +1942,17 @@ async def upload_avatar(request: Request):
     # Limite à ~80 Ko en base64 (≈ 60 Ko image réelle)
     if len(avatar) > 100_000:
         return {"ok": False, "error": "Image trop grande (max 60 Ko)"}
-    if not avatar.startswith("data:image/"):
-        return {"ok": False, "error": "Format invalide"}
+    # Whitelist stricte : pas de SVG (peut contenir du JS exécuté quand l'avatar
+    # est rendu via <img src=...>), pas de data:text/*, etc.
+    _ALLOWED_AVATAR_PREFIXES = (
+        "data:image/png;base64,",
+        "data:image/jpeg;base64,",
+        "data:image/jpg;base64,",
+        "data:image/webp;base64,",
+        "data:image/gif;base64,",
+    )
+    if not any(avatar.startswith(p) for p in _ALLOWED_AVATAR_PREFIXES):
+        return {"ok": False, "error": "Format invalide (png/jpeg/webp uniquement)"}
     set_avatar(int(tid), avatar)
     return {"ok": True}
 
@@ -2058,9 +2177,15 @@ async def blackjack_rematch(token: str, request: Request):
     if not remaining:
         return {"ok": False, "error": "Aucun joueur restant"}
 
-    # Vérifier les soldes de tous les joueurs restants
+    # Débit atomique des mises de tous les joueurs restants. Si l'un d'eux n'a
+    # pas assez, on rembourse ceux qu'on a déjà débités et on annule la revanche.
+    debited = []
     for p in remaining:
-        if get_coins(p["telegram_id"]) < p["bet"]:
+        if try_debit_coins(p["telegram_id"], p["bet"], "Blackjack - mise (revanche)"):
+            debited.append(p)
+        else:
+            for d in debited:
+                add_coins(d["telegram_id"], d["bet"], "Blackjack - remboursement (revanche annulée)")
             u = get_user(p["telegram_id"])
             name = u["username"] if u else str(p["telegram_id"])
             return {"ok": False, "error": f"Solde insuffisant pour {name}"}
@@ -2075,7 +2200,6 @@ async def blackjack_rematch(token: str, request: Request):
 
     for p in remaining:
         hand = [deck.pop(), deck.pop()]
-        add_coins(p["telegram_id"], -p["bet"], "Blackjack - mise (revanche)")
         update_blackjack_player(session["id"], p["telegram_id"],
             hand=json.dumps(hand),
             status="playing",

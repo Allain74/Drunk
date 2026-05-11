@@ -2141,6 +2141,19 @@
   // ── Carte ──
   let map = null, markers = {};
 
+  let _mapFetchPending = false;
+  async function fetchAndUpdateMap() {
+    if (!myTid) { updateMap([]); return; }
+    if (_mapFetchPending) return;
+    _mapFetchPending = true;
+    try {
+      const locs = await fetch(`${API}/locations/${myTid}`).then(r => r.json()).catch(() => []);
+      updateMap(Array.isArray(locs) ? locs : []);
+    } finally {
+      _mapFetchPending = false;
+    }
+  }
+
   function updateMap(withLoc) {
     const section = document.getElementById('map-section');
     if (!withLoc.length) { section.style.display = 'none'; return; }
@@ -2517,7 +2530,7 @@
           <input type="text" id="profil-pseudo" value="${esc(myName)}" placeholder="Pseudo…" autocomplete="off"
                  style="width:100%;padding:10px 14px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.95rem;font-family:inherit;box-sizing:border-box;margin-bottom:14px"/>
           <div class="p-field-label">Poids (kg)</div>
-          <input type="number" id="profil-poids" value="${me && me.weight_kg ? me.weight_kg : ''}" placeholder="Chargement…" min="30" max="250"
+          <input type="number" id="profil-poids" value="" placeholder="Chargement…" min="30" max="250"
                  style="width:100%;padding:10px 14px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.95rem;font-family:inherit;box-sizing:border-box"/>
           <div class="modal-id-err" id="profil-infos-err" style="margin-top:6px"></div>
           <button class="btn-primary" style="margin-top:12px" onclick="profilSaveInfos()">Enregistrer les infos</button>
@@ -2627,14 +2640,13 @@
     // Mise à jour du bouton notifications
     updatePushBtn();
 
-    // Fetch snapshot → poids réel garanti
+    // Fetch /me → poids réel garanti
     try {
-      const snap = await fetch(`${API}/snapshot`).then(r => r.json());
-      const u = snap.find(x => x.username.toLowerCase() === myName.toLowerCase());
-      if (u) {
+      const meData = await fetch(`${API}/me/${myTid}`).then(r => r.json());
+      if (meData && meData.ok) {
         const poidsEl = document.getElementById('profil-poids');
-        if (poidsEl && u.weight_kg) {
-          poidsEl.value = u.weight_kg;
+        if (poidsEl && meData.weight_kg) {
+          poidsEl.value = meData.weight_kg;
           poidsEl.placeholder = 'ex: 75';
         }
       }
@@ -3146,7 +3158,9 @@
     const filtered = filterSnapshot(data).filter(u => u.bac > 0);
 
     renderDefi(filtered);   // podium top 3 – toujours affiché (vide si personne)
-    updateMap(filterSnapshot(data).filter(u => u.lat && u.lon && u.bac > 0));
+    // La carte fait son propre fetch /locations/{myTid} (snapshot ne contient
+    // plus lat/lon pour des raisons de privacy).
+    fetchAndUpdateMap();
 
     if (!filtered.length) {
       grid.innerHTML = '';
@@ -4115,6 +4129,7 @@ async function bjLoadSessions() {
   try {
     const sessions = await fetch(`${API}/blackjack/sessions`).then(r => r.json());
     const open = sessions.filter(s => s.status === 'waiting' || s.status === 'active');
+    window._bjLastSessions = open;  // utilisé par bjClickSession pour éviter les XSS via attributs
     if (!open.length) {
       el.innerHTML = `<div style="text-align:center;color:var(--sub);padding:16px;font-size:0.85rem">Aucune table ouverte — crée la tienne !</div>`;
       return;
@@ -4137,7 +4152,7 @@ async function bjLoadSessions() {
              🚀 Lancer
            </button>`
         : '';
-      return `<div class="bj-session-card" onclick="bjClickSession('${s.token}','${s.creator}',${alreadyIn},'${s.status}')">
+      return `<div class="bj-session-card" onclick="bjClickSession('${s.token}')">
         <div class="bj-sc-top">
           <span class="bj-sc-creator">🃏 Table de ${_escHtml(s.creator)}</span>
           <div style="display:flex;align-items:center;gap:6px">
@@ -4165,16 +4180,20 @@ async function bjQuickStart(token) {
   bjEnterGame();
 }
 
-function bjClickSession(token, creator, alreadyIn, status) {
+function bjClickSession(token) {
+  const s = (window._bjLastSessions || []).find(x => x.token === token);
+  if (!s) return;
+  const alreadyIn = s.players.some(p => Number(p.telegram_id) === Number(myTid) && p.status !== 'left');
   if (alreadyIn) {
     _bjToken = token;
     bjEnterGame();
     return;
   }
   _bjToken = token;
-  document.getElementById('bj-join-creator').textContent = creator;
+  // textContent : safe contre XSS quelle que soit la valeur du creator
+  document.getElementById('bj-join-creator').textContent = s.creator || '';
   const activeNote = document.getElementById('bj-join-active-note');
-  activeNote.style.display = (status === 'active') ? 'block' : 'none';
+  activeNote.style.display = (s.status === 'active') ? 'block' : 'none';
   document.getElementById('bj-join-modal').style.display = 'block';
   document.getElementById('bj-join-modal').scrollIntoView({ behavior: 'smooth' });
 }
