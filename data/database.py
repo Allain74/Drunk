@@ -63,6 +63,11 @@ def _pipeline(statements: list[tuple[str, list]]) -> list[dict]:
                         d[cols[i]] = float(v)
                     else:
                         d[cols[i]] = v
+                # Alias bidirectionnel user_id ↔ telegram_id (migration partielle)
+                if "user_id" in d and "telegram_id" not in d:
+                    d["telegram_id"] = d["user_id"]
+                elif "telegram_id" in d and "user_id" not in d:
+                    d["user_id"] = d["telegram_id"]
                 rows.append(d)
             parsed.append({
                 "rows": rows,
