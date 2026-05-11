@@ -225,6 +225,43 @@ app.add_middleware(
 )
 
 
+# ── Rate limiting (mémoire, par IP, sur POST) ─────────────────────────────────
+from collections import defaultdict
+_rate_buckets: dict[str, list[float]] = defaultdict(list)
+RATE_LIMIT_WINDOW = 60.0   # secondes
+RATE_LIMIT_MAX = 60        # requêtes par fenêtre
+_RATE_SKIP_PREFIXES = ("/stripe/webhook", "/telegram-webhook")
+
+
+def _client_ip(request: Request) -> str:
+    fwd = request.headers.get("x-forwarded-for", "")
+    if fwd:
+        return fwd.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+@app.middleware("http")
+async def rate_limit_middleware(request: Request, call_next):
+    if request.method == "POST" and not any(
+        request.url.path.startswith(p) for p in _RATE_SKIP_PREFIXES
+    ):
+        ip = _client_ip(request)
+        now = time.time()
+        bucket = _rate_buckets[ip]
+        # Purge des entrées trop vieilles
+        cutoff = now - RATE_LIMIT_WINDOW
+        while bucket and bucket[0] < cutoff:
+            bucket.pop(0)
+        if len(bucket) >= RATE_LIMIT_MAX:
+            return Response(
+                content=json.dumps({"ok": False, "error": "Trop de requêtes, attends un peu."}),
+                status_code=429,
+                media_type="application/json",
+            )
+        bucket.append(now)
+    return await call_next(request)
+
+
 # ── Webhook Telegram ──────────────────────────────────────────────────────────
 
 @app.post("/telegram-webhook")
@@ -274,10 +311,14 @@ def build_snapshot() -> list[dict]:
 
 
 async def _broadcast(data: list[dict]):
+    try:
+        payload = json.dumps(data)
+    except Exception:
+        return
     dead = set()
     for ws in _ws_clients:
         try:
-            await ws.send_text(json.dumps(data))
+            await ws.send_text(payload)
         except Exception:
             dead.add(ws)
     _ws_clients.difference_update(dead)
@@ -694,10 +735,25 @@ async def websocket_endpoint(ws: WebSocket):
     await ws.accept()
     _ws_clients.add(ws)
     try:
-        await ws.send_text(json.dumps(build_snapshot()))
+        try:
+            await ws.send_text(json.dumps(build_snapshot()))
+        except Exception:
+            pass
         while True:
-            await ws.receive_text()
+            # On ignore le contenu (le client ne nous parle pas), mais on doit
+            # consommer les messages pour détecter la déconnexion proprement.
+            try:
+                await ws.receive_text()
+            except WebSocketDisconnect:
+                raise
+            except Exception:
+                # Message mal formé / binaire / etc. → on continue sans crash
+                continue
     except WebSocketDisconnect:
+        pass
+    except Exception:
+        pass
+    finally:
         _ws_clients.discard(ws)
 
 
