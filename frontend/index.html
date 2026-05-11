@@ -1452,6 +1452,7 @@
   let allUsers = [];   // [{telegram_id, username, is_admin}]
   let adminId = 0;
   let followingSet = new Set(); // set of telegram_id's that I follow
+  let followersSet = new Set(); // set of telegram_id's that follow me
 
   function isAdmin(tid) { return tid === adminId; }
   function nameClass(tid) { return isAdmin(tid) ? ' class="admin-name"' : ''; }
@@ -1470,6 +1471,14 @@
       const data = await fetch(`${API}/following/${myTid}`).then(r => r.json());
       followingSet = new Set(data.following || []);
     } catch(e) { followingSet = new Set(); }
+  }
+
+  async function loadFollowers() {
+    if (!myTid) { followersSet = new Set(); return; }
+    try {
+      const data = await fetch(`${API}/followers/${myTid}`).then(r => r.json());
+      followersSet = new Set(data.followers || []);
+    } catch(e) { followersSet = new Set(); }
   }
 
   function getTidByName(username) {
@@ -2044,6 +2053,7 @@
       localStorage.setItem('myName', myName);
       localStorage.setItem('authV', '2');
       await loadFollowing();
+      loadFollowers();
       updateIdentityBtn();
       closeIdentityModal();
       render(lastData);
@@ -2898,7 +2908,7 @@
       if (!data.ok) { err.textContent = data.error || 'Pseudo ou mot de passe incorrect.'; err.style.display = 'block'; return; }
       myTid = data.telegram_id; myName = data.username;
       localStorage.setItem('myTid', String(myTid)); localStorage.setItem('myName', myName); localStorage.setItem('authV', '2');
-      await loadFollowing(); updateIdentityBtn(); render(lastData);
+      await loadFollowing(); loadFollowers(); updateIdentityBtn(); render(lastData);
       loadProfil();
       autoSubscribePush();
     } catch(e) { err.textContent = 'Erreur réseau.'; err.style.display = 'block'; }
@@ -2921,7 +2931,7 @@
       if (!data.ok) { err.textContent = data.error; err.style.display = 'block'; return; }
       myTid = data.telegram_id; myName = data.username;
       localStorage.setItem('myTid', String(myTid)); localStorage.setItem('myName', myName); localStorage.setItem('authV', '2');
-      await loadFollowing(); updateIdentityBtn(); render(lastData);
+      await loadFollowing(); loadFollowers(); updateIdentityBtn(); render(lastData);
       showToast('✅ Compte créé ! Bienvenue 🍺');
       loadProfil();
       autoSubscribePush();
@@ -3207,7 +3217,7 @@
 
   // ── Amis ──────────────────────────────────────────────────────────────────
   let _aboSearch = '';
-  let _aboSub    = 'suivis'; // 'suivis' | 'decouvrir'
+  let _aboSub    = 'suivis'; // 'suivis' | 'abonnes' | 'decouvrir'
 
   // Partage l'app via la feuille de partage système
   async function shareApp() {
@@ -3311,6 +3321,7 @@
 
     const others = allUsers.filter(u => u.telegram_id !== myTid);
     const suivisList = others.filter(u => followingSet.has(u.telegram_id) || isAdmin(u.telegram_id));
+    const abonnesList = others.filter(u => followersSet.has(u.telegram_id));
     const searchVal  = _aboSearch || '';
     const decouvrirList = others.filter(u =>
       !followingSet.has(u.telegram_id) && !isAdmin(u.telegram_id) &&
@@ -3320,6 +3331,7 @@
     const subNavHtml = `
       <div class="amis-sub-nav">
         <button class="amis-sub-btn ${_aboSub==='suivis'?'active':''}"    onclick="aboSwitchSub('suivis')">Suivis (${suivisList.length})</button>
+        <button class="amis-sub-btn ${_aboSub==='abonnes'?'active':''}"   onclick="aboSwitchSub('abonnes')">Abonnés (${abonnesList.length})</button>
         <button class="amis-sub-btn ${_aboSub==='decouvrir'?'active':''}" onclick="aboSwitchSub('decouvrir')">Découvrir (${others.filter(u=>!followingSet.has(u.telegram_id)&&!isAdmin(u.telegram_id)).length})</button>
       </div>`;
 
@@ -3331,6 +3343,14 @@
             <div class="amis-empty-icon">👥</div>
             <div class="amis-empty-title">Pas encore d'amis</div>
             <div class="amis-empty-sub">Va dans "Découvrir" pour retrouver tes potes et suivre leur taux d'alcool en temps réel.</div>
+           </div>`;
+    } else if (_aboSub === 'abonnes') {
+      listHtml = abonnesList.length
+        ? `<div class="amis-list">${abonnesList.map(_renderAmiRow).join('')}</div>`
+        : `<div class="amis-empty">
+            <div class="amis-empty-icon">📭</div>
+            <div class="amis-empty-title">Personne ne te suit encore</div>
+            <div class="amis-empty-sub">Invite tes potes pour qu'ils te suivent et voient ton taux d'alcool !</div>
            </div>`;
     } else {
       listHtml = `
@@ -3377,6 +3397,7 @@
     await loadUsers();
     if (myTid) {
       await loadFollowing();
+      loadFollowers();
       autoSubscribePush();
     }
     updateIdentityBtn();
@@ -3436,6 +3457,7 @@
       localStorage.setItem('authV',  '2');
       await loadUsers();
       await loadFollowing();
+      loadFollowers();
       updateIdentityBtn();
       closeIdentityModal();
       render(lastData);
