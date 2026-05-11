@@ -1452,10 +1452,23 @@
   }
   let myTid = parseInt(localStorage.getItem('myTid') || '0') || 0;
   let myName = localStorage.getItem('myName') || '';
-  let allUsers = [];   // [{telegram_id, username, is_admin}]
-  let adminId = 0;
-  let followingSet = new Set(); // set of telegram_id's that I follow
-  let followersSet = new Set(); // set of telegram_id's that follow me
+
+  // ── Cache localStorage (stale-while-revalidate) ─────────────────────────────
+  const CACHE_VERSION = 'v1';
+  function _cacheGet(key, fallback) {
+    try {
+      const raw = localStorage.getItem(`cache_${CACHE_VERSION}_${key}`);
+      return raw ? JSON.parse(raw) : fallback;
+    } catch(e) { return fallback; }
+  }
+  function _cacheSet(key, val) {
+    try { localStorage.setItem(`cache_${CACHE_VERSION}_${key}`, JSON.stringify(val)); } catch(e) {}
+  }
+
+  let allUsers = _cacheGet('users', []);   // [{telegram_id, username, is_admin, is_premium}]
+  let adminId = (allUsers.find(u => u.is_admin) || {}).telegram_id || 0;
+  let followingSet = new Set(_cacheGet('following', []));
+  let followersSet = new Set(_cacheGet('followers', []));
 
   function isAdmin(tid) { return tid === adminId; }
   function nameClass(tid) { return isAdmin(tid) ? ' class="admin-name"' : ''; }
@@ -1465,23 +1478,26 @@
       allUsers = await fetch(`${API}/users`).then(r => r.json());
       const adminUser = allUsers.find(u => u.is_admin);
       if (adminUser) adminId = adminUser.telegram_id;
-    } catch(e) { allUsers = []; }
+      _cacheSet('users', allUsers);
+    } catch(e) { /* garde le cache si fetch échoue */ }
   }
 
   async function loadFollowing() {
-    if (!myTid) { followingSet = new Set(); return; }
+    if (!myTid) { followingSet = new Set(); _cacheSet('following', []); return; }
     try {
       const data = await fetch(`${API}/following/${myTid}`).then(r => r.json());
       followingSet = new Set(data.following || []);
-    } catch(e) { followingSet = new Set(); }
+      _cacheSet('following', [...followingSet]);
+    } catch(e) { /* garde le cache */ }
   }
 
   async function loadFollowers() {
-    if (!myTid) { followersSet = new Set(); return; }
+    if (!myTid) { followersSet = new Set(); _cacheSet('followers', []); return; }
     try {
       const data = await fetch(`${API}/followers/${myTid}`).then(r => r.json());
       followersSet = new Set(data.followers || []);
-    } catch(e) { followersSet = new Set(); }
+      _cacheSet('followers', [...followersSet]);
+    } catch(e) { /* garde le cache */ }
   }
 
   function getTidByName(username) {
@@ -2076,6 +2092,12 @@
     localStorage.removeItem('myName');
     localStorage.setItem('authV', '2');
     followingSet = new Set();
+    followersSet = new Set();
+    // Clear caches utilisateur (garde users/snapshot car non personnalisés)
+    ['following', 'followers', 'palmares', 'thune', 'bjstats', 'parisstats'].forEach(k =>
+      localStorage.removeItem(`cache_${CACHE_VERSION}_${k}`)
+    );
+    _palmares = []; _thune = []; _bjStats = []; _parisStats = [];
     updateIdentityBtn();
     closeIdentityModal();
     render(lastData);
@@ -2964,7 +2986,7 @@
   }
 
   // ── Palmarès ──
-  let _palmares = [];
+  let _palmares = _cacheGet('palmares', []);
 
   function _renderPalmares() {
     const box = document.getElementById('palmares-list');
@@ -3005,6 +3027,7 @@
     else box.innerHTML = `<div class="rank-loading">Chargement</div>`;
     try {
       _palmares = await fetch(`${API}/alltime`).then(r=>r.json());
+      _cacheSet('palmares', _palmares);
       _renderPalmares();
     } catch(e) {
       if (!_palmares.length) box.innerHTML = `<div class="rank-empty">Erreur de chargement</div>`;
@@ -3035,7 +3058,7 @@
   }
 
   // ── Render ──
-  let lastData = [];
+  let lastData = _cacheGet('snapshot', []);
 
   function _loginCta(msg) {
     return `<div style="text-align:center;padding:60px 20px">
@@ -3048,6 +3071,7 @@
 
   function render(data) {
     lastData = data;
+    if (data && data.length) _cacheSet('snapshot', data);
     const grid  = document.getElementById('grid');
     const empty = document.getElementById('empty');
 
@@ -3121,7 +3145,7 @@
   }
 
   // ── Thune ──
-  let _thune = [];
+  let _thune = _cacheGet('thune', []);
 
   function _renderThune() {
     const box = document.getElementById('thune-list');
@@ -3152,6 +3176,7 @@
     else box.innerHTML = `<div class="rank-loading">Chargement</div>`;
     try {
       _thune = await fetch(`${API}/coins`).then(r => r.json());
+      _cacheSet('thune', _thune);
       _renderThune();
     } catch(e) {
       if (!_thune.length) box.innerHTML = `<div class="rank-empty">Erreur de chargement</div>`;
@@ -3159,7 +3184,7 @@
   }
 
   // ── BJ Stats ──
-  let _bjStats = [];
+  let _bjStats = _cacheGet('bjstats', []);
 
   function _renderBjStats() {
     const box = document.getElementById('bj-stats-list');
@@ -3194,6 +3219,7 @@
     else box.innerHTML = `<div class="rank-loading">Chargement</div>`;
     try {
       _bjStats = await fetch(`${API}/blackjack/stats/all`).then(r => r.json());
+      _cacheSet('bjstats', _bjStats);
       _renderBjStats();
     } catch(e) {
       if (!_bjStats.length) box.innerHTML = `<div class="rank-empty">Erreur de chargement</div>`;
@@ -3201,7 +3227,7 @@
   }
 
   // ── Paris Stats ──
-  let _parisStats = [];
+  let _parisStats = _cacheGet('parisstats', []);
 
   function _renderParisStats() {
     const box = document.getElementById('paris-stats-list');
@@ -3238,6 +3264,7 @@
     else box.innerHTML = `<div class="rank-loading">Chargement</div>`;
     try {
       _parisStats = await fetch(`${API}/bets/stats/all`).then(r => r.json());
+      _cacheSet('parisstats', _parisStats);
       _renderParisStats();
     } catch(e) {
       if (!_parisStats.length) box.innerHTML = `<div class="rank-empty">Erreur de chargement</div>`;
@@ -3455,14 +3482,19 @@
   // ── Init ──
   async function init() {
     updateIdentityBtn();
-    await loadUsers();
+    // Affichage immédiat avec le cache (sans attendre les fetch)
+    if (lastData.length) render(lastData);
+    else render([]);
+    // Fetch en arrière-plan
+    loadUsers().then(() => {
+      if (lastData.length) render(lastData);
+    });
     if (myTid) {
-      await loadFollowing();
+      loadFollowing();
       loadFollowers();
       autoSubscribePush();
     }
     updateIdentityBtn();
-    render([]);
     connect();
   }
 

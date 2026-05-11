@@ -2,6 +2,7 @@ import asyncio
 import json
 import os
 import secrets
+import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
@@ -587,6 +588,7 @@ async def admin_remove_drinks(request: Request):
     if not target_id:
         return {"ok": False, "error": "target_id requis"}
     removed = delete_n_drinks(int(target_id), n)
+    _invalidate_alltime_cache()
     await _broadcast(build_snapshot())
     return {"ok": True, "removed": removed}
 
@@ -706,9 +708,24 @@ async def trigger_refresh():
     return {"ok": True}
 
 
+_alltime_cache = {"data": None, "ts": 0.0}
+ALLTIME_CACHE_TTL = 60.0
+
+
+def _invalidate_alltime_cache():
+    _alltime_cache["data"] = None
+    _alltime_cache["ts"] = 0.0
+
+
 @app.get("/alltime")
 def get_alltime():
-    return get_all_time_stats()
+    now = time.time()
+    if _alltime_cache["data"] is not None and now - _alltime_cache["ts"] < ALLTIME_CACHE_TTL:
+        return _alltime_cache["data"]
+    data = get_all_time_stats()
+    _alltime_cache["data"] = data
+    _alltime_cache["ts"] = now
+    return data
 
 
 @app.get("/lookup")
@@ -1108,6 +1125,7 @@ async def log_drink_web(request: Request):
     is_first = len(existing_drinks) == 0
 
     db_log_drink(telegram_id, drink_key, alcohol_grams(drink.volume_ml, drink.abv))
+    _invalidate_alltime_cache()
     add_coins(telegram_id, 5, f"Verre bu ({drink.name})")
 
     # Mise à jour de la position si fournie
@@ -1194,6 +1212,7 @@ async def undo_drink_web(request: Request):
 
     if not delete_last_drink(telegram_id):
         return {"ok": False, "error": "Aucun verre à annuler"}
+    _invalidate_alltime_cache()
 
     drinks_data = get_session_drinks(telegram_id)
     bac = total_bac(drinks_data, user["weight_kg"], user["gender"])
