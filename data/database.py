@@ -47,9 +47,12 @@ def _pipeline(statements: list[tuple[str, list]]) -> list[dict]:
             data = res["response"]["result"]
             cols = [c["name"] for c in data["cols"]]
             rows = []
+            ncols = len(cols)
             for row in data["rows"]:
                 d = {}
                 for i, cell in enumerate(row):
+                    if i >= ncols:
+                        break
                     t = cell["type"]
                     v = cell.get("value")
                     if t == "null" or v is None:
