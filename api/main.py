@@ -531,14 +531,22 @@ async def admin_set_coins(request: Request):
 
 # ── Admin helpers ──────────────────────────────────────────────────────────────
 
-def _check_admin(caller_id) -> bool:
+def _check_admin(caller_id, secret: str | None = None) -> bool:
+    """Vérifie qu'un appel est légitime : caller_id == ADMIN_ID ET secret partagé.
+    Si ADMIN_SECRET n'est pas défini en env, on tolère sans secret (backwards compat
+    en local). En prod il DOIT être défini."""
     aid = int(os.environ.get("ADMIN_ID", "0"))
-    return bool(aid and int(caller_id or 0) == aid)
+    expected = os.environ.get("ADMIN_SECRET", "")
+    if not aid or int(caller_id or 0) != aid:
+        return False
+    if expected:
+        return secret == expected
+    return True
 
 
 @app.get("/admin/users")
-def admin_get_users(caller_id: int = 0):
-    if not _check_admin(caller_id):
+def admin_get_users(caller_id: int = 0, admin_secret: str = ""):
+    if not _check_admin(caller_id, admin_secret):
         return {"ok": False, "error": "Non autorisé"}
     admin_id = int(os.environ.get("ADMIN_ID", "0"))
     users    = get_all_users()
@@ -572,7 +580,7 @@ def _get_banned_list():
 @app.post("/admin/ban")
 async def admin_ban(request: Request):
     body = await request.json()
-    if not _check_admin(body.get("caller_id")):
+    if not _check_admin(body.get("caller_id"), body.get("admin_secret")):
         return {"ok": False, "error": "Non autorisé"}
     target_id = body.get("target_id")
     if not target_id:
@@ -596,7 +604,7 @@ async def admin_ban(request: Request):
 @app.post("/admin/unban")
 async def admin_unban(request: Request):
     body = await request.json()
-    if not _check_admin(body.get("caller_id")):
+    if not _check_admin(body.get("caller_id"), body.get("admin_secret")):
         return {"ok": False, "error": "Non autorisé"}
     target_id = body.get("target_id")
     unban_user(int(target_id))
@@ -606,7 +614,7 @@ async def admin_unban(request: Request):
 @app.post("/admin/rename")
 async def admin_rename(request: Request):
     body = await request.json()
-    if not _check_admin(body.get("caller_id")):
+    if not _check_admin(body.get("caller_id"), body.get("admin_secret")):
         return {"ok": False, "error": "Non autorisé"}
     target_id = body.get("target_id")
     new_name  = (body.get("new_name") or "").strip()
@@ -622,7 +630,7 @@ async def admin_rename(request: Request):
 @app.post("/admin/remove-drinks")
 async def admin_remove_drinks(request: Request):
     body = await request.json()
-    if not _check_admin(body.get("caller_id")):
+    if not _check_admin(body.get("caller_id"), body.get("admin_secret")):
         return {"ok": False, "error": "Non autorisé"}
     target_id = body.get("target_id")
     n         = int(body.get("n", 1))
@@ -637,7 +645,7 @@ async def admin_remove_drinks(request: Request):
 @app.post("/admin/end-session")
 async def admin_end_session(request: Request):
     body = await request.json()
-    if not _check_admin(body.get("caller_id")):
+    if not _check_admin(body.get("caller_id"), body.get("admin_secret")):
         return {"ok": False, "error": "Non autorisé"}
     target_id = body.get("target_id")
     if not target_id:
@@ -650,7 +658,7 @@ async def admin_end_session(request: Request):
 @app.post("/admin/reset-password")
 async def admin_reset_password(request: Request):
     body = await request.json()
-    if not _check_admin(body.get("caller_id")):
+    if not _check_admin(body.get("caller_id"), body.get("admin_secret")):
         return {"ok": False, "error": "Non autorisé"}
     target_id = body.get("target_id")
     if not target_id:
@@ -662,7 +670,7 @@ async def admin_reset_password(request: Request):
 @app.post("/admin/give-coins")
 async def admin_give_coins(request: Request):
     body = await request.json()
-    if not _check_admin(body.get("caller_id")):
+    if not _check_admin(body.get("caller_id"), body.get("admin_secret")):
         return {"ok": False, "error": "Non autorisé"}
     target_id = body.get("target_id")
     amount    = body.get("amount")
@@ -675,7 +683,7 @@ async def admin_give_coins(request: Request):
 @app.post("/admin/broadcast-push")
 async def admin_broadcast_push(request: Request):
     body = await request.json()
-    if not _check_admin(body.get("caller_id")):
+    if not _check_admin(body.get("caller_id"), body.get("admin_secret")):
         return {"ok": False, "error": "Non autorisé"}
     title   = (body.get("title") or "").strip()
     message = (body.get("message") or "").strip()
@@ -693,7 +701,7 @@ async def admin_broadcast_push(request: Request):
 @app.post("/admin/delete-user")
 async def admin_delete_user(request: Request):
     body = await request.json()
-    if not _check_admin(body.get("caller_id")):
+    if not _check_admin(body.get("caller_id"), body.get("admin_secret")):
         return {"ok": False, "error": "Non autorisé"}
     target_id = body.get("target_id")
     if not target_id:
@@ -713,7 +721,7 @@ async def admin_delete_user(request: Request):
 async def admin_close_all_bj(request: Request):
     """Clôture toutes les parties BJ en cours (waiting + active)."""
     body = await request.json()
-    if not _check_admin(body.get("caller_id")):
+    if not _check_admin(body.get("caller_id"), body.get("admin_secret")):
         return {"ok": False, "error": "Non autorisé"}
     sessions = get_active_blackjack_sessions()
     closed = 0

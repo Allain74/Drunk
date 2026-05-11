@@ -2661,12 +2661,41 @@
   let _adminUsers = [];
   let _adminTarget = null;   // utilisateur sélectionné
 
+  // Code secret admin (en sessionStorage : disparaît quand on ferme l'onglet)
+  function _adminSecret() {
+    let s = sessionStorage.getItem('admin_secret');
+    if (!s) {
+      s = prompt('🔐 Code admin (variable Render ADMIN_SECRET) :');
+      if (!s) return null;
+      sessionStorage.setItem('admin_secret', s.trim());
+      s = s.trim();
+    }
+    return s;
+  }
+  function _adminClearSecret() {
+    sessionStorage.removeItem('admin_secret');
+  }
+  function _adminHandleAuthError(res) {
+    if (res && res.error && /autoris/i.test(res.error)) {
+      _adminClearSecret();
+      showToast('❌ Code admin incorrect. Réessaie.');
+      return true;
+    }
+    return false;
+  }
+
   async function adminLoadUsers() {
     const box = document.getElementById('adm-users-list');
     if (!box) return;
+    const secret = _adminSecret();
+    if (!secret) { box.innerHTML = '<div style="color:#ef4444">Code admin requis</div>'; return; }
     try {
-      const data = await fetch(`${API}/admin/users?caller_id=${myTid}`).then(r => r.json());
-      if (!data.ok) { box.innerHTML = `<div style="color:#ef4444">${data.error}</div>`; return; }
+      const data = await fetch(`${API}/admin/users?caller_id=${myTid}&admin_secret=${encodeURIComponent(secret)}`).then(r => r.json());
+      if (!data.ok) {
+        _adminHandleAuthError(data);
+        box.innerHTML = `<div style="color:#ef4444">${data.error}</div>`;
+        return;
+      }
       _adminUsers = data.users;
       adminRenderUsers(_adminUsers);
     } catch(e) { if (box) box.innerHTML = '<div style="color:#ef4444">Erreur réseau</div>'; }
@@ -2715,6 +2744,8 @@
 
   async function adminAction(action, extraBody = {}) {
     if (!_adminTarget) return;
+    const secret = _adminSecret();
+    if (!secret) return;
     const statusEl = document.getElementById('adm-modal-status');
     statusEl.style.color = 'var(--sub)';
     statusEl.textContent = '⏳';
@@ -2722,9 +2753,13 @@
       const res = await fetch(`${API}/admin/${action}`, {
         method: 'POST',
         headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ caller_id: myTid, target_id: _adminTarget.telegram_id, ...extraBody }),
+        body: JSON.stringify({ caller_id: myTid, admin_secret: secret, target_id: _adminTarget.telegram_id, ...extraBody }),
       }).then(r => r.json());
-      if (!res.ok) { statusEl.style.color = '#ef4444'; statusEl.textContent = '❌ ' + (res.error || 'Erreur'); return; }
+      if (!res.ok) {
+        _adminHandleAuthError(res);
+        statusEl.style.color = '#ef4444'; statusEl.textContent = '❌ ' + (res.error || 'Erreur');
+        return;
+      }
       statusEl.style.color = '#22c55e'; statusEl.textContent = '✅ OK';
       await adminLoadUsers();
       // Met à jour l'objet si rechargé
@@ -2756,6 +2791,8 @@
   function adminDoResetPwd()   { adminAction('reset-password'); }
   async function adminDoDeleteUser() {
     if (!_adminTarget) return;
+    const secret = _adminSecret();
+    if (!secret) return;
     const name = _adminTarget.username;
     if (!confirm(`Supprimer définitivement le compte de ${name} ? Cette action est irréversible.`)) return;
     const statusEl = document.getElementById('adm-modal-status');
@@ -2764,9 +2801,13 @@
     try {
       const res = await fetch(`${API}/admin/delete-user`, {
         method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ caller_id: myTid, target_id: _adminTarget.telegram_id }),
+        body: JSON.stringify({ caller_id: myTid, admin_secret: secret, target_id: _adminTarget.telegram_id }),
       }).then(r => r.json());
-      if (!res.ok) { statusEl.style.color = '#ef4444'; statusEl.textContent = '❌ ' + (res.error || 'Erreur'); return; }
+      if (!res.ok) {
+        _adminHandleAuthError(res);
+        statusEl.style.color = '#ef4444'; statusEl.textContent = '❌ ' + (res.error || 'Erreur');
+        return;
+      }
       adminCloseUser();
       await adminLoadUsers();
       showToast(`🗑 Compte de ${name} supprimé.`);
@@ -2783,18 +2824,21 @@
     const message = document.getElementById('adm-bc-msg').value.trim();
     const statusEl = document.getElementById('adm-bc-status');
     if (!title || !message) { statusEl.textContent = '❌ Titre et message requis'; return; }
+    const secret = _adminSecret();
+    if (!secret) { statusEl.textContent = '❌ Code admin requis'; return; }
     statusEl.textContent = '⏳ Envoi…';
     try {
       const res = await fetch(`${API}/admin/broadcast-push`, {
         method: 'POST',
         headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ caller_id: myTid, title, message }),
+        body: JSON.stringify({ caller_id: myTid, admin_secret: secret, title, message }),
       }).then(r => r.json());
       if (res.ok) {
         statusEl.textContent = `✅ Envoyé à ${res.sent_to} utilisateurs`;
         document.getElementById('adm-bc-title').value = '';
         document.getElementById('adm-bc-msg').value = '';
       } else {
+        _adminHandleAuthError(res);
         statusEl.textContent = '❌ ' + (res.error || 'Erreur');
       }
     } catch(e) { statusEl.textContent = '❌ Erreur réseau'; }
@@ -2803,15 +2847,20 @@
   async function adminCloseAllBJ() {
     const statusEl = document.getElementById('adm-bj-status');
     if (!confirm('Clôturer toutes les parties de Blackjack en cours ?')) return;
+    const secret = _adminSecret();
+    if (!secret) { statusEl.textContent = '❌ Code admin requis'; return; }
     statusEl.textContent = '⏳…';
     try {
       const res = await fetch(`${API}/admin/close-all-bj`, {
         method: 'POST',
         headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ caller_id: myTid }),
+        body: JSON.stringify({ caller_id: myTid, admin_secret: secret }),
       }).then(r => r.json());
       if (res.ok) statusEl.textContent = `✅ ${res.closed} partie(s) clôturée(s)`;
-      else statusEl.textContent = '❌ ' + (res.error || 'Erreur');
+      else {
+        _adminHandleAuthError(res);
+        statusEl.textContent = '❌ ' + (res.error || 'Erreur');
+      }
     } catch(e) { statusEl.textContent = '❌ Erreur réseau'; }
   }
 
