@@ -656,7 +656,7 @@
 /* ── Blackjack ── */
 /* Felt table */
 #bj-table-felt {
-  flex: 1; display: flex; flex-direction: column;
+  flex: 1; min-height: 0; display: flex; flex-direction: column;
   background: radial-gradient(ellipse 160% 100% at 50% 30%, #1a6b35 0%, #0e3d1d 60%, #050e08 100%);
   padding: 14px 14px 10px; position: relative; overflow: hidden;
 }
@@ -680,7 +680,7 @@
 }
 .bj-cards { display: flex; gap: 5px; justify-content: center; flex-wrap: wrap; margin-bottom: 5px; }
 .bj-total { font-size: 0.7rem; color: rgba(255,255,255,0.45); font-weight: 600; }
-.bj-players-zone { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 7px; }
+.bj-players-zone { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 7px; }
 
 /* Player slots */
 .bj-pslot {
@@ -3455,10 +3455,8 @@
     </div>
   </div>
 
-  <!-- Table de jeu (plein écran, pas de scroll) -->
-  <div id="bj-game-view" style="display:none;flex:1;flex-direction:column;overflow:hidden;min-height:0">
-
-    <!-- Felt : prend tout l'espace restant -->
+  <!-- Table de jeu (felt sans les barres — celles-ci sont au niveau overlay) -->
+  <div id="bj-game-view" style="display:none;flex:1;min-height:0;flex-direction:column;overflow:hidden">
     <div id="bj-table-felt">
       <!-- Banner statut -->
       <div style="text-align:center;margin-bottom:8px">
@@ -3473,24 +3471,23 @@
       <!-- Zone joueurs (scrollable si beaucoup de joueurs) -->
       <div class="bj-players-zone" id="bj-players"></div>
     </div>
+  </div>
 
-    <!-- Barre d'actions (sous la table) -->
-    <div class="bj-action-bar" id="bj-action-bar" style="display:none">
-      <button class="bj-btn-hit"   id="bj-btn-hit"   onclick="bjAct('hit')">🃏 Tirer</button>
-      <button class="bj-btn-stand" id="bj-btn-stand" onclick="bjAct('stand')">✋ Rester</button>
-    </div>
-    <div class="bj-action-bar" id="bj-start-bar" style="display:none">
-      <button class="bj-btn-start" id="bj-start-btn" onclick="bjStart()" style="flex:2">🚀 Lancer la partie</button>
-      <button onclick="bjLeave()" style="flex:1;background:#1f2937;color:#9ca3af;border:1px solid rgba(255,255,255,0.1);border-radius:14px;padding:15px;font-size:0.9rem;font-weight:700;cursor:pointer;font-family:inherit">Quitter</button>
-    </div>
-    <div class="bj-action-bar" id="bj-rematch-bar" style="display:none">
-      <button class="bj-btn-rematch" id="bj-rematch-btn" onclick="bjRematch()" style="flex:2">🔄 Rejouer</button>
-      <button onclick="bjLeave()" style="flex:1;background:#1f2937;color:#9ca3af;border:1px solid rgba(255,255,255,0.1);border-radius:14px;padding:15px;font-size:0.9rem;font-weight:700;cursor:pointer;font-family:inherit">Quitter</button>
-    </div>
-    <!-- Barre quitter (pendant la partie active, si pas mon tour) -->
-    <div class="bj-action-bar" id="bj-quit-bar" style="display:none">
-      <button onclick="bjLeave()" style="flex:1;background:#1f2937;color:#9ca3af;border:1px solid rgba(255,255,255,0.1);border-radius:14px;padding:15px;font-size:0.9rem;font-weight:700;cursor:pointer;font-family:inherit">🚪 Quitter la table</button>
-    </div>
+  <!-- Barres d'action — HORS de bj-game-view, directement dans l'overlay (flex-shrink:0 garanti) -->
+  <div class="bj-action-bar" id="bj-action-bar" style="display:none">
+    <button class="bj-btn-hit"   id="bj-btn-hit"   onclick="bjAct('hit')">🃏 Tirer</button>
+    <button class="bj-btn-stand" id="bj-btn-stand" onclick="bjAct('stand')">✋ Rester</button>
+  </div>
+  <div class="bj-action-bar" id="bj-start-bar" style="display:none">
+    <button class="bj-btn-start" id="bj-start-btn" onclick="bjStart()" style="flex:2">🚀 Lancer la partie</button>
+    <button onclick="bjLeave()" style="flex:1;background:#1f2937;color:#9ca3af;border:1px solid rgba(255,255,255,0.1);border-radius:14px;padding:15px;font-size:0.9rem;font-weight:700;cursor:pointer;font-family:inherit">Quitter</button>
+  </div>
+  <div class="bj-action-bar" id="bj-rematch-bar" style="display:none">
+    <button class="bj-btn-rematch" id="bj-rematch-btn" onclick="bjRematch()" style="flex:2">🔄 Rejouer</button>
+    <button onclick="bjLeave()" style="flex:1;background:#1f2937;color:#9ca3af;border:1px solid rgba(255,255,255,0.1);border-radius:14px;padding:15px;font-size:0.9rem;font-weight:700;cursor:pointer;font-family:inherit">Quitter</button>
+  </div>
+  <div class="bj-action-bar" id="bj-quit-bar" style="display:none">
+    <button onclick="bjLeave()" style="flex:1;background:#1f2937;color:#9ca3af;border:1px solid rgba(255,255,255,0.1);border-radius:14px;padding:15px;font-size:0.9rem;font-weight:700;cursor:pointer;font-family:inherit">🚪 Quitter la table</button>
   </div>
 </div>
 
