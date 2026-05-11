@@ -164,7 +164,7 @@
     /* ──────────────────────────────── Players ── */
     #players-zone {
       position: absolute;
-      bottom: clamp(62px, 14%, 80px); /* above action bar */
+      bottom: clamp(62px, 14%, 80px);
       left: 0; right: 0;
       display: flex; justify-content: center; align-items: flex-end;
       gap: clamp(6px, 1.5vw, 18px); padding: 0 12px;
@@ -179,23 +179,19 @@
       padding: clamp(6px, 1.2vw, 12px) clamp(8px, 1.5vw, 16px);
       min-width: clamp(100px, 14vw, 170px);
       backdrop-filter: blur(10px);
-      transition: border-color .4s, box-shadow .5s;
+      transition: border-color .4s, box-shadow .5s, opacity .3s;
       position: relative;
     }
     .pslot.is-me {
       border-color: var(--accent);
       box-shadow: 0 0 0 3px rgba(99,102,241,0.2), 0 6px 24px rgba(0,0,0,0.6);
     }
-    .pslot.result-win {
-      border-color: var(--win);
-      animation: winGlow 1.8s ease-in-out forwards;
-    }
-    .pslot.result-lose    { border-color: rgba(239,68,68,0.4); opacity: 0.7; }
-    .pslot.result-push    { border-color: var(--gold); }
-    .pslot.result-blackjack {
-      border-color: var(--gold);
-      animation: bjGlow 1.8s ease-in-out forwards;
-    }
+    .pslot.result-win      { border-color: var(--win); animation: winGlow 1.8s ease-in-out forwards; }
+    .pslot.result-lose     { border-color: rgba(239,68,68,0.4); opacity: 0.7; }
+    .pslot.result-push     { border-color: var(--gold); }
+    .pslot.result-blackjack{ border-color: var(--gold); animation: bjGlow 1.8s ease-in-out forwards; }
+    .pslot.status-left     { opacity: 0.35; filter: grayscale(0.7); }
+    .pslot.status-waiting_next { opacity: 0.6; border-style: dashed; }
 
     @keyframes winGlow {
       0%   { box-shadow: 0 0 0   rgba(34,197,94,0); }
@@ -213,22 +209,22 @@
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
       margin-bottom: 3px;
     }
-    .slot-bet { font-size: clamp(0.58rem, 0.9vw, 0.7rem); color: rgba(255,255,255,0.4); margin-bottom: 7px; }
+    .slot-bet   { font-size: clamp(0.58rem, 0.9vw, 0.7rem); color: rgba(255,255,255,0.4); margin-bottom: 7px; }
     .slot-cards { display: flex; gap: clamp(3px, 0.6vw, 6px); justify-content: center; margin-bottom: 5px; }
     .slot-total { font-size: clamp(0.62rem, 0.9vw, 0.74rem); color: rgba(255,255,255,0.45); margin-bottom: 4px; font-weight: 600; }
     .badge {
       display: inline-block; font-size: clamp(0.55rem, 0.85vw, 0.66rem);
       font-weight: 700; padding: 2px 8px; border-radius: 99px;
     }
-    .b-playing { background: rgba(99,102,241,0.18); color: #818cf8; }
-    .b-stand   { background: rgba(34,197,94,0.18);  color: #4ade80; }
-    .b-bust    { background: rgba(239,68,68,0.18);  color: #f87171; }
-    .b-done    { background: rgba(250,204,21,0.18); color: #fbbf24; }
-    .b-waiting { background: rgba(255,255,255,0.07); color: rgba(255,255,255,0.3); }
+    .b-playing      { background: rgba(99,102,241,0.18); color: #818cf8; }
+    .b-stand        { background: rgba(34,197,94,0.18);  color: #4ade80; }
+    .b-bust         { background: rgba(239,68,68,0.18);  color: #f87171; }
+    .b-done         { background: rgba(250,204,21,0.18); color: #fbbf24; }
+    .b-waiting      { background: rgba(255,255,255,0.07); color: rgba(255,255,255,0.3); }
+    .b-waiting_next { background: rgba(99,102,241,0.10); color: #818cf8; }
+    .b-left         { background: rgba(239,68,68,0.10);  color: #f87171; }
 
-    .slot-result {
-      font-size: clamp(0.66rem, 1vw, 0.8rem); font-weight: 800; margin-top: 5px;
-    }
+    .slot-result { font-size: clamp(0.66rem, 1vw, 0.8rem); font-weight: 800; margin-top: 5px; }
     .r-win       { color: var(--win); }
     .r-lose      { color: var(--lose); }
     .r-push      { color: var(--gold); }
@@ -243,17 +239,11 @@
       position: relative; flex-shrink: 0; overflow: hidden;
       user-select: none;
     }
-
-    /* Deal slide-in */
-    .card.deal {
-      animation: dealIn 0.38s cubic-bezier(0.22,0.61,0.36,1) both;
-    }
+    .card.deal { animation: dealIn 0.38s cubic-bezier(0.22,0.61,0.36,1) both; }
     @keyframes dealIn {
       from { transform: translateY(-160px) rotate(-10deg) scale(0.55); opacity: 0; }
       to   { transform: translateY(0)      rotate(0)      scale(1);    opacity: 1; }
     }
-
-    /* Flip reveal (dealer's hidden card) */
     .card.flip-out { animation: flipOut 0.18s ease-in  forwards; }
     .card.flip-in  { animation: flipIn  0.22s ease-out forwards; }
     @keyframes flipOut { from { transform: scaleX(1); } to { transform: scaleX(0); } }
@@ -273,9 +263,7 @@
       font-size: calc(var(--card-w) * 0.22); font-weight: 900; line-height: 1.1;
       transform: rotate(180deg); text-align: left;
     }
-    .card.red { color: var(--red-card); }
-
-    /* Card back */
+    .card.red  { color: var(--red-card); }
     .card.back {
       background: linear-gradient(145deg, #1e3a8a 0%, #1e40af 50%, #1e3a8a 100%);
       border: 3px solid rgba(255,255,255,0.12);
@@ -290,45 +278,36 @@
       );
     }
 
-    /* ──────────────────────────────── Waiting overlay ── */
-    #wait-overlay {
-      display: none; position: absolute; inset: 0; z-index: 30;
-      background: rgba(0,0,0,0.65); backdrop-filter: blur(5px);
-      align-items: center; justify-content: center;
-    }
-    #wait-overlay.on { display: flex; }
-    .wait-box {
-      background: #111825; border: 1px solid #1e2a40;
-      border-radius: 20px; padding: 28px 32px; text-align: center; max-width: 290px;
-    }
-    .wait-box h3 { font-size: 1.05rem; margin-bottom: 8px; }
-    .wait-box p  { font-size: 0.8rem; color: #7986cb; line-height: 1.5; }
-
-    /* ──────────────────────────────── Action bar ── */
-    #action-bar, #rematch-bar {
+    /* ──────────────────────────────── Bottom bars ── */
+    .bar {
       position: absolute; bottom: 0; left: 0; right: 0; z-index: 20;
-      background: rgba(5,10,18,0.92); backdrop-filter: blur(14px);
+      background: rgba(5,10,18,0.95); backdrop-filter: blur(14px);
       border-top: 1px solid var(--border);
-      padding: 8px 14px 12px;
+      padding: 10px 14px 14px;
       display: none;
     }
-    #action-bar.on  { display: block; }
-    #rematch-bar.on { display: block; }
-
-    .bar-lbl { text-align: center; font-size: 0.7rem; color: rgba(255,255,255,0.35); margin-bottom: 7px; }
-    .bar-btns { display: flex; gap: 10px; max-width: 360px; margin: 0 auto; }
+    .bar.on { display: block; }
+    .bar-lbl  { text-align: center; font-size: 0.7rem; color: rgba(255,255,255,0.4); margin-bottom: 8px; }
+    .bar-btns { display: flex; gap: 10px; max-width: 420px; margin: 0 auto; }
 
     .btn {
-      flex: 1; padding: 12px; border-radius: 12px; border: none;
+      flex: 1; padding: 13px; border-radius: 12px; border: none;
       font-size: clamp(0.82rem, 1.4vw, 0.95rem); font-weight: 800;
       cursor: pointer; font-family: inherit;
       transition: transform .1s, filter .15s;
     }
     .btn:active   { transform: scale(0.96); }
     .btn:disabled { filter: opacity(0.35); cursor: not-allowed; }
-    .btn-hit   { background: var(--accent); color: #fff; }
-    .btn-stand { background: #2d3748; color: #fff; }
-    .btn-rematch { background: var(--win); color: #fff; max-width: 360px; width: 100%; display: block; margin: 0 auto; }
+
+    .btn-hit    { background: var(--accent); color: #fff; }
+    .btn-stand  { background: #2d3748; color: #fff; }
+    .btn-start  { background: var(--win); color: #fff; flex: 2; }
+    .btn-rematch{ background: var(--win); color: #fff; flex: 2; }
+    .btn-quit   {
+      background: rgba(239,68,68,0.15);
+      border: 1px solid rgba(239,68,68,0.35);
+      color: #f87171; flex: 1;
+    }
   </style>
 </head>
 <body>
@@ -348,7 +327,7 @@
 <div id="login-screen">
   <div class="login-box">
     <h2>🃏 Rejoindre la table</h2>
-    <p>Entre ton prénom tel qu'enregistré sur le bot pour jouer depuis le navigateur.</p>
+    <p>Entre ton prénom tel qu'enregistré pour jouer depuis le navigateur.</p>
     <div class="inp-row">
       <input id="name-in" type="text" placeholder="Thomas, Lucas…" autocomplete="off" autocapitalize="words"/>
       <button class="btn-ok" id="ok-btn" onclick="doLogin()">OK</button>
@@ -373,14 +352,6 @@
 
   <div id="table">
 
-    <!-- Overlay waiting -->
-    <div id="wait-overlay">
-      <div class="wait-box">
-        <h3>⏳ En attente de joueurs</h3>
-        <p>Le créateur doit appuyer sur <strong>Lancer la partie</strong> dans Telegram.</p>
-      </div>
-    </div>
-
     <div id="banner"></div>
 
     <!-- Dealer -->
@@ -393,8 +364,17 @@
     <!-- Players -->
     <div id="players-zone"></div>
 
-    <!-- Action bar -->
-    <div id="action-bar">
+    <!-- ── Barre salle d'attente : Lancer + Quitter ── -->
+    <div id="wait-bar" class="bar">
+      <div class="bar-lbl" id="wait-lbl">En attente de joueurs…</div>
+      <div class="bar-btns">
+        <button class="btn btn-start" id="btn-start" onclick="doStart()">🚀 Lancer la partie</button>
+        <button class="btn btn-quit"  onclick="doLeave()">🚪 Quitter</button>
+      </div>
+    </div>
+
+    <!-- ── Barre action : Hit + Stand ── -->
+    <div id="action-bar" class="bar">
       <div class="bar-lbl">C'est ton tour — que fais-tu ?</div>
       <div class="bar-btns">
         <button class="btn btn-hit"   id="btn-hit"   onclick="act('hit')">🃏 Hit</button>
@@ -402,11 +382,20 @@
       </div>
     </div>
 
-    <!-- Rematch bar -->
-    <div id="rematch-bar">
-      <div class="bar-lbl">Partie terminée — rejouer avec les mêmes joueurs et mises ?</div>
+    <!-- ── Barre quitter (active, pas mon tour) ── -->
+    <div id="quit-bar" class="bar">
+      <div class="bar-lbl">Partie en cours…</div>
+      <div class="bar-btns">
+        <button class="btn btn-quit" style="flex:1" onclick="doLeave()">🚪 Quitter la table</button>
+      </div>
+    </div>
+
+    <!-- ── Barre terminée : Rejouer + Quitter pour TOUS ── -->
+    <div id="finished-bar" class="bar">
+      <div class="bar-lbl">Partie terminée !</div>
       <div class="bar-btns">
         <button class="btn btn-rematch" id="btn-rematch" onclick="doRematch()">🔄 Rejouer</button>
+        <button class="btn btn-quit"    onclick="doLeave()">🚪 Quitter</button>
       </div>
     </div>
 
@@ -423,18 +412,17 @@ let SESSION_TOKEN = params.get('session');
 let myTid  = parseInt(localStorage.getItem('bj_tid')  || '0');
 let myName = localStorage.getItem('bj_username') || '';
 let ws = null;
+let pollTimer = null;
 
-// Card counts to detect new cards (for deal animation)
 let prevDealerLen = 0;
-let prevHandLens  = {}; // telegram_id → length
+let prevHandLens  = {};
 let lastState     = null;
-let dealerFlipPending = false;
 
-// ── Boot ─────────────────────────────────────────────────────────────────────
+// ── Boot ──────────────────────────────────────────────────────────────────────
 if (!SESSION_TOKEN) {
-  showError();
+  showError('Session introuvable — utilise le lien envoyé par le bot.');
 } else if (myTid) {
-  showGame(); connect();
+  showGame(); connect(); startPoll();
 }
 
 // ── Login ─────────────────────────────────────────────────────────────────────
@@ -456,54 +444,63 @@ async function doLogin() {
     myTid = d.telegram_id; myName = d.username;
     localStorage.setItem('bj_tid', String(myTid));
     localStorage.setItem('bj_username', myName);
-    showGame(); connect();
+    showGame(); connect(); startPoll();
   } catch { btn.textContent = 'OK'; btn.disabled = false; }
 }
 
-function showError() {
+function showError(msg) {
   document.getElementById('login-screen').style.display = 'none';
-  document.getElementById('error-screen').style.display = 'flex';
+  const el = document.getElementById('error-screen');
+  el.textContent = '❌ ' + (msg || 'Erreur');
+  el.style.display = 'flex';
 }
 function showGame() {
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('game-screen').classList.add('on');
 }
 
+// ── Polling HTTP (fallback si WS mort) ───────────────────────────────────────
+function startPoll() {
+  if (pollTimer) return;
+  pollTimer = setInterval(async () => {
+    if (ws && ws.readyState === WebSocket.OPEN) return; // WS actif → pas besoin
+    try {
+      const d = await fetch(`${API}/blackjack/${SESSION_TOKEN}/state`).then(r => r.json());
+      if (d.ok) render(d);
+    } catch {}
+  }, 3000);
+}
+function stopPoll() {
+  clearInterval(pollTimer); pollTimer = null;
+}
+
 // ── Card helpers ──────────────────────────────────────────────────────────────
 function parseCard(c) {
   if (!c || c === '?') return null;
-  const suit = c.slice(-1), rank = c.slice(0, -1);
-  const isRed = suit === '♥' || suit === '♦';
-  return { rank, suit, isRed };
+  return { rank: c.slice(0,-1), suit: c.slice(-1), isRed: '♥♦'.includes(c.slice(-1)) };
 }
-
-function makeCard(c, animate = false, extraClass = '') {
+function makeCard(c, animate = false) {
   const p = parseCard(c);
-  const cls = ['card', extraClass, animate ? 'deal' : ''].filter(Boolean).join(' ');
+  const cls = ['card', animate ? 'deal' : ''].filter(Boolean).join(' ');
   if (!p) return `<div class="${cls} back"></div>`;
-  return `<div class="${cls}${p.isRed ? ' red' : ''}">
+  return `<div class="${cls}${p.isRed?' red':''}">
     <div class="c-tl">${p.rank}<br>${p.suit}</div>
     <div class="c-center">${p.suit}</div>
     <div class="c-br">${p.rank}<br>${p.suit}</div>
   </div>`;
 }
-
 function handVal(hand) {
   let t = 0, a = 0;
-  for (const c of (hand || [])) {
-    if (!c || c === '?') continue;
-    const r = c.slice(0, -1);
-    if (r === 'A') { t += 11; a++; }
-    else if ('JQK'.includes(r)) t += 10;
-    else t += parseInt(r) || 0;
+  for (const c of (hand||[])) {
+    if (!c || c==='?') continue;
+    const r = c.slice(0,-1);
+    if (r==='A') { t+=11; a++; } else if ('JQK'.includes(r)) t+=10; else t+=parseInt(r)||0;
   }
-  while (t > 21 && a) { t -= 10; a--; }
+  while (t>21 && a) { t-=10; a--; }
   return t;
 }
-
 function esc(s) {
-  return String(s).replace(/[&<>"']/g, c =>
-    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
 // ── Connection status ─────────────────────────────────────────────────────────
@@ -515,19 +512,14 @@ function setConn(ok, txt) {
 // ── Dealer flip animation ─────────────────────────────────────────────────────
 function animateDealerFlip(newCard) {
   const dealerDiv = document.getElementById('dealer-cards');
-  const cards = dealerDiv.querySelectorAll('.card');
-  const hiddenCard = cards[1]; // second card was hidden
+  const hiddenCard = dealerDiv.querySelectorAll('.card')[1];
   if (!hiddenCard) return;
-
   hiddenCard.classList.add('flip-out');
   setTimeout(() => {
     const p = parseCard(newCard);
     if (p) {
       hiddenCard.className = 'card flip-in' + (p.isRed ? ' red' : '');
-      hiddenCard.innerHTML = `
-        <div class="c-tl">${p.rank}<br>${p.suit}</div>
-        <div class="c-center">${p.suit}</div>
-        <div class="c-br">${p.rank}<br>${p.suit}</div>`;
+      hiddenCard.innerHTML = `<div class="c-tl">${p.rank}<br>${p.suit}</div><div class="c-center">${p.suit}</div><div class="c-br">${p.rank}<br>${p.suit}</div>`;
     }
   }, 180);
 }
@@ -537,97 +529,112 @@ function render(state) {
   const prev = lastState;
   lastState  = state;
 
-  // ── Banner
+  // Banner
   const banner = document.getElementById('banner');
   banner.className = state.status;
-  banner.textContent = { waiting:'⏳ En attente…', active:'🎮 Partie en cours', finished:'🏁 Partie terminée' }[state.status] || '';
+  banner.textContent = { waiting:'⏳ En attente…', active:'🎮 Partie en cours', finished:'🏁 Terminée' }[state.status] || '';
 
-  // ── Waiting overlay
-  document.getElementById('wait-overlay').classList.toggle('on', state.status === 'waiting');
-
-  // ── Dealer
+  // Dealer
   const dHand    = state.dealer_hand || [];
-  const prevDH   = prev ? (prev.dealer_hand || []) : [];
+  const prevDH   = prev ? (prev.dealer_hand||[]) : [];
   const dealerEl = document.getElementById('dealer-cards');
-
-  // Detect dealer card reveal (? → real card)
-  const wasHidden = prevDH.some(c => c === '?');
-  const nowClear  = dHand.every(c => c !== '?');
+  const wasHidden = prevDH.some(c => c==='?');
+  const nowClear  = dHand.every(c => c!=='?');
   const revealed  = wasHidden && nowClear && prev;
 
   if (revealed && dHand.length >= 2) {
-    // Animate flip on the second card only, re-render first
-    dealerEl.innerHTML = dHand.map((c, i) => {
-      if (i === 1) return `<div class="card back"></div>`; // placeholder for flip
-      return makeCard(c, i >= prevDH.length);
-    }).join('');
+    dealerEl.innerHTML = dHand.map((c,i) => i===1 ? `<div class="card back"></div>` : makeCard(c, i>=prevDH.length)).join('');
     setTimeout(() => animateDealerFlip(dHand[1]), 50);
-    // After flip settles, render remaining new cards
-    if (dHand.length > 2) {
-      setTimeout(() => {
-        const existing = dealerEl.querySelectorAll('.card');
-        for (let i = 2; i < dHand.length; i++) {
-          const el = document.createElement('div');
-          el.outerHTML; // not used
-          dealerEl.innerHTML += makeCard(dHand[i], true);
-        }
-      }, 450);
-    }
   } else {
-    dealerEl.innerHTML = dHand.map((c, i) => makeCard(c, i >= prevDH.length)).join('');
+    dealerEl.innerHTML = dHand.map((c,i) => makeCard(c, i>=prevDH.length)).join('');
   }
 
-  const dealerTotalEl = document.getElementById('dealer-total');
+  const dtEl = document.getElementById('dealer-total');
   if (state.dealer_value != null) {
-    dealerTotalEl.textContent = `Total : ${state.dealer_value}`;
-  } else if (dHand.length > 0) {
-    const vis = dHand.filter(c => c !== '?');
-    dealerTotalEl.textContent = vis.length ? `Visible : ${handVal(vis)}` : '';
-  } else {
-    dealerTotalEl.textContent = '';
-  }
+    dtEl.textContent = `Total : ${state.dealer_value}`;
+  } else if (dHand.length) {
+    const vis = dHand.filter(c => c!=='?');
+    dtEl.textContent = vis.length ? `Visible : ${handVal(vis)}` : '';
+  } else { dtEl.textContent = ''; }
   prevDealerLen = dHand.length;
 
-  // ── Players
+  // Players
   const zone = document.getElementById('players-zone');
   zone.innerHTML = state.players.map(p => {
-    const isMe  = p.telegram_id === myTid;
-    const hand  = p.hand || [];
-    const prevP = prev ? prev.players.find(x => x.telegram_id === p.telegram_id) : null;
-    const prevLen = prevP ? (prevP.hand || []).length : 0;
-    const realHand = hand.filter(c => c !== '?');
+    const isMe   = Number(p.telegram_id) === Number(myTid);
+    const hand   = p.hand || [];
+    const prevP  = prev ? prev.players.find(x => x.telegram_id === p.telegram_id) : null;
+    const prevLen= prevP ? (prevP.hand||[]).length : 0;
+    const realHand = hand.filter(c => c!=='?');
     const total    = realHand.length ? handVal(realHand) : 0;
 
-    const badgeCls = { playing:'b-playing', stand:'b-stand', bust:'b-bust', done:'b-done', waiting:'b-waiting' }[p.status] || 'b-waiting';
-    const badgeTxt = { playing:'🎮 Joue', stand:'✋ Stand', bust:'💥 Bust!', done:'✅', waiting:'⏳' }[p.status] || p.status;
-    const resultHTML = { win:'<div class="slot-result r-win">🏆 Gagné !</div>', lose:'<div class="slot-result r-lose">💸 Perdu</div>', push:'<div class="slot-result r-push">🤝 Égalité</div>', blackjack:'<div class="slot-result r-blackjack">🎉 BLACKJACK !</div>' }[p.result] || '';
+    const badgeCls = {
+      playing:'b-playing', stand:'b-stand', bust:'b-bust', done:'b-done',
+      waiting:'b-waiting', waiting_next:'b-waiting_next', left:'b-left'
+    }[p.status] || 'b-waiting';
+    const badgeTxt = {
+      playing:'🎮 Joue', stand:'✋ Stand', bust:'💥 Bust!', done:'✅',
+      waiting:'⏳', waiting_next:'⏳ Prochaine main', left:'🚪 Parti'
+    }[p.status] || p.status;
+    const resultHTML = {
+      win:       '<div class="slot-result r-win">🏆 Gagné !</div>',
+      lose:      '<div class="slot-result r-lose">💸 Perdu</div>',
+      push:      '<div class="slot-result r-push">🤝 Égalité</div>',
+      blackjack: '<div class="slot-result r-blackjack">🎉 BLACKJACK !</div>',
+    }[p.result] || '';
 
     const slotCls = ['pslot', isMe?'is-me':'', p.result?`result-${p.result}`:`status-${p.status}`].filter(Boolean).join(' ');
-
     return `<div class="${slotCls}">
       <div class="slot-name">${esc(p.username)}${isMe?' 👤':''}</div>
       <div class="slot-bet">🪙 ${p.bet}</div>
-      <div class="slot-cards">${hand.map((c,i) => makeCard(c, i >= prevLen)).join('')}</div>
+      <div class="slot-cards">${hand.map((c,i) => makeCard(c, i>=prevLen)).join('')}</div>
       ${total ? `<div class="slot-total">= ${total}</div>` : ''}
       <span class="badge ${badgeCls}">${badgeTxt}</span>
       ${resultHTML}
     </div>`;
   }).join('');
 
-  // ── Action / Rematch bars
-  const me         = state.players.find(p => p.telegram_id === myTid);
-  const actionBar  = document.getElementById('action-bar');
-  const rematchBar = document.getElementById('rematch-bar');
-  const isCreator  = myTid === state.creator_id;
+  // ── Barres de boutons ──────────────────────────────────────────────────────
+  const isCreator = Number(myTid) === Number(state.creator_id);
+  const me = state.players.find(p => Number(p.telegram_id) === Number(myTid));
 
-  if (me && me.status === 'playing' && state.status === 'active') {
-    actionBar.classList.add('on'); rematchBar.classList.remove('on');
-    document.getElementById('btn-hit').disabled = document.getElementById('btn-stand').disabled = false;
-  } else if (state.status === 'finished' && isCreator) {
-    actionBar.classList.remove('on'); rematchBar.classList.add('on');
-    document.getElementById('btn-rematch').disabled = false;
-  } else {
-    actionBar.classList.remove('on'); rematchBar.classList.remove('on');
+  const waitBar     = document.getElementById('wait-bar');
+  const actionBar   = document.getElementById('action-bar');
+  const quitBar     = document.getElementById('quit-bar');
+  const finishedBar = document.getElementById('finished-bar');
+
+  waitBar.classList.remove('on');
+  actionBar.classList.remove('on');
+  quitBar.classList.remove('on');
+  finishedBar.classList.remove('on');
+
+  if (state.status === 'waiting') {
+    waitBar.classList.add('on');
+    const startBtn = document.getElementById('btn-start');
+    startBtn.disabled = !isCreator;
+    startBtn.textContent = isCreator ? '🚀 Lancer la partie' : '⏳ En attente du créateur…';
+    document.getElementById('wait-lbl').textContent =
+      `${state.players.length} joueur${state.players.length>1?'s':''} à table`;
+
+  } else if (state.status === 'active') {
+    const isMyTurn = me && me.status === 'playing';
+    if (isMyTurn) {
+      actionBar.classList.add('on');
+      document.getElementById('btn-hit').disabled = document.getElementById('btn-stand').disabled = false;
+    } else {
+      quitBar.classList.add('on');
+      // Adapter le label selon le statut
+      const lbl = document.getElementById('quit-bar').querySelector('.bar-lbl');
+      if (me && me.status === 'waiting_next') lbl.textContent = '⏳ Tu rejoindras à la prochaine main…';
+      else if (me && me.status === 'stand')   lbl.textContent = '✋ Tu as posé — en attente des autres…';
+      else                                     lbl.textContent = 'Partie en cours…';
+    }
+
+  } else if (state.status === 'finished') {
+    finishedBar.classList.add('on');
+    const btn = document.getElementById('btn-rematch');
+    btn.disabled = false;
+    btn.textContent = '🔄 Rejouer';
   }
 }
 
@@ -637,37 +644,61 @@ function connect() {
   const url = API.replace(/^http/, 'ws') + `/ws/blackjack/${SESSION_TOKEN}`;
   ws = new WebSocket(url);
   ws.onopen    = () => setConn(true, 'Connecté');
-  ws.onmessage = e => { render(JSON.parse(e.data)); setConn(true, new Date().toLocaleTimeString('fr-FR')); };
-  ws.onclose   = () => { setConn(false, 'Reconnexion…'); setTimeout(connect, 3000); };
-  ws.onerror   = () => ws.close();
+  ws.onmessage = e => {
+    const d = JSON.parse(e.data);
+    render(d);
+    setConn(true, new Date().toLocaleTimeString('fr-FR'));
+  };
+  ws.onclose   = () => { ws = null; setConn(false, 'Reconnexion…'); setTimeout(connect, 3000); };
+  ws.onerror   = () => { if (ws) { ws.onclose = null; ws.close(); ws = null; } setTimeout(connect, 3000); };
 }
 
 // ── Actions ───────────────────────────────────────────────────────────────────
 function act(action) {
-  if (!ws || ws.readyState !== WebSocket.OPEN) return;
-  document.getElementById('btn-hit').disabled = document.getElementById('btn-stand').disabled = true;
-  ws.send(JSON.stringify({ action, telegram_id: myTid }));
+  const hitBtn = document.getElementById('btn-hit');
+  const stndBtn= document.getElementById('btn-stand');
+  hitBtn.disabled = stndBtn.disabled = true;
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ action, telegram_id: myTid }));
+  } else {
+    // Fallback HTTP
+    fetch(`${API}/blackjack/${SESSION_TOKEN}/action-web`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ action, telegram_id: myTid }),
+    }).then(r => r.json()).then(d => {
+      if (!d.ok) { hitBtn.disabled = stndBtn.disabled = false; }
+    }).catch(() => { hitBtn.disabled = stndBtn.disabled = false; });
+  }
+}
+
+async function doStart() {
+  const btn = document.getElementById('btn-start');
+  btn.textContent = '⏳ Lancement…'; btn.disabled = true;
+  try {
+    const d = await fetch(`${API}/blackjack/${SESSION_TOKEN}/start-web`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ telegram_id: myTid }),
+    }).then(r => r.json());
+    if (!d.ok) {
+      alert(d.error || 'Impossible de lancer');
+      btn.textContent = '🚀 Lancer la partie'; btn.disabled = false;
+    }
+  } catch {
+    btn.textContent = '🚀 Lancer la partie'; btn.disabled = false;
+  }
 }
 
 async function doRematch() {
   const btn = document.getElementById('btn-rematch');
   btn.textContent = '⏳ …'; btn.disabled = true;
   try {
-    const r = await fetch(`${API}/blackjack/${SESSION_TOKEN}/rematch`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+    const d = await fetch(`${API}/blackjack/${SESSION_TOKEN}/rematch`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
       body: JSON.stringify({ telegram_id: myTid }),
-    });
-    const d = await r.json();
-    if (d.ok && d.token) {
-      SESSION_TOKEN = d.token;
-      history.replaceState({}, '', `?session=${d.token}`);
+    }).then(r => r.json());
+    if (d.ok) {
+      // Même token — le WS reçoit le nouveau state automatiquement
       lastState = null; prevDealerLen = 0; prevHandLens = {};
-      document.getElementById('rematch-bar').classList.remove('on');
-      document.getElementById('dealer-cards').innerHTML = '';
-      document.getElementById('players-zone').innerHTML = '';
-      if (ws) ws.close();
-      connect();
     } else {
       alert(d.error || 'Erreur lors du rejouer.');
       btn.textContent = '🔄 Rejouer'; btn.disabled = false;
@@ -675,6 +706,21 @@ async function doRematch() {
   } catch {
     btn.textContent = '🔄 Rejouer'; btn.disabled = false;
   }
+}
+
+async function doLeave() {
+  const confirmed = confirm('Quitter la table ?');
+  if (!confirmed) return;
+  try {
+    await fetch(`${API}/blackjack/${SESSION_TOKEN}/leave`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ telegram_id: myTid }),
+    });
+  } catch {}
+  stopPoll();
+  if (ws) { ws.onclose = null; ws.onerror = null; ws.close(); ws = null; }
+  // Rediriger vers l'app principale
+  window.location.href = '/';
 }
 </script>
 </body>
