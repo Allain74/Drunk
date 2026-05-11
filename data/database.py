@@ -163,6 +163,22 @@ def init_db():
         _execute("ALTER TABLE users ADD COLUMN avatar TEXT DEFAULT NULL")
     except Exception:
         pass
+    try:
+        _execute("ALTER TABLE users ADD COLUMN is_premium INTEGER DEFAULT 0")
+    except Exception:
+        pass
+    try:
+        _execute("ALTER TABLE users ADD COLUMN stripe_customer_id TEXT")
+    except Exception:
+        pass
+    try:
+        _execute("ALTER TABLE users ADD COLUMN stripe_subscription_id TEXT")
+    except Exception:
+        pass
+    try:
+        _execute("ALTER TABLE users ADD COLUMN premium_until TEXT")
+    except Exception:
+        pass
     _pipeline([
         ("""CREATE TABLE IF NOT EXISTS users (
             user_id     INTEGER PRIMARY KEY,
@@ -742,3 +758,31 @@ def delete_user(user_id: int):
         ("DELETE FROM push_subscriptions  WHERE user_id=?", [user_id]),
         ("DELETE FROM users               WHERE user_id=?", [user_id]),
     ])
+
+
+# ── Abonnement Premium ────────────────────────────────────────────────────────
+
+def set_premium(user_id: int, customer_id: str, subscription_id: str, premium_until: str):
+    """Active l'abonnement premium d'un utilisateur."""
+    _execute(
+        """UPDATE users SET is_premium=1, stripe_customer_id=?,
+                            stripe_subscription_id=?, premium_until=?
+           WHERE user_id=?""",
+        [customer_id, subscription_id, premium_until, user_id]
+    )
+
+
+def clear_premium(user_id: int):
+    """Désactive l'abonnement premium (garde stripe_customer_id pour réutiliser)."""
+    _execute(
+        "UPDATE users SET is_premium=0, stripe_subscription_id=NULL, premium_until=NULL WHERE user_id=?",
+        [user_id]
+    )
+
+
+def get_user_by_stripe_customer(customer_id: str) -> dict | None:
+    return _fetchone("SELECT * FROM users WHERE stripe_customer_id=?", [customer_id])
+
+
+def set_stripe_customer_id(user_id: int, customer_id: str):
+    _execute("UPDATE users SET stripe_customer_id=? WHERE user_id=?", [customer_id, user_id])

@@ -6,8 +6,9 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
 
+import stripe
 from dotenv import load_dotenv
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 
@@ -34,6 +35,7 @@ from data.database import (
     set_avatar, get_all_avatars,
     get_all_follows,
     clear_password, delete_n_drinks,
+    set_premium, clear_premium, get_user_by_stripe_customer, set_stripe_customer_id,
 )
 from core.recap import build_weekly_recap, build_weekly_recap_for_user
 from core.widmark import total_bac, bac_label, sober_in_hours, alcohol_grams
@@ -41,6 +43,12 @@ from core.blackjack import new_deck, hand_value, display_hand, is_blackjack
 from core.drinks import DRINKS
 
 load_dotenv()
+
+# ── Stripe (abonnement premium) ───────────────────────────────────────────────
+stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "")
+STRIPE_PRICE_ID = os.environ.get("STRIPE_PRICE_ID", "")
+STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
+FRONTEND_URL = os.environ.get("FRONTEND_URL", "")
 
 # ── Web Push (VAPID) ──────────────────────────────────────────────────────────
 try:
@@ -233,6 +241,7 @@ def build_snapshot() -> list[dict]:
     drinks_by_user = get_all_active_drinks()
     now = datetime.now(timezone.utc)
     banned_ids = {u["user_id"] for u in _get_banned_list()}
+    admin_id = int(os.environ.get("ADMIN_ID", "0"))
     result = []
     for uid, user in users.items():
         drinks = drinks_by_user.get(uid, [])
@@ -256,6 +265,7 @@ def build_snapshot() -> list[dict]:
             "max_bac":     round(user.get("max_bac") or 0, 2),
             "peak_24h":    round(peak_24h, 2),
             "gender":      user.get("gender", "homme"),
+            "is_premium":  uid == admin_id or bool(user.get("is_premium")),
             "is_banned":   uid in banned_ids,
         })
     result.sort(key=lambda x: x["bac"], reverse=True)
@@ -829,6 +839,7 @@ def get_all_users_endpoint():
             "username":    u["username"],
             "gender":      u.get("gender", "homme"),
             "is_admin":    u["telegram_id"] == admin_id,
+            "is_premium":  u["telegram_id"] == admin_id or bool(u.get("is_premium")),
         }
         for u in users
     ]
@@ -886,11 +897,13 @@ async def login_endpoint(request: Request):
     if is_banned(user["telegram_id"]):
         return {"ok": False, "error": "Compte banni 🚫"}
     admin_id = int(os.environ.get("ADMIN_ID", "0"))
+    is_adm = user["telegram_id"] == admin_id
     return {
         "ok": True,
         "telegram_id": user["telegram_id"],
         "username": user["username"],
-        "is_admin": user["telegram_id"] == admin_id,
+        "is_admin": is_adm,
+        "is_premium": is_adm or bool(user.get("is_premium")),
     }
 
 
@@ -2009,3 +2022,129 @@ async def blackjack_rematch(token: str, request: Request):
         await _bj_broadcast(token)
 
     return {"ok": True, "token": token}
+
+
+# ── Abonnement Premium (Stripe) ───────────────────────────────────────────────
+
+@app.post("/premium/checkout")
+async def premium_checkout(request: Request):
+    """Crée une session Stripe Checkout pour s'abonner au premium."""
+    if not stripe.api_key or not STRIPE_PRICE_ID:
+        return {"ok": False, "error": "Paiement temporairement indisponible"}
+    body = await request.json()
+    telegram_id = body.get("telegram_id")
+    if not telegram_id:
+        return {"ok": False, "error": "Identifiant manquant"}
+    user = get_user(int(telegram_id))
+    if not user:
+        return {"ok": False, "error": "Utilisateur introuvable"}
+    try:
+        customer_id = user.get("stripe_customer_id")
+        if not customer_id:
+            customer = stripe.Customer.create(
+                metadata={"user_id": str(telegram_id), "username": user["username"]},
+                name=user["username"],
+            )
+            customer_id = customer.id
+            set_stripe_customer_id(int(telegram_id), customer_id)
+        session = stripe.checkout.Session.create(
+            customer=customer_id,
+            mode="subscription",
+            line_items=[{"price": STRIPE_PRICE_ID, "quantity": 1}],
+            success_url=f"{FRONTEND_URL}/?premium=success",
+            cancel_url=f"{FRONTEND_URL}/?premium=cancel",
+            metadata={"user_id": str(telegram_id)},
+            allow_promotion_codes=True,
+        )
+        return {"ok": True, "url": session.url}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+@app.post("/premium/portal")
+async def premium_portal(request: Request):
+    """Renvoie l'URL du Stripe Customer Portal pour gérer l'abonnement."""
+    if not stripe.api_key:
+        return {"ok": False, "error": "Paiement temporairement indisponible"}
+    body = await request.json()
+    telegram_id = body.get("telegram_id")
+    if not telegram_id:
+        return {"ok": False, "error": "Identifiant manquant"}
+    user = get_user(int(telegram_id))
+    if not user or not user.get("stripe_customer_id"):
+        return {"ok": False, "error": "Aucun abonnement trouvé"}
+    try:
+        session = stripe.billing_portal.Session.create(
+            customer=user["stripe_customer_id"],
+            return_url=FRONTEND_URL,
+        )
+        return {"ok": True, "url": session.url}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+@app.get("/premium/status/{telegram_id}")
+def premium_status(telegram_id: int):
+    """Retourne le statut premium d'un utilisateur."""
+    admin_id = int(os.environ.get("ADMIN_ID", "0"))
+    if telegram_id == admin_id:
+        return {"is_premium": True, "source": "admin"}
+    user = get_user(telegram_id)
+    if not user:
+        return {"is_premium": False}
+    return {
+        "is_premium": bool(user.get("is_premium")),
+        "premium_until": user.get("premium_until"),
+        "has_stripe_customer": bool(user.get("stripe_customer_id")),
+    }
+
+
+@app.post("/stripe/webhook")
+async def stripe_webhook(request: Request):
+    """Webhook Stripe : active/désactive l'abonnement selon les événements."""
+    if not STRIPE_WEBHOOK_SECRET:
+        return Response(status_code=503)
+    payload = await request.body()
+    sig = request.headers.get("stripe-signature", "")
+    try:
+        event = stripe.Webhook.construct_event(payload, sig, STRIPE_WEBHOOK_SECRET)
+    except Exception:
+        return Response(status_code=400)
+
+    t = event["type"]
+    obj = event["data"]["object"]
+
+    if t == "checkout.session.completed":
+        customer_id = obj.get("customer")
+        subscription_id = obj.get("subscription")
+        user_id_str = (obj.get("metadata") or {}).get("user_id")
+        if user_id_str and subscription_id:
+            try:
+                sub = stripe.Subscription.retrieve(subscription_id)
+                premium_until = datetime.fromtimestamp(
+                    sub["current_period_end"], tz=timezone.utc
+                ).isoformat()
+                set_premium(int(user_id_str), customer_id, subscription_id, premium_until)
+            except Exception:
+                pass
+    elif t in ("customer.subscription.updated", "customer.subscription.created"):
+        customer_id = obj.get("customer")
+        user = get_user_by_stripe_customer(customer_id) if customer_id else None
+        if user:
+            status = obj.get("status")
+            uid = user.get("user_id") or user.get("telegram_id")
+            if status in ("active", "trialing"):
+                premium_until = datetime.fromtimestamp(
+                    obj["current_period_end"], tz=timezone.utc
+                ).isoformat()
+                set_premium(uid, customer_id, obj["id"], premium_until)
+            else:
+                clear_premium(uid)
+    elif t == "customer.subscription.deleted":
+        customer_id = obj.get("customer")
+        user = get_user_by_stripe_customer(customer_id) if customer_id else None
+        if user:
+            uid = user.get("user_id") or user.get("telegram_id")
+            clear_premium(uid)
+
+    return {"received": True}
