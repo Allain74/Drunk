@@ -464,7 +464,7 @@
     .modal4 { flex:1; overflow-y:auto; padding:20px 16px 32px; }
     .profile-name { font-size:1.4rem; font-weight:900; margin-bottom:2px; }
     .profile-badge { display:inline-block; font-size:0.72rem; font-weight:700; border-radius:6px; padding:2px 8px; margin-bottom:10px; }
-    /* Bloc TAC actif */
+    /* Bloc taux d'alcool actif */
     .profile-bac-block { text-align:center; margin:12px 0 8px; }
     .profile-bac-big { font-size:3rem; font-weight:900; line-height:1; }
     .profile-bac-unit { font-size:0.85rem; color:var(--sub); margin-top:2px; }
@@ -982,38 +982,52 @@
       <button class="picker-btn" onclick="quickDrink('demif')">Demi forte<span>25cl · 8.5%</span></button>
       <button class="picker-btn" onclick="quickDrink('pintef')">Pinte forte<span>50cl · 8.5%</span></button>
       <button class="picker-btn" onclick="quickDrink('cidre')">Cidre<span>25cl · 5%</span></button>
+      <button class="picker-btn" onclick="quickDrink('picon_biere')">Picon bière<span>50cl · 6.5%</span></button>
     </div>
   </div>
-  <div class="picker-section"><div class="picker-label">🍷 Vins</div>
+  <div class="picker-section"><div class="picker-label">🍷 Vins & Apéritifs</div>
     <div class="picker-grid">
       <button class="picker-btn" onclick="quickDrink('vin')">Vin<span>12cl · 12.5%</span></button>
       <button class="picker-btn" onclick="quickDrink('champagne')">Champagne<span>10cl · 12%</span></button>
       <button class="picker-btn" onclick="quickDrink('sangria')">Sangria<span>20cl · 10%</span></button>
+      <button class="picker-btn" onclick="quickDrink('martini')">Martini<span>8cl · 15%</span></button>
+      <button class="picker-btn" onclick="quickDrink('kir')">Kir<span>12cl · 10%</span></button>
     </div>
   </div>
   <div class="picker-section"><div class="picker-label">🥃 Shots & Spiritueux</div>
     <div class="picker-grid">
-      <button class="picker-btn" onclick="quickDrink('vodka')">Vodka<span>4cl · 40%</span></button>
-      <button class="picker-btn" onclick="quickDrink('whisky')">Whisky<span>4cl · 40%</span></button>
-      <button class="picker-btn" onclick="quickDrink('tequila')">Tequila<span>4cl · 40%</span></button>
-      <button class="picker-btn" onclick="quickDrink('rhum')">Rhum<span>4cl · 40%</span></button>
-      <button class="picker-btn" onclick="quickDrink('shot96')">Shot 96°<span>4cl · 96%</span></button>
+      <button class="picker-btn" onclick="quickDrink('shot_vodka')">Vodka<span>4cl · 40%</span></button>
+      <button class="picker-btn" onclick="quickDrink('shot_whisky')">Whisky<span>4cl · 40%</span></button>
+      <button class="picker-btn" onclick="quickDrink('shot_tequila')">Tequila<span>4cl · 40%</span></button>
+      <button class="picker-btn" onclick="quickDrink('shot_rhum')">Rhum<span>4cl · 40%</span></button>
+      <button class="picker-btn" onclick="quickDrink('shot_96')">Shot 96°<span>4cl · 96%</span></button>
+      <button class="picker-btn" onclick="quickDrink('gnole')">Gnôle<span>4cl · 50%</span></button>
+      <button class="picker-btn" onclick="quickDrink('chartreuse')">Chartreuse<span>4cl · 55%</span></button>
+      <button class="picker-btn" onclick="quickDrink('limoncello')">Limoncello<span>3cl · 28%</span></button>
+      <button class="picker-btn" onclick="quickDrink('jagermeister')">Jägermeister<span>4cl · 35%</span></button>
     </div>
   </div>
   <div class="picker-section"><div class="picker-label">🍹 Cocktails</div>
     <div class="picker-grid">
       <button class="picker-btn" onclick="quickDrink('mojito')">Mojito<span>20cl · 10%</span></button>
-      <button class="picker-btn" onclick="quickDrink('gin')">Gin Tonic<span>20cl · 8%</span></button>
-      <button class="picker-btn" onclick="quickDrink('aperol')">Aperol<span>20cl · 8%</span></button>
-      <button class="picker-btn" onclick="quickDrink('longisland')">Long Island<span>30cl · 16%</span></button>
+      <button class="picker-btn" onclick="quickDrink('gin_tonic')">Gin Tonic<span>20cl · 8%</span></button>
+      <button class="picker-btn" onclick="quickDrink('aperol')">Spritz<span>20cl · 8%</span></button>
+      <button class="picker-btn" onclick="quickDrink('long_island')">Long Island<span>30cl · 16%</span></button>
+      <button class="picker-btn" onclick="quickDrink('caipirinha')">Caïpirinha<span>20cl · 25%</span></button>
+      <button class="picker-btn" onclick="quickDrink('sex_beach')">Sex on Beach<span>20cl · 12%</span></button>
+      <button class="picker-btn" onclick="quickDrink('pina_colada')">Piña Colada<span>25cl · 12%</span></button>
+      <button class="picker-btn" onclick="quickDrink('moscow_mule')">Moscow Mule<span>20cl · 10%</span></button>
+      <button class="picker-btn" onclick="quickDrink('daiquiri')">Daiquiri<span>12cl · 20%</span></button>
+      <button class="picker-btn" onclick="quickDrink('punch')">Punch<span>20cl · 15%</span></button>
     </div>
   </div>
   <div class="picker-section"><div class="picker-label">🌿 Autres</div>
     <div class="picker-grid">
       <button class="picker-btn" onclick="quickDrink('ricard')">Ricard<span>2.5cl · 45%</span></button>
-      <button class="picker-btn" onclick="quickDrink('perroquet')">Perroquet<span>2.5cl · 22.5%</span></button>
+      <button class="picker-btn" onclick="quickDrink('perroquet')">Perroquet sauvage<span>2.5cl · 22.5%</span></button>
       <button class="picker-btn" onclick="quickDrink('get27')">Get 27<span>4cl · 21%</span></button>
       <button class="picker-btn" onclick="quickDrink('bucket')">Bucket<span>12.5cl · 40%</span></button>
+      <button class="picker-btn" onclick="quickDrink('suze')">Suze<span>4cl · 20%</span></button>
     </div>
   </div>
   <div style="margin-top:4px">
@@ -1039,7 +1053,7 @@
 </div>
 
 <!-- ══════════════════════════════════════════════════════════════
-     2. LIVE — TAC en direct + classement live (fusion)
+     2. LIVE — Taux d'alcool en direct + classement live (fusion)
 ═══════════════════════════════════════════════════════════════ -->
 <div id="live-panel" class="panel active">
   <div class="page-hd" style="display:flex;align-items:flex-start;justify-content:space-between">
@@ -1093,11 +1107,34 @@
     </div>
   </div>
   <div id="classement-thune" style="display:none">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <span style="font-weight:700;font-size:1rem">💰 Classement de la thune</span>
+      <button onclick="openCoinsHelp()" style="background:var(--border);border:none;border-radius:50%;width:28px;height:28px;font-size:0.85rem;font-weight:700;cursor:pointer;color:var(--sub);display:flex;align-items:center;justify-content:center;flex-shrink:0">?</button>
+    </div>
     <div class="table-scroll">
       <table class="thune-table">
         <thead><tr><th>#</th><th>Joueur</th><th>pièces</th></tr></thead>
         <tbody id="thune-tbody"></tbody>
       </table>
+    </div>
+  </div>
+
+  <!-- Modale aide pièces -->
+  <div id="coins-help-overlay" onclick="closeCoinsHelp()" style="display:none;position:fixed;inset:0;background:#0008;z-index:3000;align-items:flex-end;justify-content:center">
+    <div onclick="event.stopPropagation()" style="background:var(--card);border-radius:20px 20px 0 0;padding:24px 20px 36px;width:100%;max-width:480px;margin:0 auto">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
+        <span style="font-size:1.05rem;font-weight:700">🪙 À quoi servent les pièces ?</span>
+        <button onclick="closeCoinsHelp()" style="background:var(--border);border:none;border-radius:50%;width:30px;height:30px;font-size:1rem;cursor:pointer;color:var(--sub)">✕</button>
+      </div>
+      <p style="color:var(--sub);font-size:0.9rem;line-height:1.6;margin-bottom:12px">
+        Les pièces (<strong>🪙</strong>) sont la monnaie virtuelle de l'appli. Tu en gagnes en buvant, en te connectant, en gagnant des paris ou au Blackjack — et tu en dépenses pour parier contre tes amis ou jouer.
+      </p>
+      <p style="color:var(--sub);font-size:0.9rem;line-height:1.6;margin-bottom:12px">
+        Le classement de la thune reflète qui a accumulé le plus de pièces depuis le début. C'est la richesse virtuelle de chaque joueur.
+      </p>
+      <p style="color:var(--sub);font-size:0.9rem;line-height:1.6">
+        ✨ <em>D'autres fonctionnalités utilisant les pièces arrivent prochainement…</em>
+      </p>
     </div>
   </div>
   <div id="classement-bj" style="display:none">
@@ -1182,38 +1219,52 @@
         <button class="picker-btn" onclick="quickDrink('demif');closeDrinkPicker()">Demi forte<span>25cl · 8.5%</span></button>
         <button class="picker-btn" onclick="quickDrink('pintef');closeDrinkPicker()">Pinte forte<span>50cl · 8.5%</span></button>
         <button class="picker-btn" onclick="quickDrink('cidre');closeDrinkPicker()">Cidre<span>25cl · 5%</span></button>
+        <button class="picker-btn" onclick="quickDrink('picon_biere');closeDrinkPicker()">Picon bière<span>50cl · 6.5%</span></button>
       </div>
     </div>
-    <div class="picker-section"><div class="picker-label">🍷 Vins</div>
+    <div class="picker-section"><div class="picker-label">🍷 Vins & Apéritifs</div>
       <div class="picker-grid">
         <button class="picker-btn" onclick="quickDrink('vin');closeDrinkPicker()">Vin<span>12cl · 12.5%</span></button>
         <button class="picker-btn" onclick="quickDrink('champagne');closeDrinkPicker()">Champagne<span>10cl · 12%</span></button>
         <button class="picker-btn" onclick="quickDrink('sangria');closeDrinkPicker()">Sangria<span>20cl · 10%</span></button>
+        <button class="picker-btn" onclick="quickDrink('martini');closeDrinkPicker()">Martini<span>8cl · 15%</span></button>
+        <button class="picker-btn" onclick="quickDrink('kir');closeDrinkPicker()">Kir<span>12cl · 10%</span></button>
       </div>
     </div>
     <div class="picker-section"><div class="picker-label">🥃 Shots & Spiritueux</div>
       <div class="picker-grid">
-        <button class="picker-btn" onclick="quickDrink('vodka');closeDrinkPicker()">Vodka<span>4cl · 40%</span></button>
-        <button class="picker-btn" onclick="quickDrink('whisky');closeDrinkPicker()">Whisky<span>4cl · 40%</span></button>
-        <button class="picker-btn" onclick="quickDrink('tequila');closeDrinkPicker()">Tequila<span>4cl · 40%</span></button>
-        <button class="picker-btn" onclick="quickDrink('rhum');closeDrinkPicker()">Rhum<span>4cl · 40%</span></button>
-        <button class="picker-btn" onclick="quickDrink('shot96');closeDrinkPicker()">Shot 96°<span>4cl · 96%</span></button>
+        <button class="picker-btn" onclick="quickDrink('shot_vodka');closeDrinkPicker()">Vodka<span>4cl · 40%</span></button>
+        <button class="picker-btn" onclick="quickDrink('shot_whisky');closeDrinkPicker()">Whisky<span>4cl · 40%</span></button>
+        <button class="picker-btn" onclick="quickDrink('shot_tequila');closeDrinkPicker()">Tequila<span>4cl · 40%</span></button>
+        <button class="picker-btn" onclick="quickDrink('shot_rhum');closeDrinkPicker()">Rhum<span>4cl · 40%</span></button>
+        <button class="picker-btn" onclick="quickDrink('shot_96');closeDrinkPicker()">Shot 96°<span>4cl · 96%</span></button>
+        <button class="picker-btn" onclick="quickDrink('gnole');closeDrinkPicker()">Gnôle<span>4cl · 50%</span></button>
+        <button class="picker-btn" onclick="quickDrink('chartreuse');closeDrinkPicker()">Chartreuse<span>4cl · 55%</span></button>
+        <button class="picker-btn" onclick="quickDrink('limoncello');closeDrinkPicker()">Limoncello<span>3cl · 28%</span></button>
+        <button class="picker-btn" onclick="quickDrink('jagermeister');closeDrinkPicker()">Jägermeister<span>4cl · 35%</span></button>
       </div>
     </div>
     <div class="picker-section"><div class="picker-label">🍹 Cocktails</div>
       <div class="picker-grid">
         <button class="picker-btn" onclick="quickDrink('mojito');closeDrinkPicker()">Mojito<span>20cl · 10%</span></button>
-        <button class="picker-btn" onclick="quickDrink('gin');closeDrinkPicker()">Gin Tonic<span>20cl · 8%</span></button>
-        <button class="picker-btn" onclick="quickDrink('aperol');closeDrinkPicker()">Aperol<span>20cl · 8%</span></button>
-        <button class="picker-btn" onclick="quickDrink('longisland');closeDrinkPicker()">Long Island<span>30cl · 16%</span></button>
+        <button class="picker-btn" onclick="quickDrink('gin_tonic');closeDrinkPicker()">Gin Tonic<span>20cl · 8%</span></button>
+        <button class="picker-btn" onclick="quickDrink('aperol');closeDrinkPicker()">Spritz<span>20cl · 8%</span></button>
+        <button class="picker-btn" onclick="quickDrink('long_island');closeDrinkPicker()">Long Island<span>30cl · 16%</span></button>
+        <button class="picker-btn" onclick="quickDrink('caipirinha');closeDrinkPicker()">Caïpirinha<span>20cl · 25%</span></button>
+        <button class="picker-btn" onclick="quickDrink('sex_beach');closeDrinkPicker()">Sex on Beach<span>20cl · 12%</span></button>
+        <button class="picker-btn" onclick="quickDrink('pina_colada');closeDrinkPicker()">Piña Colada<span>25cl · 12%</span></button>
+        <button class="picker-btn" onclick="quickDrink('moscow_mule');closeDrinkPicker()">Moscow Mule<span>20cl · 10%</span></button>
+        <button class="picker-btn" onclick="quickDrink('daiquiri');closeDrinkPicker()">Daiquiri<span>12cl · 20%</span></button>
+        <button class="picker-btn" onclick="quickDrink('punch');closeDrinkPicker()">Punch<span>20cl · 15%</span></button>
       </div>
     </div>
     <div class="picker-section"><div class="picker-label">🌿 Autres</div>
       <div class="picker-grid">
         <button class="picker-btn" onclick="quickDrink('ricard');closeDrinkPicker()">Ricard<span>2.5cl · 45%</span></button>
-        <button class="picker-btn" onclick="quickDrink('perroquet');closeDrinkPicker()">Perroquet<span>2.5cl · 22.5%</span></button>
+        <button class="picker-btn" onclick="quickDrink('perroquet');closeDrinkPicker()">Perroquet sauvage<span>2.5cl · 22.5%</span></button>
         <button class="picker-btn" onclick="quickDrink('get27');closeDrinkPicker()">Get 27<span>4cl · 21%</span></button>
         <button class="picker-btn" onclick="quickDrink('bucket');closeDrinkPicker()">Bucket<span>12.5cl · 40%</span></button>
+        <button class="picker-btn" onclick="quickDrink('suze');closeDrinkPicker()">Suze<span>4cl · 20%</span></button>
       </div>
     </div>
   </div>
@@ -1261,7 +1312,7 @@
     <div style="width:36px;height:4px;border-radius:2px;background:var(--border)"></div>
   </div>
   <div class="modal-chart-hd">
-    <span style="font-weight:900;font-size:0.95rem;flex:1" id="modal-title">📈 Historique TAC</span>
+    <span style="font-weight:900;font-size:0.95rem;flex:1" id="modal-title">📈 Historique taux d'alcool</span>
     <button onclick="closeModal()" style="background:none;border:none;color:var(--sub);font-size:1.2rem;cursor:pointer;padding:4px;line-height:1">✕</button>
   </div>
   <div class="modal-chart-body">
@@ -1311,7 +1362,7 @@
     <!-- ── Inscription ── -->
     <div id="id-panel-register" style="display:none">
       <h3>✨ Créer un compte</h3>
-      <p>Crée ton compte pour suivre ton TAC directement depuis le site.</p>
+      <p>Crée ton compte pour suivre ton taux d'alcool directement depuis le site.</p>
       <input type="text"     id="reg-pseudo"   placeholder="Pseudo (2–30 caractères)…" autocomplete="off"/>
       <div style="display:flex;gap:8px;margin-top:8px">
         <button id="reg-btn-homme" class="reg-genre-btn active" onclick="selectGenre('homme')">👨 Homme</button>
@@ -1539,9 +1590,42 @@
       }
     });
   }
-  // Init badge au démarrage
+
+  // ── Sync IndexedDB → localStorage au démarrage ───────────────────────────
+  // Récupère les notifs stockées par le SW quand l'app était fermée
+  async function _syncIdbNotifs() {
+    try {
+      const db = await new Promise((resolve, reject) => {
+        const req = indexedDB.open('drunk-notifs', 1);
+        req.onupgradeneeded = e => e.target.result.createObjectStore('pending', { keyPath: 'id' });
+        req.onsuccess = e => resolve(e.target.result);
+        req.onerror   = e => reject(e.target.error);
+      });
+      const pending = await new Promise((resolve, reject) => {
+        const tx  = db.transaction('pending', 'readonly');
+        const req = tx.objectStore('pending').getAll();
+        req.onsuccess = e => resolve(e.target.result);
+        req.onerror   = e => reject(e.target.error);
+      });
+      if (!pending || pending.length === 0) return;
+      // Fusionner avec localStorage (éviter les doublons par id)
+      const existing    = _loadNotifs();
+      const existingIds = new Set(existing.map(n => String(n.id)));
+      const newOnes     = pending.filter(n => !existingIds.has(String(n.id)));
+      if (newOnes.length > 0) {
+        _saveNotifs([...newOnes, ...existing]);
+        _updateNotifBadge();
+      }
+      // Vider IndexedDB après sync
+      const tx2 = db.transaction('pending', 'readwrite');
+      tx2.objectStore('pending').clear();
+    } catch(e) { /* silently ignore — IndexedDB non dispo */ }
+  }
+
+  // Init badge au démarrage + sync IndexedDB
   _cleanOldNotifs();
   _updateNotifBadge();
+  _syncIdbNotifs();
 
   // ── Navigation ──
   const NAV_TABS = ['menu','live','classement','amis','profil'];
@@ -1576,6 +1660,14 @@
     // BJ : on ferme juste l'overlay visuellement MAIS on garde _bjToken intact
     // → openBlackjack() détecte qu'une session est en cours et y retourne directement
     // (pas de _bjToken = null ici pour ne pas perdre la partie en cours)
+  }
+
+  function openCoinsHelp() {
+    const o = document.getElementById('coins-help-overlay');
+    o.style.display = 'flex';
+  }
+  function closeCoinsHelp() {
+    document.getElementById('coins-help-overlay').style.display = 'none';
   }
 
   function showClassementSub(sub) {
@@ -1640,9 +1732,14 @@
   const DRINK_LABELS = {
     demi:'🍺 Demi', pinte:'🍺 Pinte', demif:'🍺 Demi forte', pintef:'🍺 Pinte forte', cidre:'🍺 Cidre',
     vin:'🍷 Vin', champagne:'🍾 Champagne', sangria:'🍷 Sangria',
-    vodka:'🥃 Vodka', whisky:'🥃 Whisky', tequila:'🥃 Tequila', rhum:'🥃 Rhum', shot96:'💥 Shot 96°',
-    mojito:'🍹 Mojito', gin:'🍹 Gin Tonic', aperol:'🧡 Aperol', longisland:'🍹 Long Island',
-    ricard:'🌿 Ricard', perroquet:'🦜 Perroquet', get27:'🌿 Get 27', bucket:'🪣 Bucket',
+    shot_vodka:'🥃 Vodka', shot_whisky:'🥃 Whisky', shot_tequila:'🥃 Tequila', shot_rhum:'🥃 Rhum', shot_96:'💥 Shot 96°',
+    mojito:'🍹 Mojito', gin_tonic:'🍹 Gin Tonic', aperol:'🧡 Spritz', long_island:'🍹 Long Island',
+    biere_bouteille:'🍺 Bière 33cl',
+    ricard:'🌿 Ricard', perroquet:'🦜 Perroquet sauvage', get27:'🌿 Get 27', bucket:'🪣 Bucket',
+    gnole:'🥃 Gnôle', caipirinha:'🍹 Caïpirinha', chartreuse:'🌿 Chartreuse', sex_beach:'🍹 Sex on Beach',
+    picon_biere:'🍺 Picon bière', martini:'🍸 Martini', pina_colada:'🍹 Piña Colada',
+    moscow_mule:'🍹 Moscow Mule', daiquiri:'🍹 Daiquiri', limoncello:'🍋 Limoncello',
+    punch:'🍹 Punch', kir:'🍷 Kir', suze:'🌿 Suze', jagermeister:'🦌 Jägermeister',
   };
 
   // ── Profile modal ──
@@ -1744,7 +1841,7 @@
         body = `
           <div class="profile-bac-block">
             <div class="profile-bac-big" style="color:${color}">${bac}</div>
-            <div class="profile-bac-unit">g/L de TAC</div>
+            <div class="profile-bac-unit">g/L de taux d'alcool</div>
             <div class="profile-bac-label" style="background:${color}">${bacLabel}</div>
           </div>
           <div class="profile-sober-chip">🕐 Sobre vers <strong>${soberAt}</strong></div>
@@ -2046,7 +2143,7 @@
       const popup = L.popup({ closeButton: false, offset: [80, -8] }).setContent(
         `<div class="map-popup">
           <div class="map-popup-name">${esc(u.username)} ${emoji}</div>
-          <div class="map-popup-row"><span>TAC</span><span class="map-popup-val" style="color:${color}">${u.bac.toFixed(2)} g/L</span></div>
+          <div class="map-popup-row"><span>Alcool</span><span class="map-popup-val" style="color:${color}">${u.bac.toFixed(2)} g/L</span></div>
           <div class="map-popup-row"><span>Verres</span><span class="map-popup-val">${u.nb_drinks}</span></div>
           <div class="map-popup-row"><span>Sobre dans</span><span class="map-popup-val">${u.sober_in_h}h</span></div>
          </div>`
@@ -2077,13 +2174,18 @@
     demi:'🍺 Demi 25cl', pinte:'🍺 Pinte 50cl', demif:'🍺 Demi forte', pintef:'🍺 Pinte forte',
     biere_bouteille:'🍺 Bouteille 33cl',
     // New keys
-    vin:'🍷 Vin', ricard:'🌿 Ricard/Pastis', perroquet:'🦜 Perroquet Sauvage',
+    vin:'🍷 Vin', ricard:'🌿 Ricard/Pastis', perroquet:'🦜 Perroquet sauvage',
     get27:'🍃 Get 27', bucket:'🪣 Bucket thaïlandais',
+    gnole:'🥃 Gnôle', caipirinha:'🍹 Caïpirinha', chartreuse:'🌿 Chartreuse',
+    sex_beach:'🍹 Sex on the beach', picon_biere:'🍺 Picon bière',
+    martini:'🍸 Martini', pina_colada:'🍹 Piña Colada', moscow_mule:'🍹 Moscow Mule',
+    daiquiri:'🍹 Daiquiri', limoncello:'🍋 Limoncello',
+    punch:'🍹 Punch', kir:'🍷 Kir', suze:'🌿 Suze', jagermeister:'🦌 Jägermeister',
     // Old keys for compatibility
     vin_rouge:'🍷 Vin rouge', vin_blanc:'🥂 Vin blanc', pastis:'🌿 Pastis',
     champagne:'🥂 Champagne', shot_vodka:'🥃 Vodka', shot_tequila:'🥃 Tequila',
     shot_whisky:'🥃 Whisky', shot_rhum:'🥃 Rhum', shot_96:'💥 Shot 96°',
-    mojito:'🍹 Mojito', gin_tonic:'🍹 Gin tonic', aperol:'🍹 Aperol spritz',
+    mojito:'🍹 Mojito', gin_tonic:'🍹 Gin tonic', aperol:'🍹 Spritz',
     long_island:'🍹 Long Island', sangria:'🍷 Sangria', cidre:'🍎 Cidre',
   };
 
@@ -2142,7 +2244,7 @@
       data: {
         labels,
         datasets: [{
-          label: 'TAC (g/L)',
+          label: "Taux d'alcool (g/L)",
           data: bacs,
           borderColor: '#6366f1',
           backgroundColor: 'rgba(99,102,241,0.12)',
@@ -2377,7 +2479,7 @@
           <div class="p-stat-grid">
             <div class="p-stat">
               <div class="p-stat-val" style="color:${color}">${bac.toFixed(2)} g/L</div>
-              <div class="p-stat-lbl">TAC actuel · ${label}</div>
+              <div class="p-stat-lbl">Taux d'alcool · ${label}</div>
             </div>
             <div class="p-stat">
               <div class="p-stat-val">${drinks}</div>
@@ -3149,7 +3251,7 @@
         : `<div class="amis-empty">
             <div class="amis-empty-icon">👥</div>
             <div class="amis-empty-title">Pas encore d'amis</div>
-            <div class="amis-empty-sub">Va dans "Découvrir" pour retrouver tes potes et suivre leur TAC en temps réel.</div>
+            <div class="amis-empty-sub">Va dans "Découvrir" pour retrouver tes potes et suivre leur taux d'alcool en temps réel.</div>
            </div>`;
     } else {
       listHtml = `
@@ -3199,6 +3301,7 @@
       autoSubscribePush();
     }
     updateIdentityBtn();
+    render([]);
     connect();
   }
 
@@ -3656,7 +3759,7 @@
       <label>Type de pari</label>
       <div class="paris-type-grid">
         <button class="paris-type-btn sel" data-type="verres" onclick="parisSelectType(this)">🍺<br>Plus de<br>verres</button>
-        <button class="paris-type-btn"     data-type="ivre"   onclick="parisSelectType(this)">🌀<br>TAC<br>le plus haut</button>
+        <button class="paris-type-btn"     data-type="ivre"   onclick="parisSelectType(this)">🌀<br>Alcool<br>le plus haut</button>
         <button class="paris-type-btn"     data-type="coinflip" onclick="parisSelectType(this)">🪙<br>Pile<br>ou face</button>
       </div>
 
@@ -4184,7 +4287,7 @@ async function parisLoadBets() {
       el.innerHTML = `<div style="text-align:center;color:var(--sub);padding:20px;font-size:0.85rem">Aucun pari en cours — défie quelqu'un !</div>`;
       return;
     }
-    const typeLabels = { verres:'🍺 Plus de verres', ivre:'🌀 TAC le plus haut', coinflip:'🪙 Pile ou face' };
+    const typeLabels = { verres:'🍺 Plus de verres', ivre:"🌀 Alcool le plus haut", coinflip:'🪙 Pile ou face' };
     const statusLabels = { pending:'En attente', active:'En cours', settled:'Terminé', cancelled:'Annulé' };
     const statusCls    = { pending:'pb-pending', active:'pb-active', settled:'pb-settled', cancelled:'pb-settled' };
     el.innerHTML = bets.map(b => {

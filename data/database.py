@@ -95,9 +95,9 @@ def _check_password(password: str, stored: str) -> bool:
     except Exception:
         return False
 
-def set_password(telegram_id: int, password: str):
-    _execute("UPDATE users SET password_hash=? WHERE telegram_id=?",
-             [_hash_password(password), telegram_id])
+def set_password(user_id: int, password: str):
+    _execute("UPDATE users SET password_hash=? WHERE user_id=?",
+             [_hash_password(password), user_id])
 
 def verify_password(username: str, password: str) -> dict | None:
     """Retourne le user si le pseudo+password est correct, sinon None.
@@ -131,6 +131,18 @@ def init_db():
     except Exception:
         pass
 
+    # Migration: telegram_id → user_id
+    for tbl, col in [("users", "telegram_id"), ("sessions", "telegram_id"),
+                      ("drink_logs", "telegram_id"), ("banned_users", "telegram_id"),
+                      ("transactions", "telegram_id"), ("blackjack_players", "telegram_id"),
+                      ("push_subscriptions", "telegram_id")]:
+        try:
+            cols = [r["name"] for r in _fetchall(f"PRAGMA table_info({tbl})", [])]
+            if "telegram_id" in cols and "user_id" not in cols:
+                _execute(f"ALTER TABLE {tbl} RENAME COLUMN telegram_id TO user_id", [])
+        except Exception:
+            pass
+
     try:
         _execute("ALTER TABLE users ADD COLUMN max_bac REAL DEFAULT 0")
     except Exception:
@@ -153,7 +165,7 @@ def init_db():
         pass
     _pipeline([
         ("""CREATE TABLE IF NOT EXISTS users (
-            telegram_id INTEGER PRIMARY KEY,
+            user_id     INTEGER PRIMARY KEY,
             username    TEXT NOT NULL,
             weight_kg   REAL NOT NULL,
             gender      TEXT NOT NULL,
@@ -163,22 +175,22 @@ def init_db():
         )""", []),
         ("""CREATE TABLE IF NOT EXISTS sessions (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            telegram_id INTEGER NOT NULL,
+            user_id     INTEGER NOT NULL,
             started_at  TEXT NOT NULL DEFAULT (datetime('now')),
             active      INTEGER NOT NULL DEFAULT 1
         )""", []),
         ("""CREATE TABLE IF NOT EXISTS drink_logs (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
             session_id  INTEGER NOT NULL,
-            telegram_id INTEGER NOT NULL,
+            user_id     INTEGER NOT NULL,
             drink_key   TEXT NOT NULL,
             alc_grams   REAL NOT NULL,
             logged_at   TEXT NOT NULL DEFAULT (datetime('now'))
         )""", []),
-        ("CREATE TABLE IF NOT EXISTS banned_users (telegram_id INTEGER PRIMARY KEY)", []),
+        ("CREATE TABLE IF NOT EXISTS banned_users (user_id INTEGER PRIMARY KEY)", []),
         ("""CREATE TABLE IF NOT EXISTS transactions (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            telegram_id INTEGER NOT NULL,
+            user_id     INTEGER NOT NULL,
             amount      INTEGER NOT NULL,
             reason      TEXT NOT NULL,
             created_at  TEXT NOT NULL DEFAULT (datetime('now'))
@@ -206,7 +218,7 @@ def init_db():
         ("""CREATE TABLE IF NOT EXISTS blackjack_players (
             id         INTEGER PRIMARY KEY AUTOINCREMENT,
             session_id INTEGER NOT NULL,
-            telegram_id INTEGER NOT NULL,
+            user_id    INTEGER NOT NULL,
             bet        INTEGER NOT NULL DEFAULT 0,
             hand       TEXT NOT NULL DEFAULT '[]',
             status     TEXT NOT NULL DEFAULT 'waiting',
@@ -221,43 +233,43 @@ def init_db():
     )""")
 
 
-def upsert_user(telegram_id: int, username: str, weight_kg: float, gender: str):
-    existing = _fetchone("SELECT telegram_id FROM users WHERE telegram_id=?", [telegram_id])
+def upsert_user(user_id: int, username: str, weight_kg: float, gender: str):
+    existing = _fetchone("SELECT user_id FROM users WHERE user_id=?", [user_id])
     if existing:
         _execute(
-            "UPDATE users SET username=?, weight_kg=?, gender=? WHERE telegram_id=?",
-            [username, weight_kg, gender, telegram_id]
+            "UPDATE users SET username=?, weight_kg=?, gender=? WHERE user_id=?",
+            [username, weight_kg, gender, user_id]
         )
     else:
         _execute(
-            "INSERT INTO users (telegram_id, username, weight_kg, gender) VALUES (?, ?, ?, ?)",
-            [telegram_id, username, weight_kg, gender]
+            "INSERT INTO users (user_id, username, weight_kg, gender) VALUES (?, ?, ?, ?)",
+            [user_id, username, weight_kg, gender]
         )
 
 
-def get_user(telegram_id: int) -> dict | None:
-    return _fetchone("SELECT * FROM users WHERE telegram_id=?", [telegram_id])
+def get_user(user_id: int) -> dict | None:
+    return _fetchone("SELECT * FROM users WHERE user_id=?", [user_id])
 
 
-def is_banned(telegram_id: int) -> bool:
-    return _fetchone("SELECT 1 FROM banned_users WHERE telegram_id=?", [telegram_id]) is not None
+def is_banned(user_id: int) -> bool:
+    return _fetchone("SELECT 1 FROM banned_users WHERE user_id=?", [user_id]) is not None
 
-def ban_user(telegram_id: int):
-    _execute("INSERT OR IGNORE INTO banned_users (telegram_id) VALUES (?)", [telegram_id])
+def ban_user(user_id: int):
+    _execute("INSERT OR IGNORE INTO banned_users (user_id) VALUES (?)", [user_id])
 
-def unban_user(telegram_id: int):
-    _execute("DELETE FROM banned_users WHERE telegram_id=?", [telegram_id])
+def unban_user(user_id: int):
+    _execute("DELETE FROM banned_users WHERE user_id=?", [user_id])
 
-def rename_user(telegram_id: int, new_name: str):
-    _execute("UPDATE users SET username=? WHERE telegram_id=?", [new_name, telegram_id])
+def rename_user(user_id: int, new_name: str):
+    _execute("UPDATE users SET username=? WHERE user_id=?", [new_name, user_id])
 
-def clear_password(telegram_id: int):
+def clear_password(user_id: int):
     """Remet le mot de passe à vide (aucun mot de passe requis)."""
-    _execute("UPDATE users SET password_hash='' WHERE telegram_id=?", [telegram_id])
+    _execute("UPDATE users SET password_hash='' WHERE user_id=?", [user_id])
 
-def delete_n_drinks(telegram_id: int, n: int) -> int:
+def delete_n_drinks(user_id: int, n: int) -> int:
     """Supprime les n derniers verres de la session active. Retourne le nb supprimé."""
-    session = get_active_session(telegram_id)
+    session = get_active_session(user_id)
     if not session or n <= 0:
         return 0
     rows = _fetchall(
@@ -272,10 +284,10 @@ def get_user_by_username(username: str) -> dict | None:
     return _fetchone("SELECT * FROM users WHERE LOWER(username)=LOWER(?)", [username])
 
 
-def is_username_taken(username: str, exclude_telegram_id: int) -> bool:
+def is_username_taken(username: str, exclude_user_id: int) -> bool:
     row = _fetchone(
-        "SELECT telegram_id FROM users WHERE LOWER(username)=LOWER(?) AND telegram_id != ?",
-        [username, exclude_telegram_id]
+        "SELECT user_id FROM users WHERE LOWER(username)=LOWER(?) AND user_id != ?",
+        [username, exclude_user_id]
     )
     return row is not None
 
@@ -284,52 +296,52 @@ def get_all_users() -> list[dict]:
     return _fetchall("SELECT * FROM users")
 
 
-def update_max_bac(telegram_id: int, bac: float):
+def update_max_bac(user_id: int, bac: float):
     _execute(
-        "UPDATE users SET max_bac=? WHERE telegram_id=? AND (max_bac IS NULL OR max_bac < ?)",
-        [bac, telegram_id, bac]
+        "UPDATE users SET max_bac=? WHERE user_id=? AND (max_bac IS NULL OR max_bac < ?)",
+        [bac, user_id, bac]
     )
 
 
-def update_location(telegram_id: int, lat: float, lon: float):
+def update_location(user_id: int, lat: float, lon: float):
     now = datetime.now(timezone.utc).isoformat()
     _execute(
-        "UPDATE users SET latitude=?, longitude=?, location_at=? WHERE telegram_id=?",
-        [lat, lon, now, telegram_id]
+        "UPDATE users SET latitude=?, longitude=?, location_at=? WHERE user_id=?",
+        [lat, lon, now, user_id]
     )
 
 
-def start_session(telegram_id: int) -> int:
+def start_session(user_id: int) -> int:
     results = _pipeline([
-        ("UPDATE sessions SET active=0 WHERE telegram_id=? AND active=1", [telegram_id]),
-        ("INSERT INTO sessions (telegram_id) VALUES (?)", [telegram_id]),
+        ("UPDATE sessions SET active=0 WHERE user_id=? AND active=1", [user_id]),
+        ("INSERT INTO sessions (user_id) VALUES (?)", [user_id]),
     ])
     return int(results[-1]["last_insert_rowid"])
 
 
-def get_active_session(telegram_id: int) -> dict | None:
+def get_active_session(user_id: int) -> dict | None:
     return _fetchone(
-        "SELECT * FROM sessions WHERE telegram_id=? AND active=1", [telegram_id]
+        "SELECT * FROM sessions WHERE user_id=? AND active=1", [user_id]
     )
 
 
-def end_session(telegram_id: int):
-    _execute("UPDATE sessions SET active=0 WHERE telegram_id=? AND active=1", [telegram_id])
+def end_session(user_id: int):
+    _execute("UPDATE sessions SET active=0 WHERE user_id=? AND active=1", [user_id])
 
 
-def log_drink(telegram_id: int, drink_key: str, alc_grams: float) -> bool:
-    session = get_active_session(telegram_id)
+def log_drink(user_id: int, drink_key: str, alc_grams: float) -> bool:
+    session = get_active_session(user_id)
     if not session:
         return False
     _execute(
-        "INSERT INTO drink_logs (session_id, telegram_id, drink_key, alc_grams) VALUES (?, ?, ?, ?)",
-        [session["id"], telegram_id, drink_key, alc_grams]
+        "INSERT INTO drink_logs (session_id, user_id, drink_key, alc_grams) VALUES (?, ?, ?, ?)",
+        [session["id"], user_id, drink_key, alc_grams]
     )
     return True
 
 
-def delete_last_drink(telegram_id: int) -> str | None:
-    session = get_active_session(telegram_id)
+def delete_last_drink(user_id: int) -> str | None:
+    session = get_active_session(user_id)
     if not session:
         return None
     row = _fetchone(
@@ -342,8 +354,8 @@ def delete_last_drink(telegram_id: int) -> str | None:
     return row["drink_key"]
 
 
-def get_session_drinks_detail(telegram_id: int) -> list[dict]:
-    session = get_active_session(telegram_id)
+def get_session_drinks_detail(user_id: int) -> list[dict]:
+    session = get_active_session(user_id)
     if not session:
         return []
     return _fetchall(
@@ -352,13 +364,13 @@ def get_session_drinks_detail(telegram_id: int) -> list[dict]:
     )
 
 
-def get_session_drinks(telegram_id: int) -> list[tuple[float, datetime]]:
-    session = get_active_session(telegram_id)
+def get_session_drinks(user_id: int) -> list[tuple[float, datetime]]:
+    session = get_active_session(user_id)
     if not session:
         # Cherche la session la plus récente même fermée (< 48h) pour afficher le bon TAC
         session = _fetchone(
-            "SELECT * FROM sessions WHERE telegram_id=? AND started_at >= datetime('now', '-48 hours') ORDER BY id DESC LIMIT 1",
-            [telegram_id]
+            "SELECT * FROM sessions WHERE user_id=? AND started_at >= datetime('now', '-48 hours') ORDER BY id DESC LIMIT 1",
+            [user_id]
         )
     if not session:
         return []
@@ -378,7 +390,7 @@ def get_all_active_drinks() -> dict[int, list[tuple[float, datetime]]]:
     # Cutoff 48h — évite qu'une longue soirée ou une session fermée trop tôt fasse tomber le TAC à 0
     cutoff = datetime.now(timezone.utc).timestamp() - 172800
     rows = _fetchall("""
-        SELECT dl.telegram_id, dl.alc_grams, dl.logged_at
+        SELECT dl.user_id, dl.alc_grams, dl.logged_at
         FROM drink_logs dl JOIN sessions s ON dl.session_id=s.id
         WHERE s.active=1
            OR (s.active=0 AND s.started_at >= datetime('now', '-48 hours'))
@@ -388,7 +400,7 @@ def get_all_active_drinks() -> dict[int, list[tuple[float, datetime]]]:
     for r in rows:
         t = datetime.fromisoformat(r["logged_at"]).replace(tzinfo=timezone.utc)
         if t.timestamp() >= cutoff:
-            result.setdefault(r["telegram_id"], []).append((r["alc_grams"], t))
+            result.setdefault(r["user_id"], []).append((r["alc_grams"], t))
     return result
 
 
@@ -396,15 +408,15 @@ def get_all_time_stats() -> list[dict]:
     rows = _fetchall("""
         SELECT u.username, dl.drink_key, COUNT(*) as count, SUM(dl.alc_grams) as total_alc
         FROM drink_logs dl
-        JOIN users u ON dl.telegram_id = u.telegram_id
-        GROUP BY u.telegram_id, dl.drink_key
+        JOIN users u ON dl.user_id = u.user_id
+        GROUP BY u.user_id, dl.drink_key
         ORDER BY u.username, count DESC
     """)
     days_rows = _fetchall("""
         SELECT u.username, COUNT(DISTINCT DATE(dl.logged_at)) as nb_days, MAX(u.max_bac) as max_bac
         FROM drink_logs dl
-        JOIN users u ON dl.telegram_id = u.telegram_id
-        GROUP BY u.telegram_id
+        JOIN users u ON dl.user_id = u.user_id
+        GROUP BY u.user_id
     """)
     nb_days_map = {r["username"]: (r["nb_days"], r.get("max_bac") or 0) for r in days_rows}
 
@@ -426,27 +438,27 @@ def get_all_time_stats() -> list[dict]:
     return sorted(users.values(), key=lambda x: x["total_alc_g"], reverse=True)
 
 
-def set_last_inactivity_notif(telegram_id: int, dt: datetime):
+def set_last_inactivity_notif(user_id: int, dt: datetime):
     _execute(
-        "UPDATE users SET last_inactivity_notif=? WHERE telegram_id=?",
-        [dt.isoformat(), telegram_id]
+        "UPDATE users SET last_inactivity_notif=? WHERE user_id=?",
+        [dt.isoformat(), user_id]
     )
 
 
-def get_last_inactivity_notif(telegram_id: int) -> datetime | None:
+def get_last_inactivity_notif(user_id: int) -> datetime | None:
     row = _fetchone(
-        "SELECT last_inactivity_notif FROM users WHERE telegram_id=?",
-        [telegram_id]
+        "SELECT last_inactivity_notif FROM users WHERE user_id=?",
+        [user_id]
     )
     if not row or not row["last_inactivity_notif"]:
         return None
     return datetime.fromisoformat(row["last_inactivity_notif"]).replace(tzinfo=timezone.utc)
 
 
-def get_last_drink_time(telegram_id: int) -> datetime | None:
+def get_last_drink_time(user_id: int) -> datetime | None:
     row = _fetchone(
-        "SELECT logged_at FROM drink_logs WHERE telegram_id=? ORDER BY logged_at DESC LIMIT 1",
-        [telegram_id]
+        "SELECT logged_at FROM drink_logs WHERE user_id=? ORDER BY logged_at DESC LIMIT 1",
+        [user_id]
     )
     if not row:
         return None
@@ -455,20 +467,20 @@ def get_last_drink_time(telegram_id: int) -> datetime | None:
 
 def get_weekly_drink_logs(since: datetime) -> list[dict]:
     return _fetchall("""
-        SELECT dl.telegram_id, u.username, dl.drink_key, dl.alc_grams, dl.logged_at
+        SELECT dl.user_id, u.username, dl.drink_key, dl.alc_grams, dl.logged_at
         FROM drink_logs dl
-        JOIN users u ON dl.telegram_id = u.telegram_id
+        JOIN users u ON dl.user_id = u.user_id
         WHERE dl.logged_at >= ?
-        ORDER BY dl.telegram_id, dl.logged_at
+        ORDER BY dl.user_id, dl.logged_at
     """, [since.isoformat()])
 
 
-def get_top_drinks(telegram_id: int, n: int = 5) -> list[str]:
+def get_top_drinks(user_id: int, n: int = 5) -> list[str]:
     rows = _fetchall("""
         SELECT drink_key, COUNT(*) as cnt
-        FROM drink_logs WHERE telegram_id=?
+        FROM drink_logs WHERE user_id=?
         GROUP BY drink_key ORDER BY cnt DESC LIMIT ?
-    """, [telegram_id, n])
+    """, [user_id, n])
     return [r["drink_key"] for r in rows]
 
 
@@ -481,29 +493,29 @@ def get_drinks_by_session(session_id: int) -> list[dict]:
 
 # ── Coins & Transactions ──────────────────────────────────────────────────────
 
-def get_coins(telegram_id: int) -> int:
-    row = _fetchone("SELECT coins FROM users WHERE telegram_id=?", [telegram_id])
+def get_coins(user_id: int) -> int:
+    row = _fetchone("SELECT coins FROM users WHERE user_id=?", [user_id])
     return int(row["coins"] or 0) if row else 0
 
 
-def add_coins(telegram_id: int, amount: int, reason: str) -> int:
-    _execute("UPDATE users SET coins = coins + ? WHERE telegram_id=?", [amount, telegram_id])
+def add_coins(user_id: int, amount: int, reason: str) -> int:
+    _execute("UPDATE users SET coins = coins + ? WHERE user_id=?", [amount, user_id])
     _execute(
-        "INSERT INTO transactions (telegram_id, amount, reason) VALUES (?, ?, ?)",
-        [telegram_id, amount, reason]
+        "INSERT INTO transactions (user_id, amount, reason) VALUES (?, ?, ?)",
+        [user_id, amount, reason]
     )
-    return get_coins(telegram_id)
+    return get_coins(user_id)
 
 
-def get_transactions(telegram_id: int, limit: int = 20) -> list[dict]:
+def get_transactions(user_id: int, limit: int = 20) -> list[dict]:
     return _fetchall(
-        "SELECT amount, reason, created_at FROM transactions WHERE telegram_id=? ORDER BY created_at DESC LIMIT ?",
-        [telegram_id, limit]
+        "SELECT amount, reason, created_at FROM transactions WHERE user_id=? ORDER BY created_at DESC LIMIT ?",
+        [user_id, limit]
     )
 
 
 def get_all_balances() -> list[dict]:
-    return _fetchall("SELECT telegram_id, username, coins FROM users ORDER BY coins DESC")
+    return _fetchall("SELECT user_id, username, coins FROM users ORDER BY coins DESC")
 
 
 # ── Bets ──────────────────────────────────────────────────────────────────────
@@ -543,11 +555,11 @@ def get_bet(bet_id: int) -> dict | None:
     return _fetchone("SELECT * FROM bets WHERE id=?", [bet_id])
 
 
-def get_user_bets(telegram_id: int) -> list[dict]:
+def get_user_bets(user_id: int) -> list[dict]:
     """Retourne tous les paris impliquant cet utilisateur (hors annulés), du plus récent."""
     return _fetchall(
         "SELECT * FROM bets WHERE (challenger_id=? OR opponent_id=?) AND status != 'cancelled' ORDER BY created_at DESC LIMIT 30",
-        [telegram_id, telegram_id],
+        [user_id, user_id],
     )
 
 
@@ -575,10 +587,10 @@ def update_blackjack_session(session_id: int, **kwargs):
     _execute(f"UPDATE blackjack_sessions SET {sets} WHERE id=?", vals)
 
 
-def add_blackjack_player(session_id: int, telegram_id: int, bet: int):
+def add_blackjack_player(session_id: int, user_id: int, bet: int):
     _execute(
-        "INSERT OR IGNORE INTO blackjack_players (session_id, telegram_id, bet) VALUES (?, ?, ?)",
-        [session_id, telegram_id, bet]
+        "INSERT OR IGNORE INTO blackjack_players (session_id, user_id, bet) VALUES (?, ?, ?)",
+        [session_id, user_id, bet]
     )
 
 
@@ -586,25 +598,25 @@ def get_blackjack_players(session_id: int) -> list[dict]:
     return _fetchall("SELECT * FROM blackjack_players WHERE session_id=?", [session_id])
 
 
-def update_blackjack_player(session_id: int, telegram_id: int, **kwargs):
+def update_blackjack_player(session_id: int, user_id: int, **kwargs):
     sets = ", ".join(f"{k}=?" for k in kwargs)
-    vals = list(kwargs.values()) + [session_id, telegram_id]
-    _execute(f"UPDATE blackjack_players SET {sets} WHERE session_id=? AND telegram_id=?", vals)
+    vals = list(kwargs.values()) + [session_id, user_id]
+    _execute(f"UPDATE blackjack_players SET {sets} WHERE session_id=? AND user_id=?", vals)
 
 
-def get_blackjack_session_by_player(telegram_id: int) -> dict | None:
+def get_blackjack_session_by_player(user_id: int) -> dict | None:
     return _fetchone("""
         SELECT bs.* FROM blackjack_sessions bs
         JOIN blackjack_players bp ON bs.id = bp.session_id
-        WHERE bp.telegram_id=? AND bs.status IN ('waiting', 'active')
+        WHERE bp.user_id=? AND bs.status IN ('waiting', 'active')
         ORDER BY bs.created_at DESC LIMIT 1
-    """, [telegram_id])
+    """, [user_id])
 
 
-def _get_waiting_session_by_creator(telegram_id: int) -> dict | None:
+def _get_waiting_session_by_creator(user_id: int) -> dict | None:
     return _fetchone(
         "SELECT * FROM blackjack_sessions WHERE creator_id=? AND status='waiting' ORDER BY created_at DESC LIMIT 1",
-        [telegram_id]
+        [user_id]
     )
 
 
@@ -640,11 +652,11 @@ def get_followers(following_id: int) -> list[int]:
     return [r["follower_id"] for r in rows]
 
 
-def get_blackjack_stats(telegram_id: int) -> dict:
+def get_blackjack_stats(user_id: int) -> dict:
     """Retourne les stats blackjack d'un joueur : parties jouées, gagnées, perdues, égalités."""
     rows = _fetchall(
-        "SELECT result FROM blackjack_players WHERE telegram_id=? AND result IS NOT NULL",
-        [telegram_id]
+        "SELECT result FROM blackjack_players WHERE user_id=? AND result IS NOT NULL",
+        [user_id]
     )
     played = len(rows)
     won    = sum(1 for r in rows if r["result"] in ("win", "blackjack"))
@@ -653,16 +665,16 @@ def get_blackjack_stats(telegram_id: int) -> dict:
     return {"played": played, "won": won, "lost": lost, "push": push}
 
 
-def get_profile_follows(telegram_id: int) -> dict:
+def get_profile_follows(user_id: int) -> dict:
     """Retourne le nombre d'abonnés/abonnements + la liste de ceux que suit cet utilisateur."""
-    following_ids = get_following(telegram_id)
-    follower_ids  = get_followers(telegram_id)
+    following_ids = get_following(user_id)
+    follower_ids  = get_followers(user_id)
     following_users = [get_user(fid) for fid in following_ids]
     following_users = [u for u in following_users if u]
     return {
         "followers_count": len(follower_ids),
         "following_count": len(following_ids),
-        "following": [{"telegram_id": u["telegram_id"], "username": u["username"]} for u in following_users],
+        "following": [{"user_id": u["user_id"], "username": u["username"]} for u in following_users],
     }
 
 
@@ -671,7 +683,7 @@ def get_profile_follows(telegram_id: int) -> dict:
 def init_push_subscriptions():
     _execute("""CREATE TABLE IF NOT EXISTS push_subscriptions (
         id          INTEGER PRIMARY KEY AUTOINCREMENT,
-        telegram_id INTEGER NOT NULL,
+        user_id     INTEGER NOT NULL,
         endpoint    TEXT NOT NULL UNIQUE,
         p256dh      TEXT NOT NULL,
         auth        TEXT NOT NULL,
@@ -679,13 +691,13 @@ def init_push_subscriptions():
     )""")
 
 
-def save_push_subscription(telegram_id: int, endpoint: str, p256dh: str, auth: str):
+def save_push_subscription(user_id: int, endpoint: str, p256dh: str, auth: str):
     _execute(
-        """INSERT INTO push_subscriptions (telegram_id, endpoint, p256dh, auth)
+        """INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth)
            VALUES (?, ?, ?, ?)
-           ON CONFLICT(endpoint) DO UPDATE SET telegram_id=excluded.telegram_id,
+           ON CONFLICT(endpoint) DO UPDATE SET user_id=excluded.user_id,
                p256dh=excluded.p256dh, auth=excluded.auth""",
-        [telegram_id, endpoint, p256dh, auth]
+        [user_id, endpoint, p256dh, auth]
     )
 
 
@@ -693,10 +705,10 @@ def delete_push_subscription(endpoint: str):
     _execute("DELETE FROM push_subscriptions WHERE endpoint=?", [endpoint])
 
 
-def get_push_subscriptions(telegram_id: int) -> list[dict]:
+def get_push_subscriptions(user_id: int) -> list[dict]:
     return _fetchall(
-        "SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE telegram_id=?",
-        [telegram_id]
+        "SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE user_id=?",
+        [user_id]
     )
 
 
@@ -707,26 +719,26 @@ def get_all_follows() -> list[dict]:
 
 # ── Avatars ───────────────────────────────────────────────────────────────────
 
-def set_avatar(telegram_id: int, avatar: str):
+def set_avatar(user_id: int, avatar: str):
     """Stocke un avatar (data URL base64) pour un utilisateur."""
-    _execute("UPDATE users SET avatar=? WHERE telegram_id=?", [avatar, telegram_id])
+    _execute("UPDATE users SET avatar=? WHERE user_id=?", [avatar, user_id])
 
 
 def get_all_avatars() -> list[dict]:
-    """Retourne tous les avatars non-null sous forme [{telegram_id, avatar}]."""
-    return _fetchall("SELECT telegram_id, avatar FROM users WHERE avatar IS NOT NULL")
+    """Retourne tous les avatars non-null sous forme [{user_id, avatar}]."""
+    return _fetchall("SELECT user_id, avatar FROM users WHERE avatar IS NOT NULL")
 
 
-def delete_user(telegram_id: int):
+def delete_user(user_id: int):
     """Supprime un compte et toutes ses données associées."""
     _pipeline([
-        ("DELETE FROM drink_logs          WHERE telegram_id=?", [telegram_id]),
-        ("DELETE FROM sessions            WHERE telegram_id=?", [telegram_id]),
-        ("DELETE FROM transactions        WHERE telegram_id=?", [telegram_id]),
-        ("DELETE FROM follows             WHERE follower_id=? OR following_id=?", [telegram_id, telegram_id]),
-        ("DELETE FROM bets                WHERE challenger_id=? OR opponent_id=?", [telegram_id, telegram_id]),
-        ("DELETE FROM blackjack_players   WHERE telegram_id=?", [telegram_id]),
-        ("DELETE FROM banned_users        WHERE telegram_id=?", [telegram_id]),
-        ("DELETE FROM push_subscriptions  WHERE telegram_id=?", [telegram_id]),
-        ("DELETE FROM users               WHERE telegram_id=?", [telegram_id]),
+        ("DELETE FROM drink_logs          WHERE user_id=?", [user_id]),
+        ("DELETE FROM sessions            WHERE user_id=?", [user_id]),
+        ("DELETE FROM transactions        WHERE user_id=?", [user_id]),
+        ("DELETE FROM follows             WHERE follower_id=? OR following_id=?", [user_id, user_id]),
+        ("DELETE FROM bets                WHERE challenger_id=? OR opponent_id=?", [user_id, user_id]),
+        ("DELETE FROM blackjack_players   WHERE user_id=?", [user_id]),
+        ("DELETE FROM banned_users        WHERE user_id=?", [user_id]),
+        ("DELETE FROM push_subscriptions  WHERE user_id=?", [user_id]),
+        ("DELETE FROM users               WHERE user_id=?", [user_id]),
     ])

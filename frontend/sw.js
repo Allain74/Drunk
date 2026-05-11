@@ -60,6 +60,31 @@ self.addEventListener("fetch", (e) => {
   );
 });
 
+// ── IndexedDB helpers (stockage persistant des notifs hors-page) ──────────────
+const IDB_NAME    = "drunk-notifs";
+const IDB_VERSION = 1;
+const IDB_STORE   = "pending";
+
+function _idbOpen() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(IDB_NAME, IDB_VERSION);
+    req.onupgradeneeded = (e) => {
+      e.target.result.createObjectStore(IDB_STORE, { keyPath: "id" });
+    };
+    req.onsuccess = (e) => resolve(e.target.result);
+    req.onerror   = (e) => reject(e.target.error);
+  });
+}
+
+function _idbSaveNotif(notif) {
+  return _idbOpen().then((db) => new Promise((resolve, reject) => {
+    const tx = db.transaction(IDB_STORE, "readwrite");
+    tx.objectStore(IDB_STORE).put(notif);
+    tx.oncomplete = () => resolve();
+    tx.onerror    = (e) => reject(e.target.error);
+  }));
+}
+
 // ── Push notifications ────────────────────────────────────────────────────────
 self.addEventListener("push", (event) => {
   if (!event.data) return;
@@ -77,13 +102,18 @@ self.addEventListener("push", (event) => {
 
   event.waitUntil(
     Promise.all([
+      // 1. Afficher la notification système
       self.registration.showNotification(notif.title, {
         body: notif.body,
         icon:  "/icons/icon-192.png",
         badge: "/icons/icon-192.png",
         data:  { url: notif.url },
       }),
-      // Transmet la notif à toutes les pages ouvertes pour stockage localStorage
+
+      // 2. Stocker dans IndexedDB (persiste même si aucune page ouverte)
+      _idbSaveNotif(notif).catch(() => {}),
+
+      // 3. Transmet la notif aux pages ouvertes pour stockage localStorage immédiat
       self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(clients => {
         clients.forEach(c => c.postMessage({ type: "PUSH_NOTIF", notif }));
       }),

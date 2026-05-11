@@ -1,0 +1,147 @@
+name: 🍺 TestFlight Deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "ios/**"
+      - "frontend/**"
+      - ".github/workflows/testflight.yml"
+  workflow_dispatch:  # Lancement manuel depuis GitHub
+
+jobs:
+  deploy:
+    name: Build & Upload to TestFlight
+    runs-on: macos-14   # Apple Silicon = build plus rapide
+
+    steps:
+      # ── 1. Checkout ─────────────────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── 2. Installer xcodegen ────────────────────────────────────────────────
+      - name: Install xcodegen
+        run: brew install xcodegen
+
+      # ── 3. Générer le projet Xcode ───────────────────────────────────────────
+      - name: Generate Xcode project
+        working-directory: ios
+        run: xcodegen generate
+
+      # ── 4. Importer le certificat de distribution ────────────────────────────
+      - name: Import signing certificate
+        env:
+          CERTIFICATE_BASE64: ${{ secrets.CERTIFICATE_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.CERTIFICATE_PASSWORD }}
+        run: |
+          CERT_PATH="$RUNNER_TEMP/dist.p12"
+          KEYCHAIN_PATH="$RUNNER_TEMP/app.keychain"
+          KEYCHAIN_PASS="tempkeychain123"
+
+          echo -n "$CERTIFICATE_BASE64" | base64 --decode -o "$CERT_PATH"
+
+          security create-keychain -p "$KEYCHAIN_PASS" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASS" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" -P "$CERTIFICATE_PASSWORD" \
+            -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+          security set-key-partition-list \
+            -S apple-tool:,apple: -s -k "$KEYCHAIN_PASS" "$KEYCHAIN_PATH"
+
+      # ── 5. Installer le profil de provisionnement ────────────────────────────
+      - name: Install provisioning profile
+        env:
+          PROV_PROFILE_BASE64: ${{ secrets.PROV_PROFILE_BASE64 }}
+        run: |
+          PP_PATH="$RUNNER_TEMP/profile.mobileprovision"
+          echo -n "$PROV_PROFILE_BASE64" | base64 --decode -o "$PP_PATH"
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          cp "$PP_PATH" ~/Library/MobileDevice/Provisioning\ Profiles/
+
+      # ── 6. Récupérer le nom du profil ────────────────────────────────────────
+      - name: Read profile name
+        id: profile
+        run: |
+          PP_PATH="$RUNNER_TEMP/profile.mobileprovision"
+          NAME=$(security cms -D -i "$PP_PATH" | \
+            plutil -extract Name raw -)
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+
+      # ── 7. Archive ───────────────────────────────────────────────────────────
+      - name: Archive
+        working-directory: ios
+        run: |
+          xcodebuild archive \
+            -project Drunk.xcodeproj \
+            -scheme Drunk \
+            -configuration Release \
+            -archivePath "$RUNNER_TEMP/Drunk.xcarchive" \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY="iPhone Distribution" \
+            PROV_PROFILE="${{ steps.profile.outputs.name }}" \
+            CURRENT_PROJECT_VERSION=${{ github.run_number }} \
+            | xcpretty || true
+          # Vérifie que l'archive existe
+          ls "$RUNNER_TEMP/Drunk.xcarchive"
+
+      # ── 8. Export IPA ────────────────────────────────────────────────────────
+      - name: Export IPA
+        run: |
+          PROFILE_UUID=$(security cms -D \
+            -i "$RUNNER_TEMP/profile.mobileprovision" | \
+            plutil -extract UUID raw -)
+          cat > "$RUNNER_TEMP/ExportOptions.plist" << EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+            "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>app-store</string>
+            <key>teamID</key>
+            <string>${{ secrets.TEAM_ID }}</string>
+            <key>provisioningProfiles</key>
+            <dict>
+              <key>com.allain.drunk</key>
+              <string>$PROFILE_UUID</string>
+            </dict>
+            <key>signingStyle</key>
+            <string>manual</string>
+            <key>stripSwiftSymbols</key>
+            <true/>
+          </dict>
+          </plist>
+          EOF
+
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/Drunk.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+            -exportPath "$RUNNER_TEMP/export"
+
+      # ── 9. Upload vers TestFlight ─────────────────────────────────────────────
+      - name: Upload to TestFlight
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+        run: |
+          KEY_PATH="$RUNNER_TEMP/AuthKey.p8"
+          echo -n "$ASC_PRIVATE_KEY" | base64 --decode -o "$KEY_PATH"
+
+          xcrun altool --upload-app \
+            --type ios \
+            --file "$RUNNER_TEMP/export/Drunk.ipa" \
+            --apiKey "$ASC_KEY_ID" \
+            --apiIssuer "$ASC_ISSUER_ID" \
+            --private-key-path "$KEY_PATH" \
+            --verbose
+
+      # ── 10. Résumé ───────────────────────────────────────────────────────────
+      - name: Summary
+        if: success()
+        run: |
+          echo "## ✅ Build #${{ github.run_number }} uploadé sur TestFlight !" \
+            >> $GITHUB_STEP_SUMMARY
+          echo "Vérifie sur https://appstoreconnect.apple.com" \
+            >> $GITHUB_STEP_SUMMARY

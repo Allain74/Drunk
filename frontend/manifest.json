@@ -26,7 +26,7 @@
   "categories": ["lifestyle", "social"],
   "shortcuts": [
     {
-      "name": "Live TAC",
+      "name": "Live taux d'alcool",
       "url": "/?tab=live",
       "description": "Voir le taux d'alcool en temps réel"
     },
