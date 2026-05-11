@@ -305,28 +305,27 @@
 
     .no-session { opacity:0.45; }
 
-    /* ── Graphique modal ── */
-    /* Historique — plein écran (style modal-bg4) */
+    /* ── Graphique — bottom sheet compact ── */
     .modal-bg {
-      position:fixed; inset:0;
-      background:var(--bg);
+      position:fixed; inset:auto 0 0 0;
+      background:var(--card);
+      border-radius:20px 20px 0 0;
+      box-shadow:0 -8px 40px #00000030;
       z-index:510;
       display:flex; flex-direction:column;
       overflow:hidden;
-      transform:translateX(100%);
-      transition:transform .2s cubic-bezier(.4,0,.2,1);
+      transform:translateY(100%);
+      transition:transform .28s cubic-bezier(.4,0,.2,1);
     }
-    .modal-bg.open { transform:translateX(0); }
+    .modal-bg.open { transform:translateY(0); }
     .modal-chart-hd {
       display:flex; align-items:center; gap:10px;
-      padding:0 16px; min-height:52px;
-      padding-top:max(14px,env(safe-area-inset-top));
-      padding-bottom:12px;
-      background:var(--card); border-bottom:1px solid var(--border);
+      padding:12px 16px 10px;
+      border-bottom:1px solid var(--border);
       flex-shrink:0;
     }
-    .modal-chart-body { flex:1; overflow-y:auto; padding:20px 16px 40px; display:flex; flex-direction:column; }
-    .modal-chart-canvas-wrap { flex:0 0 auto; height:260px; max-height:260px; position:relative; }
+    .modal-chart-body { padding:12px 16px 16px; display:flex; flex-direction:column; }
+    .modal-chart-canvas-wrap { height:200px; position:relative; }
     /* (ancien modal card — inutilisé désormais) */
     .modal { display:none; }
     .modal-close { display:none; }
@@ -1251,17 +1250,22 @@
   <div id="notif-list"><div style="text-align:center;color:var(--sub);padding:40px 0;font-size:0.9rem">Aucune notification 🔕</div></div>
 </div>
 
-<!-- Modal graphique -->
+<!-- Fond semi-transparent derrière le graphique -->
+<div id="modal-bg-backdrop" onclick="closeModal()"
+  style="display:none;position:fixed;inset:0;z-index:509;background:#00000050"></div>
+
+<!-- Graphique — bottom sheet compact -->
 <div class="modal-bg" id="modal-bg">
+  <!-- Drag indicator -->
+  <div style="display:flex;justify-content:center;padding:8px 0 4px">
+    <div style="width:36px;height:4px;border-radius:2px;background:var(--border)"></div>
+  </div>
   <div class="modal-chart-hd">
-    <button class="modal4-back" onclick="closeModal()">
-      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
-      Retour
-    </button>
-    <span style="font-weight:900;font-size:1rem;flex:1" id="modal-title">Historique</span>
+    <span style="font-weight:900;font-size:0.95rem;flex:1" id="modal-title">📈 Historique TAC</span>
+    <button onclick="closeModal()" style="background:none;border:none;color:var(--sub);font-size:1.2rem;cursor:pointer;padding:4px;line-height:1">✕</button>
   </div>
   <div class="modal-chart-body">
-    <div id="chart-empty" style="display:none;color:var(--sub);text-align:center;padding:40px 0;font-size:0.9rem">Aucun verre enregistré pour le moment 🫗</div>
+    <div id="chart-empty" style="display:none;color:var(--sub);text-align:center;padding:20px 0;font-size:0.9rem">Aucun verre enregistré 🫗</div>
     <div class="modal-chart-canvas-wrap">
       <canvas id="chart"></canvas>
     </div>
@@ -2088,6 +2092,7 @@
 
   async function openChart(username) {
     document.getElementById('modal-title').textContent = `📈 ${username}`;
+    document.getElementById('modal-bg-backdrop').style.display = 'block';
     document.getElementById('modal-bg').classList.add('open');
 
     const emptyEl = document.getElementById('chart-empty');
@@ -2803,6 +2808,7 @@
 
   function closeModal() {
     document.getElementById('modal-bg').classList.remove('open');
+    document.getElementById('modal-bg-backdrop').style.display = 'none';
   }
 
   // ── Render ──
