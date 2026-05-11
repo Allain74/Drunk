@@ -2656,19 +2656,19 @@
   let _adminUsers = [];
   let _adminTarget = null;   // utilisateur sélectionné
 
-  // Code secret admin (en sessionStorage : disparaît quand on ferme l'onglet)
+  // Code secret admin (en localStorage : persiste tant qu'on ne le révoque pas)
   function _adminSecret() {
-    let s = sessionStorage.getItem('admin_secret');
+    let s = localStorage.getItem('admin_secret');
     if (!s) {
       s = prompt('🔐 Code admin (variable Render ADMIN_SECRET) :');
       if (!s) return null;
-      sessionStorage.setItem('admin_secret', s.trim());
       s = s.trim();
+      localStorage.setItem('admin_secret', s);
     }
     return s;
   }
   function _adminClearSecret() {
-    sessionStorage.removeItem('admin_secret');
+    localStorage.removeItem('admin_secret');
   }
   function _adminHandleAuthError(res) {
     if (res && res.error && /autoris/i.test(res.error)) {
