@@ -1235,6 +1235,45 @@ def get_bj_state(token: str):
     }
 
 
+@app.get("/blackjack/my-session/{telegram_id}")
+def get_my_bj_session(telegram_id: int):
+    """Retourne la session BJ active/waiting/finished la plus récente du joueur (pour reconnexion)."""
+    from data.database import _fetchone as _fo
+    row = _fo("""
+        SELECT bs.* FROM blackjack_sessions bs
+        JOIN blackjack_players bp ON bs.id = bp.session_id
+        WHERE bp.telegram_id=? AND bp.status != 'left'
+        ORDER BY bs.created_at DESC LIMIT 1
+    """, [telegram_id])
+    if not row:
+        return {"ok": False}
+    players = get_blackjack_players(row["id"])
+    creator = get_user(row["creator_id"])
+    player_data = []
+    for p in players:
+        u = get_user(p["telegram_id"])
+        player_data.append({
+            "telegram_id": p["telegram_id"],
+            "username": u["username"] if u else str(p["telegram_id"]),
+            "hand": json.loads(p["hand"]),
+            "status": p["status"],
+            "result": p["result"],
+            "bet": p["bet"],
+        })
+    dealer_hand = json.loads(row["dealer_hand"])
+    hide_dealer = row["status"] == "active"
+    return {
+        "ok": True,
+        "token": row["token"],
+        "status": row["status"],
+        "creator_id": row["creator_id"],
+        "creator": creator["username"] if creator else "?",
+        "dealer_hand": ([dealer_hand[0], "?"] if dealer_hand else []) if hide_dealer else dealer_hand,
+        "dealer_value": hand_value(dealer_hand) if not hide_dealer else None,
+        "players": player_data,
+    }
+
+
 @app.get("/blackjack/sessions")
 async def list_bj_sessions():
     """Liste toutes les sessions blackjack en attente ou actives."""

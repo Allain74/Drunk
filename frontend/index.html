@@ -1428,14 +1428,9 @@
     document.getElementById('social-list-overlay')?.remove();
     // Avatar fullscreen
     document.getElementById('avatar-fs-overlay')?.remove();
-    // BJ : nettoyer l'état WS pour éviter la boucle de reconnexion
-    if (_bjToken) {
-      if (_bjWs) { _bjWs.onclose = null; _bjWs.onerror = null; _bjWs.close(); _bjWs = null; }
-      _bjToken = null; _bjLastState = null;
-      _bjStopPoll();
-      document.getElementById('bj-lobby').style.display = '';
-      document.getElementById('bj-game-view').style.display = 'none';
-    }
+    // BJ : on ferme juste l'overlay visuellement MAIS on garde _bjToken intact
+    // → openBlackjack() détecte qu'une session est en cours et y retourne directement
+    // (pas de _bjToken = null ici pour ne pas perdre la partie en cours)
   }
 
   function showClassementSub(sub) {
@@ -3560,24 +3555,34 @@ function openBlackjack() {
   if (!myTid) { showTab('profil'); showToast('Connecte-toi d\'abord'); return; }
   document.getElementById('bj-overlay').classList.add('open');
   _bjRefreshCoins();
+  // Si on est déjà dans une session (token mémorisé), retourner direct au jeu
+  if (_bjToken) {
+    document.getElementById('bj-lobby').style.display = 'none';
+    document.getElementById('bj-game-view').style.display = 'flex';
+    document.getElementById('bj-game-view').style.flexDirection = 'column';
+    document.getElementById('bj-game-view').style.flex = '1';
+    document.getElementById('bj-game-view').style.overflow = 'hidden';
+    // Reconnect WS si coupé
+    if (!_bjWs || _bjWs.readyState !== WebSocket.OPEN) _bjWsConnect();
+    _bjStartPoll();
+    // Refresh état immédiat
+    fetch(`${API}/blackjack/${_bjToken}/state`).then(r => r.json()).then(s => { if (s.ok) _bjRender(s); }).catch(() => {});
+    return;
+  }
   bjLoadSessions();
-  // Si déjà dans une session, aller direct au jeu
+  // Si pas de token mémorisé, chercher une session existante
   _bjCheckExistingSession();
 }
 
 function closeBlackjack() {
-  // Si on est dans la vue jeu → retour au lobby BJ (pas fermeture)
-  const gameView = document.getElementById('bj-game-view');
-  if (gameView && gameView.style.display !== 'none') {
-    bjBackToLobby();
-    return;
-  }
-  // On est dans le lobby → ferme l'overlay complètement
+  // Ferme juste l'overlay visuellement — le token + WS + poll restent actifs
+  // Quand l'utilisateur rouvre BJ, openBlackjack() détecte _bjToken et rebranche le jeu
   document.getElementById('bj-overlay').classList.remove('open');
-  if (_bjWs) { _bjWs.close(); _bjWs = null; }
-  _bjToken = null; _bjLastState = null;
-  document.getElementById('bj-lobby').style.display = '';
-  document.getElementById('bj-join-modal').style.display = 'none';
+  if (!_bjToken) {
+    // Lobby sans session active → cleanup complet
+    document.getElementById('bj-lobby').style.display = '';
+    document.getElementById('bj-join-modal').style.display = 'none';
+  }
 }
 
 function bjBackToLobby() {
@@ -3600,13 +3605,11 @@ async function _bjRefreshCoins() {
 }
 
 async function _bjCheckExistingSession() {
+  // Utilise le nouvel endpoint dédié qui retourne n'importe quel statut (waiting/active/finished)
   try {
-    const sessions = await fetch(`${API}/blackjack/sessions`).then(r => r.json());
-    const mine = sessions.find(s => s.players.some(p => Number(p.telegram_id) === Number(myTid)));
-    // Auto-rejoindre UNIQUEMENT si la partie est déjà lancée (reconnexion mi-partie)
-    // Si en attente → on reste dans le lobby, l'utilisateur choisit
-    if (mine && mine.status === 'active') {
-      _bjToken = mine.token;
+    const s = await fetch(`${API}/blackjack/my-session/${myTid}`).then(r => r.json());
+    if (s.ok && s.token) {
+      _bjToken = s.token;
       bjEnterGame();
     }
   } catch(e) {}
