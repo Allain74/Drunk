@@ -16,6 +16,7 @@ from core.drinks import DRINKS, list_drinks_text
 from core.widmark import alcohol_grams, total_bac, bac_label, sober_in_hours
 from core.recap import build_weekly_recap
 from core.blackjack import new_deck, hand_value, is_blackjack, display_hand, dealer_should_hit
+from core.bj_broadcast import _bj_clients
 from data.database import (
     init_db, upsert_user, get_user, get_user_by_username, get_all_users,
     start_session, get_active_session, log_drink, get_session_drinks,
@@ -1212,9 +1213,12 @@ async def _bj_action(send_func, tid: int, action: str, session: dict, bot=None) 
     else:
         return False
 
-    # Vérifier si tous les joueurs ont terminé leur tour
+    # Vérifier si tous les joueurs ACTIFS ont terminé leur tour
+    # (exclure waiting_next, left, waiting qui ne jouent pas cette main)
     players = get_blackjack_players(session["id"])
-    all_done = all(p["status"] in ("stand", "bust") for p in players)
+    active = [p for p in players
+              if p["status"] not in ("waiting_next", "left", "waiting")]
+    all_done = bool(active) and all(p["status"] in ("stand", "bust", "done") for p in active)
     if not all_done:
         return True
 
@@ -1228,12 +1232,14 @@ async def _bj_action(send_func, tid: int, action: str, session: dict, bot=None) 
         status="finished"
     )
 
-    # Calculer résultats
-    for p in players:
+    # Calculer résultats (seulement les joueurs actifs non-bust/non-done)
+    for p in active:
         p_hand = json.loads(p["hand"])
         bet = p["bet"]
         if p["status"] == "bust":
             update_blackjack_player(session["id"], p["telegram_id"], result="lose")
+        elif p["status"] == "done":
+            pass  # blackjack déjà traité
         elif dealer_val > 21 or hand_value(p_hand) > dealer_val:
             add_coins(p["telegram_id"], bet * 2, "Blackjack gagné")
             update_blackjack_player(session["id"], p["telegram_id"], result="win")
@@ -1242,6 +1248,40 @@ async def _bj_action(send_func, tid: int, action: str, session: dict, bot=None) 
             update_blackjack_player(session["id"], p["telegram_id"], result="push")
         else:
             update_blackjack_player(session["id"], p["telegram_id"], result="lose")
+
+    # Broadcast WS aux clients web (si des clients sont connectés sur ce token)
+    token = session.get("token")
+    if token and _bj_clients.get(token):
+        from data.database import get_user as _get_user, _fetchone as _fo
+        # Relire dealer_hand depuis DB (il vient d'être mis à jour)
+        _sess_row = _fo("SELECT dealer_hand FROM blackjack_sessions WHERE id=?", [session["id"]])
+        dealer_h = json.loads(_sess_row["dealer_hand"]) if _sess_row else dealer_hand
+        all_players = get_blackjack_players(session["id"])
+        state_payload = json.dumps({
+            "ok": True,
+            "status": "finished",
+            "creator_id": session["creator_id"],
+            "dealer_hand": dealer_h,
+            "dealer_value": hand_value(dealer_h),
+            "players": [
+                {
+                    "telegram_id": p["telegram_id"],
+                    "username": (_get_user(p["telegram_id"]) or {}).get("username", str(p["telegram_id"])),
+                    "hand": json.loads(p["hand"]),
+                    "status": p["status"],
+                    "result": p["result"],
+                    "bet": p["bet"],
+                }
+                for p in all_players
+            ],
+        })
+        dead = set()
+        for client in list(_bj_clients.get(token, set())):
+            try:
+                await client.send_text(state_payload)
+            except Exception:
+                dead.add(client)
+        _bj_clients.get(token, set()).difference_update(dead)
 
     # Envoyer résultats finaux à chaque joueur
     players = get_blackjack_players(session["id"])

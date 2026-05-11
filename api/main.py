@@ -98,7 +98,7 @@ async def _notify_followers(actor_id: int, title: str, body: str, url: str = "/"
 _TG_NOTIFS = False
 
 _ws_clients: set[WebSocket] = set()
-_bj_clients: dict[str, set[WebSocket]] = {}
+from core.bj_broadcast import _bj_clients          # dict partagé avec bot.py
 _bot_app = None
 _danger_notified: dict[int, datetime] = {}
 # (drinker_id, follower_id) → dernière notif "ami ivre" envoyée
