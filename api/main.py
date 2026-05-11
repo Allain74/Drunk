@@ -801,6 +801,7 @@ def get_coins_endpoint():
     for b in balances:
         txs = get_transactions(b["telegram_id"], 10)
         result.append({
+            "telegram_id": b["telegram_id"],
             "username": b["username"],
             "coins": b["coins"] or 0,
             "transactions": [
@@ -809,6 +810,13 @@ def get_coins_endpoint():
             ],
         })
     return result
+
+
+@app.get("/balance/{telegram_id}")
+def get_user_balance(telegram_id: int):
+    """Retourne le solde de pièces d'un utilisateur."""
+    bal = get_coins(telegram_id)
+    return {"ok": True, "balance": bal or 0}
 
 
 @app.get("/users")
