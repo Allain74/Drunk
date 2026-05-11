@@ -887,6 +887,29 @@
     }
     .table-scroll table { min-width: 480px; }
 
+    /* ── Cards de classement (mobile-first) ── */
+    .rank-list { display: flex; flex-direction: column; gap: 8px; }
+    .rank-card {
+      display: flex; align-items: center; gap: 12px;
+      background: var(--card); border-radius: 14px; padding: 12px 14px;
+      box-shadow: var(--shadow); cursor: pointer; transition: transform .12s;
+    }
+    .rank-card:active { transform: scale(0.985); }
+    .rank-pos {
+      flex: 0 0 32px; text-align: center; font-size: 1.15rem; font-weight: 800;
+      color: var(--sub);
+    }
+    .rank-pos.medal { font-size: 1.5rem; }
+    .rank-body { flex: 1 1 0; min-width: 0; }
+    .rank-name { font-weight: 700; font-size: 0.95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .rank-sub { font-size: 0.75rem; color: var(--sub); margin-top: 2px; }
+    .rank-stat { flex: 0 0 auto; text-align: right; }
+    .rank-stat-val { font-weight: 800; font-size: 1.05rem; }
+    .rank-stat-lbl { font-size: 0.68rem; color: var(--sub); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 1px; }
+    .rank-empty { text-align: center; color: var(--sub); padding: 40px 16px; font-size: 0.9rem; }
+    .rank-loading { text-align: center; color: var(--sub); padding: 24px 16px; font-size: 0.85rem; }
+    .rank-loading::after { content: ' ⏳'; }
+
     /* ── Safe area iOS (notch + home indicator) ── */
     body {
       padding-top:    max(20px, env(safe-area-inset-top));
@@ -1099,24 +1122,14 @@
     <button class="sub-nav-btn"        id="sub-bj"    onclick="showClassementSub('bj')">🎮 Jeux</button>
   </div>
   <div id="classement-stats">
-    <div class="table-scroll">
-      <table class="palmares-table">
-        <thead><tr><th>#</th><th>Joueur</th><th>Doses total</th><th>Moy./jour</th><th>Record ever</th><th>Verres</th><th>Alcool pur</th></tr></thead>
-        <tbody id="palmares-tbody"></tbody>
-      </table>
-    </div>
+    <div id="palmares-list" class="rank-list"></div>
   </div>
   <div id="classement-thune" style="display:none">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
       <span style="font-weight:700;font-size:1rem">💰 Classement de la thune</span>
       <button onclick="openCoinsHelp()" style="background:var(--border);border:none;border-radius:50%;width:28px;height:28px;font-size:0.85rem;font-weight:700;cursor:pointer;color:var(--sub);display:flex;align-items:center;justify-content:center;flex-shrink:0">?</button>
     </div>
-    <div class="table-scroll">
-      <table class="thune-table">
-        <thead><tr><th>#</th><th>Joueur</th><th>pièces</th></tr></thead>
-        <tbody id="thune-tbody"></tbody>
-      </table>
-    </div>
+    <div id="thune-list" class="rank-list"></div>
   </div>
 
   <!-- Modale aide pièces -->
@@ -1145,21 +1158,11 @@
     </div>
     <!-- Classement Blackjack -->
     <div id="jeu-blackjack">
-      <div class="table-scroll">
-        <table class="palmares-table">
-          <thead><tr><th>#</th><th>Joueur</th><th>Parties</th><th>Gagnées</th><th>Perdues</th><th>Égalités</th><th>Win%</th></tr></thead>
-          <tbody id="bj-stats-tbody"></tbody>
-        </table>
-      </div>
+      <div id="bj-stats-list" class="rank-list"></div>
     </div>
     <!-- Classement Paris -->
     <div id="jeu-paris" style="display:none">
-      <div class="table-scroll">
-        <table class="palmares-table">
-          <thead><tr><th>#</th><th>Joueur</th><th>Paris</th><th>Gagnés</th><th>Perdus</th><th>Win%</th><th>Net 🪙</th></tr></thead>
-          <tbody id="paris-stats-tbody"></tbody>
-        </table>
-      </div>
+      <div id="paris-stats-list" class="rank-list"></div>
     </div>
   </div>
 </div>
@@ -2938,12 +2941,34 @@
     } catch(e) { err.textContent = 'Erreur réseau.'; err.style.display = 'block'; }
   }
 
+  // ── Helper commun cards de classement ──
+  const _MEDALS = ['🥇','🥈','🥉'];
+  function _rankCard({pos, username, isAdm, mainVal, mainLbl, subTxt, onClick}) {
+    const posClass = pos <= 3 ? 'rank-pos medal' : 'rank-pos';
+    const posTxt = pos <= 3 ? _MEDALS[pos-1] : '#' + pos;
+    const nameHtml = isAdm
+      ? `<span class="admin-name">${esc(username)}</span>`
+      : esc(username);
+    const click = onClick ? ` onclick="${onClick}"` : '';
+    return `<div class="rank-card"${click}>
+      <div class="${posClass}">${posTxt}</div>
+      <div class="rank-body">
+        <div class="rank-name">${nameHtml}</div>
+        ${subTxt ? `<div class="rank-sub">${subTxt}</div>` : ''}
+      </div>
+      <div class="rank-stat">
+        <div class="rank-stat-val">${mainVal}</div>
+        ${mainLbl ? `<div class="rank-stat-lbl">${mainLbl}</div>` : ''}
+      </div>
+    </div>`;
+  }
+
   // ── Palmarès ──
   let _palmares = [];
 
   function _renderPalmares() {
-    const tbody = document.getElementById('palmares-tbody');
-    if (!tbody) return;
+    const box = document.getElementById('palmares-list');
+    if (!box) return;
     const visible = myTid
       ? _palmares.filter(u => {
           const tid = getTidByName(u.username);
@@ -2951,32 +2976,39 @@
           return tid === myTid || followingSet.has(tid) || isAdmin(tid);
         })
       : _palmares;
-    const medals = ['🥇','🥈','🥉'];
-    tbody.innerHTML = visible.map((u,i) => {
+    if (!visible.length) {
+      box.innerHTML = `<div class="rank-empty">Aucune donnée</div>`;
+      return;
+    }
+    box.innerHTML = visible.map((u, i) => {
       const tid = getTidByName(u.username);
       const isAdm = tid && isAdmin(tid);
-      const nameHtml = isAdm ? `<span class="admin-name">${esc(u.username)}</span>` : `<strong>${esc(u.username)}</strong>`;
-      return `<tr onclick="openModal2('${esc(u.username)}')">
-        <td>${medals[i]||i+1}</td><td>${nameHtml}</td>
-        <td>${(u.total_alc_g/10).toFixed(1)}</td><td>${u.avg_doses_per_day}</td>
-        <td style="color:#f97316;font-weight:700">${u.max_bac > 0 ? u.max_bac+' g/L' : '—'}</td>
-        <td>${u.total_drinks}</td>
-        <td>${u.total_alc_g.toFixed(0)}g</td>
-      </tr>`;
-    }).join('') || `<tr><td colspan="7" style="text-align:center;color:var(--sub)">Aucune donnée</td></tr>`;
+      const doses = (u.total_alc_g/10).toFixed(1);
+      const recordTxt = u.max_bac > 0 ? `record ${u.max_bac} g/L` : '';
+      const subTxt = `${u.total_drinks} verre${u.total_drinks>1?'s':''}${recordTxt ? ' · ' + recordTxt : ''}`;
+      return _rankCard({
+        pos: i+1, username: u.username, isAdm,
+        mainVal: doses, mainLbl: 'doses', subTxt,
+        onClick: `openModal2('${esc(u.username)}')`,
+      });
+    }).join('');
   }
 
   async function loadPalmares() {
-    const tbody = document.getElementById('palmares-tbody');
+    const box = document.getElementById('palmares-list');
+    if (!box) return;
     if (!myTid) {
-      if (tbody) tbody.innerHTML = `<tr><td colspan="7">${_loginCta('Classement réservé aux membres')}</td></tr>`;
+      box.innerHTML = _loginCta('Classement réservé aux membres');
       return;
     }
-    // Affichage immédiat avec cache
     if (_palmares.length) _renderPalmares();
-    // Fetch en arrière-plan puis re-render
-    _palmares = await fetch(`${API}/alltime`).then(r=>r.json());
-    _renderPalmares();
+    else box.innerHTML = `<div class="rank-loading">Chargement</div>`;
+    try {
+      _palmares = await fetch(`${API}/alltime`).then(r=>r.json());
+      _renderPalmares();
+    } catch(e) {
+      if (!_palmares.length) box.innerHTML = `<div class="rank-empty">Erreur de chargement</div>`;
+    }
   }
 
   function openModal2(username) {
@@ -3091,96 +3123,125 @@
   // ── Thune ──
   let _thune = [];
 
-  async function loadThune() {
-    const tbody = document.getElementById('thune-tbody');
-    if (!myTid) {
-      if (tbody) tbody.innerHTML = `<tr><td colspan="3">${_loginCta('Classement réservé aux membres')}</td></tr>`;
+  function _renderThune() {
+    const box = document.getElementById('thune-list');
+    if (!box) return;
+    if (!_thune.length) {
+      box.innerHTML = `<div class="rank-empty">Aucune donnée</div>`;
       return;
     }
-    _thune = await fetch(`${API}/coins`).then(r => r.json());
-    const medals = ['🥇','🥈','🥉'];
-    tbody.innerHTML = _thune.map((u, i) => {
+    box.innerHTML = _thune.map((u, i) => {
       const tid = getTidByName(u.username);
       const isAdm = tid && isAdmin(tid);
-      const nameHtml = isAdm
-        ? `<span class="admin-name">${esc(u.username)}</span>`
-        : `<strong>${esc(u.username)}</strong>`;
-      return `
-      <tr onclick="openModal3('${esc(u.username)}')">
-        <td>${medals[i] || i+1}</td>
-        <td>${nameHtml}</td>
-        <td><span class="coin-badge">🪙 ${u.coins}</span></td>
-      </tr>`;
+      return _rankCard({
+        pos: i+1, username: u.username, isAdm,
+        mainVal: '🪙 ' + u.coins, mainLbl: '',
+        onClick: `openModal3('${esc(u.username)}')`,
+      });
     }).join('');
   }
 
-  // ── BJ Stats ──
-  async function loadBjStats() {
-    const tbody = document.getElementById('bj-stats-tbody');
+  async function loadThune() {
+    const box = document.getElementById('thune-list');
+    if (!box) return;
     if (!myTid) {
-      if (tbody) tbody.innerHTML = `<tr><td colspan="7">${_loginCta('Classement réservé aux membres')}</td></tr>`;
+      box.innerHTML = _loginCta('Classement réservé aux membres');
       return;
     }
-    const all = await fetch(`${API}/blackjack/stats/all`).then(r => r.json()).catch(() => []);
-    // Filtre par follows (même logique que Palmarès)
-    const visible = all.filter(u => {
+    if (_thune.length) _renderThune();
+    else box.innerHTML = `<div class="rank-loading">Chargement</div>`;
+    try {
+      _thune = await fetch(`${API}/coins`).then(r => r.json());
+      _renderThune();
+    } catch(e) {
+      if (!_thune.length) box.innerHTML = `<div class="rank-empty">Erreur de chargement</div>`;
+    }
+  }
+
+  // ── BJ Stats ──
+  let _bjStats = [];
+
+  function _renderBjStats() {
+    const box = document.getElementById('bj-stats-list');
+    if (!box) return;
+    const visible = _bjStats.filter(u => {
       if (!u.telegram_id) return false;
       return u.telegram_id === myTid || followingSet.has(u.telegram_id) || isAdmin(u.telegram_id);
     }).sort((a, b) => b.played - a.played);
-    const medals = ['🥇','🥈','🥉'];
-    tbody.innerHTML = visible.map((u, i) => {
+    if (!visible.length) {
+      box.innerHTML = `<div class="rank-empty">Aucune partie jouée pour l'instant.</div>`;
+      return;
+    }
+    box.innerHTML = visible.map((u, i) => {
       const isAdm = isAdmin(u.telegram_id);
-      const nameHtml = isAdm
-        ? `<span class="admin-name">${esc(u.username)}</span>`
-        : `<strong>${esc(u.username)}</strong>`;
       const winPct = u.played > 0 ? Math.round((u.won / u.played) * 100) : 0;
-      const color = winPct >= 60 ? '#22c55e' : winPct >= 40 ? '#f97316' : '#ef4444';
-      return `<tr>
-        <td>${medals[i] || i+1}</td>
-        <td>${nameHtml}</td>
-        <td>${u.played}</td>
-        <td style="color:#22c55e;font-weight:700">${u.won}</td>
-        <td style="color:#ef4444;font-weight:700">${u.lost}</td>
-        <td style="color:var(--sub)">${u.push}</td>
-        <td style="color:${color};font-weight:700">${winPct}%</td>
-      </tr>`;
-    }).join('') || `<tr><td colspan="7" style="text-align:center;color:var(--sub);padding:24px">Aucune partie jouée pour l'instant.</td></tr>`;
+      return _rankCard({
+        pos: i+1, username: u.username, isAdm,
+        mainVal: winPct + '%', mainLbl: 'wins',
+        subTxt: `${u.played} parties · ${u.won}V · ${u.lost}D`,
+      });
+    }).join('');
+  }
+
+  async function loadBjStats() {
+    const box = document.getElementById('bj-stats-list');
+    if (!box) return;
+    if (!myTid) {
+      box.innerHTML = _loginCta('Classement réservé aux membres');
+      return;
+    }
+    if (_bjStats.length) _renderBjStats();
+    else box.innerHTML = `<div class="rank-loading">Chargement</div>`;
+    try {
+      _bjStats = await fetch(`${API}/blackjack/stats/all`).then(r => r.json());
+      _renderBjStats();
+    } catch(e) {
+      if (!_bjStats.length) box.innerHTML = `<div class="rank-empty">Erreur de chargement</div>`;
+    }
   }
 
   // ── Paris Stats ──
-  async function loadParisStats() {
-    const tbody = document.getElementById('paris-stats-tbody');
-    if (!tbody) return;
-    if (!myTid) {
-      tbody.innerHTML = `<tr><td colspan="7">${_loginCta('Classement réservé aux membres')}</td></tr>`;
-      return;
-    }
-    const all = await fetch(`${API}/bets/stats/all`).then(r => r.json()).catch(() => []);
-    const visible = all.filter(u => {
+  let _parisStats = [];
+
+  function _renderParisStats() {
+    const box = document.getElementById('paris-stats-list');
+    if (!box) return;
+    const visible = _parisStats.filter(u => {
       if (!u.telegram_id) return false;
       return u.telegram_id === myTid || followingSet.has(u.telegram_id) || isAdmin(u.telegram_id);
-    });
-    const medals = ['🥇','🥈','🥉'];
-    tbody.innerHTML = visible.map((u, i) => {
+    }).sort((a, b) => (b.coins_gained || 0) - (a.coins_gained || 0));
+    if (!visible.length) {
+      box.innerHTML = `<div class="rank-empty">Aucun pari joué pour l'instant.</div>`;
+      return;
+    }
+    box.innerHTML = visible.map((u, i) => {
       const isAdm = isAdmin(u.telegram_id);
-      const nameHtml = isAdm
-        ? `<span class="admin-name">${esc(u.username)}</span>`
-        : `<strong>${esc(u.username)}</strong>`;
       const winPct = u.played > 0 ? Math.round((u.won / u.played) * 100) : 0;
-      const color  = winPct >= 60 ? '#22c55e' : winPct >= 40 ? '#f97316' : '#ef4444';
-      const net    = u.coins_gained;
-      const netCol = net >= 0 ? '#22c55e' : '#ef4444';
-      const netStr = (net >= 0 ? '+' : '') + net + ' 🪙';
-      return `<tr>
-        <td>${medals[i] || i+1}</td>
-        <td>${nameHtml}</td>
-        <td>${u.played}</td>
-        <td style="color:#22c55e;font-weight:700">${u.won}</td>
-        <td style="color:#ef4444;font-weight:700">${u.lost}</td>
-        <td style="color:${color};font-weight:700">${winPct}%</td>
-        <td style="color:${netCol};font-weight:700">${netStr}</td>
-      </tr>`;
-    }).join('') || `<tr><td colspan="7" style="text-align:center;color:var(--sub);padding:24px">Aucun pari joué pour l'instant.</td></tr>`;
+      const net = u.coins_gained;
+      const netStr = (net >= 0 ? '+' : '') + net;
+      return _rankCard({
+        pos: i+1, username: u.username, isAdm,
+        mainVal: netStr + ' 🪙', mainLbl: 'net',
+        subTxt: `${u.played} paris · ${winPct}% wins`,
+      });
+    }).join('');
+  }
+
+  async function loadParisStats() {
+    const box = document.getElementById('paris-stats-list');
+    if (!box) return;
+    if (!myTid) {
+      box.innerHTML = _loginCta('Classement réservé aux membres');
+      return;
+    }
+    if (_parisStats.length) _renderParisStats();
+    else box.innerHTML = `<div class="rank-loading">Chargement</div>`;
+    try {
+      _parisStats = await fetch(`${API}/bets/stats/all`).then(r => r.json());
+      _renderParisStats();
+    } catch(e) {
+      if (!_parisStats.length) box.innerHTML = `<div class="rank-empty">Erreur de chargement</div>`;
+    }
   }
 
   function openModal3(username) {
