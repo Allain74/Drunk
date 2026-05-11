@@ -833,16 +833,19 @@ def get_user_balance(telegram_id: int):
 def get_all_users_endpoint():
     admin_id = int(os.environ.get("ADMIN_ID", "0"))
     users = get_all_users()
-    return [
-        {
-            "telegram_id": u["telegram_id"],
-            "username":    u["username"],
+    result = []
+    for u in users:
+        uid = u.get("telegram_id") or u.get("user_id")
+        if uid is None:
+            continue
+        result.append({
+            "telegram_id": uid,
+            "username":    u.get("username"),
             "gender":      u.get("gender", "homme"),
-            "is_admin":    u["telegram_id"] == admin_id,
-            "is_premium":  u["telegram_id"] == admin_id or bool(u.get("is_premium")),
-        }
-        for u in users
-    ]
+            "is_admin":    uid == admin_id,
+            "is_premium":  uid == admin_id or bool(u.get("is_premium")),
+        })
+    return result
 
 @app.get("/following/{telegram_id}")
 def get_following_endpoint(telegram_id: int):
