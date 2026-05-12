@@ -1468,6 +1468,14 @@
     localStorage.setItem('authV', '2');
   }
 
+  // ── Parrainage : capture ?ref=<tid> au load et le persiste ─────────────────
+  try {
+    const _refParam = new URLSearchParams(location.search).get('ref');
+    if (_refParam && /^\d+$/.test(_refParam)) {
+      localStorage.setItem('referrer_id', _refParam);
+    }
+  } catch(e) {}
+
   const COLORS  = ['#22c55e','#84cc16','#eab308','#f97316','#ef4444','#a855f7'];
   const EMOJIS  = ['😶','🙂','😄','😵','🤢','💀'];
   const LABELS  = ['Sobre','Léger','Alcoolisé','⚠️ Limite','Ivre','Danger'];
@@ -2461,6 +2469,94 @@
   }
 
   // ── Profil tab ──
+  function _renderLevelCard(me) {
+    const box = document.getElementById('profil-level-content');
+    if (!box || !me.level) return;
+    const lvl = me.level;
+    const streak = (me.streak && me.streak.current) || 0;
+    const longest = (me.streak && me.streak.longest) || 0;
+    box.innerHTML = `
+      <div style="display:flex;align-items:center;gap:12px;text-align:left">
+        <div style="font-size:2.2rem;line-height:1">${lvl.emoji}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:800;font-size:1rem">Niveau ${lvl.level} — ${lvl.title}</div>
+          <div style="font-size:0.78rem;color:var(--sub);margin-top:2px">${lvl.xp} XP / ${lvl.next_threshold} XP</div>
+          <div style="margin-top:6px;height:6px;background:var(--border);border-radius:99px;overflow:hidden">
+            <div style="height:100%;width:${lvl.progress_pct}%;background:linear-gradient(90deg,#6366f1,#a855f7);border-radius:99px"></div>
+          </div>
+        </div>
+      </div>
+      ${streak > 0 ? `
+        <div style="display:flex;align-items:center;gap:8px;margin-top:14px;padding:10px;background:rgba(249,115,22,0.08);border:1px solid rgba(249,115,22,0.3);border-radius:10px">
+          <div style="font-size:1.4rem">🔥</div>
+          <div style="flex:1">
+            <div style="font-weight:800;font-size:0.92rem">${streak} jour${streak>1?'s':''} d'affilée</div>
+            <div style="font-size:0.72rem;color:var(--sub)">Record perso : ${longest} jour${longest>1?'s':''}</div>
+          </div>
+        </div>
+      ` : ''}`;
+  }
+
+  function _renderBadges(badges) {
+    const box = document.getElementById('profil-badges-content');
+    const counter = document.getElementById('profil-badges-count');
+    if (!box || !Array.isArray(badges)) return;
+    const unlocked = badges.filter(b => b.unlocked);
+    if (counter) counter.textContent = `${unlocked.length} / ${badges.length}`;
+    if (!badges.length) {
+      box.innerHTML = '<div style="color:var(--sub);font-size:0.85rem;text-align:center;padding:8px 0">Aucun badge</div>';
+      return;
+    }
+    // Trie : débloqués d'abord
+    const sorted = [...badges].sort((a, b) => (b.unlocked ? 1 : 0) - (a.unlocked ? 1 : 0));
+    box.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(72px,1fr));gap:8px">${
+      sorted.map(b => `
+        <div title="${esc(b.name)} — ${esc(b.desc)}"
+             style="text-align:center;padding:10px 4px;border-radius:10px;background:${b.unlocked ? 'rgba(250,204,21,0.1)' : 'var(--bg)'};border:1px solid ${b.unlocked ? 'rgba(250,204,21,0.35)' : 'var(--border)'};opacity:${b.unlocked ? 1 : 0.35}">
+          <div style="font-size:1.5rem;line-height:1">${b.emoji}</div>
+          <div style="font-size:0.65rem;font-weight:700;margin-top:4px;line-height:1.2">${esc(b.name)}</div>
+        </div>
+      `).join('')
+    }</div>`;
+  }
+
+  function _renderRefSection(me) {
+    const linkEl = document.getElementById('profil-ref-link');
+    const countEl = document.getElementById('profil-ref-count');
+    if (linkEl) {
+      const base = location.origin + location.pathname.replace(/\/+$/, '');
+      linkEl.value = `${base}/?ref=${me.telegram_id}`;
+    }
+    if (countEl) {
+      const n = me.referrals_count || 0;
+      countEl.textContent = n > 0 ? `🎉 ${n} ami${n>1?'s':''} parrainé${n>1?'s':''}` : '';
+    }
+  }
+
+  function profilCopyRefLink() {
+    const inp = document.getElementById('profil-ref-link');
+    if (!inp) return;
+    try {
+      navigator.clipboard.writeText(inp.value);
+      showToast('📋 Lien copié !');
+    } catch(e) {
+      inp.select();
+      document.execCommand('copy');
+      showToast('📋 Lien copié !');
+    }
+  }
+
+  async function profilShareRefLink() {
+    const inp = document.getElementById('profil-ref-link');
+    if (!inp || !inp.value) return;
+    const text = `🍺 Rejoins-moi sur Drunk ! Avec mon lien on gagne tous les deux 200 🪙 :\n${inp.value}`;
+    if (navigator.share) {
+      try { await navigator.share({ title: 'Drunk 🍺', text, url: inp.value }); } catch(e) {}
+    } else {
+      profilCopyRefLink();
+    }
+  }
+
   async function loadProfil() {
     const box = document.getElementById('profil-content');
     if (!box) return;
@@ -2559,6 +2655,37 @@
           </div>
           <div class="p-username">@${esc(myName)}${isPremium ? ' <span style="font-size:0.85em;vertical-align:middle">👑</span>' : ''}</div>
           <div style="font-size:0.72rem;color:var(--sub);margin-top:4px">${isPremium ? 'Membre Premium' : 'Appuie sur la photo pour la changer'}</div>
+        </div>
+
+        <!-- Niveau / XP / Streak -->
+        <div class="p-card" id="profil-level-card">
+          <div class="p-card-label">Niveau</div>
+          <div id="profil-level-content" style="text-align:center;color:var(--sub);font-size:0.85rem">Chargement…</div>
+        </div>
+
+        <!-- Badges -->
+        <div class="p-card">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+            <div class="p-card-label" style="margin:0">🏅 Badges</div>
+            <span id="profil-badges-count" style="font-size:0.75rem;color:var(--sub);font-weight:700"></span>
+          </div>
+          <div id="profil-badges-content">
+            <div style="color:var(--sub);font-size:0.85rem;text-align:center;padding:8px 0">Chargement…</div>
+          </div>
+        </div>
+
+        <!-- Parrainage -->
+        <div class="p-card">
+          <div class="p-card-label">🎁 Invite des amis</div>
+          <p style="font-size:0.85rem;line-height:1.5;color:var(--sub);margin:4px 0 12px">
+            Partage ton lien : <strong>200 🪙</strong> pour toi ET ton pote dès qu'il s'inscrit.
+          </p>
+          <div style="display:flex;gap:8px">
+            <input id="profil-ref-link" readonly value="" style="flex:1;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.8rem;font-family:monospace;box-sizing:border-box"/>
+            <button class="admin-action-btn primary" onclick="profilCopyRefLink()">📋</button>
+          </div>
+          <button class="btn-primary" style="margin-top:10px" onclick="profilShareRefLink()">📲 Partager mon lien</button>
+          <div style="font-size:0.72rem;color:var(--sub);margin-top:6px;text-align:center" id="profil-ref-count"></div>
         </div>
 
         <!-- Infos -->
@@ -2688,7 +2815,7 @@
     // Mise à jour du bouton notifications
     updatePushBtn();
 
-    // Fetch /me → poids réel garanti
+    // Fetch /me → poids réel + gamification (XP, level, streak, badges_count)
     try {
       const meData = await fetch(`${API}/me/${myTid}`).then(r => r.json());
       if (meData && meData.ok) {
@@ -2697,7 +2824,15 @@
           poidsEl.value = meData.weight_kg;
           poidsEl.placeholder = 'ex: 75';
         }
+        _renderLevelCard(meData);
+        _renderRefSection(meData);
       }
+    } catch(e) {}
+
+    // Fetch badges
+    try {
+      const badges = await fetch(`${API}/badges/${myTid}`).then(r => r.json());
+      _renderBadges(badges);
     } catch(e) {}
 
     // Fetch pièces
@@ -3101,15 +3236,22 @@
     if (!pseudo || !poids || !pwd) { err.textContent = 'Tous les champs sont requis.'; err.style.display = 'block'; return; }
     if (pwd !== pwd2) { err.textContent = 'Les mots de passe ne correspondent pas.'; err.style.display = 'block'; return; }
     try {
+      const refId = localStorage.getItem('referrer_id') || null;
       const data = await fetch(`${API}/register`, {
         method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({username: pseudo, password: pwd, gender: window._ctGenre || 'homme', weight: parseFloat(poids)}),
+        body: JSON.stringify({
+          username: pseudo, password: pwd,
+          gender: window._ctGenre || 'homme',
+          weight: parseFloat(poids),
+          referrer_id: refId,
+        }),
       }).then(r => r.json());
       if (!data.ok) { err.textContent = data.error; err.style.display = 'block'; return; }
       myTid = data.telegram_id; myName = data.username;
       _saveAuth(data);
+      localStorage.removeItem('referrer_id');
       await loadFollowing(); loadFollowers(); updateIdentityBtn(); render(lastData);
-      showToast('✅ Compte créé ! Bienvenue 🍺');
+      showToast(refId ? '✅ Compte créé ! 🎁 +200 🪙 (bonus parrainage)' : '✅ Compte créé ! Bienvenue 🍺');
       loadProfil();
       autoSubscribePush();
     } catch(e) { err.textContent = 'Erreur réseau.'; err.style.display = 'block'; }
@@ -3848,6 +3990,12 @@
       }).then(r => r.json());
       if (!data.ok) { showToast('❌ ' + data.error); return; }
       showToast(`✅ Verre ajouté — ${data.bac.toFixed(2)} g/L`);
+      // Toasts pour les badges nouvellement débloqués
+      if (data.new_badges && data.new_badges.length) {
+        data.new_badges.forEach((b, i) => {
+          setTimeout(() => showToast(`🏅 Badge débloqué : ${b.emoji} ${b.name}`), 1200 * (i + 1));
+        });
+      }
     } catch(e) {
       showToast('❌ Erreur réseau');
     } finally {
