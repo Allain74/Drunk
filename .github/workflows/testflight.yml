@@ -1,13 +1,11 @@
 name: 🍺 TestFlight Deploy
 
+# Trigger uniquement manuel depuis GitHub Actions (clic sur "Run workflow").
+# L'app n'est pas distribuée sur l'AppStore pour l'instant ; ce workflow
+# nécessite des secrets Apple Dev (CERTIFICATE_BASE64, PROV_PROFILE_BASE64,
+# ASC_KEY_ID, ASC_ISSUER_ID, ASC_PRIVATE_KEY, TEAM_ID) pour fonctionner.
 on:
-  push:
-    branches: [main]
-    paths:
-      - "ios/**"
-      - "frontend/**"
-      - ".github/workflows/testflight.yml"
-  workflow_dispatch:  # Lancement manuel depuis GitHub
+  workflow_dispatch:
 
 jobs:
   deploy:
