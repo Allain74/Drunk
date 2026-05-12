@@ -4968,7 +4968,7 @@
     });
   }
 
-  async function quickDrink(drinkKey) {
+  function quickDrink(drinkKey) {
     if (!myTid) { showTab('profil'); return; }
     // Garde locale : bloque le double-clic accidentel
     const now = Date.now();
@@ -4982,38 +4982,44 @@
     _drinkButtonsDisabled(true);
     setTimeout(() => _drinkButtonsDisabled(false), DRINK_COOLDOWN_MS);
 
-    // Capture la position en parallèle (sans bloquer l'ajout du verre)
+    // ── OPTIMISTIC UI : toast immédiat, sans attendre le réseau (200-500ms RTT) ──
+    // Le user voit son verre confirmé instantanément. Le fetch tourne en
+    // background. Si erreur réseau ou refus serveur, on annule avec un toast
+    // correctif.
+    showToast('✅ Verre ajouté !');
+
+    // Capture la position en parallèle (sans bloquer)
     _refreshPosition();
 
-    try {
-      const payload = { telegram_id: myTid, drink_key: drinkKey };
-      if (_cachedPos) { payload.lat = _cachedPos.lat; payload.lon = _cachedPos.lon; }
-      const data = await fetch(`${API}/log-drink`, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify(payload),
-      }).then(r => r.json());
+    // Fetch en background (pas d'await)
+    const payload = { telegram_id: myTid, drink_key: drinkKey };
+    if (_cachedPos) { payload.lat = _cachedPos.lat; payload.lon = _cachedPos.lon; }
+    fetch(`${API}/log-drink`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload),
+    }).then(r => r.json()).then(data => {
       if (!data.ok) {
-        // Si le backend refuse, on libère immédiatement les boutons
         _lastDrinkAt = 0;
         _drinkButtonsDisabled(false);
-        showToast('❌ ' + data.error);
+        showToast('❌ ' + (data.error || 'Erreur'));
         return;
       }
-      showToast(`✅ Verre ajouté — ${data.bac.toFixed(2)} g/L`);
-      // Toasts pour les badges nouvellement débloqués
+      // Met à jour avec le BAC précis (après confirmation serveur)
+      if (typeof data.bac === 'number') {
+        setTimeout(() => showToast(`📊 ${data.bac.toFixed(2)} g/L`), 800);
+      }
       if (data.new_badges && data.new_badges.length) {
         data.new_badges.forEach((b, i) => {
-          setTimeout(() => showToast(`🏅 Badge débloqué : ${b.emoji} ${b.name}`), 1200 * (i + 1));
+          setTimeout(() => showToast(`🏅 Badge débloqué : ${b.emoji} ${b.name}`), 1500 + 1200 * i);
         });
       }
-      // Rafraîchit la section "Tes favoris"
       loadFavorites();
-    } catch(e) {
+    }).catch(() => {
       _lastDrinkAt = 0;
       _drinkButtonsDisabled(false);
-      showToast('❌ Erreur réseau');
-    }
+      showToast('❌ Erreur réseau — verre non enregistré');
+    });
   }
 
   async function undoDrink() {
