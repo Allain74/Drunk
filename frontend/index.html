@@ -1192,6 +1192,24 @@
   <div id="profil-content"></div>
 </div>
 
+<!-- ── Onboarding tuto 5 étapes (modal full-screen) ── -->
+<div id="onboarding-overlay" style="display:none;position:fixed;inset:0;background:linear-gradient(135deg,#6366f1,#a855f7);z-index:5000;color:white;flex-direction:column">
+  <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:24px;text-align:center">
+    <div style="max-width:340px">
+      <div id="onb-emoji" style="font-size:4rem;margin-bottom:20px;line-height:1"></div>
+      <div id="onb-title" style="font-size:1.6rem;font-weight:800;margin-bottom:14px;line-height:1.2"></div>
+      <div id="onb-body" style="font-size:1rem;line-height:1.55;opacity:0.95"></div>
+    </div>
+  </div>
+  <div style="padding:20px 24px 32px;display:flex;flex-direction:column;align-items:center;gap:16px">
+    <div id="onb-dots" style="display:flex;gap:6px"></div>
+    <div style="display:flex;gap:10px;width:100%;max-width:340px">
+      <button id="onb-skip" onclick="onbSkip()" style="flex:1;background:rgba(255,255,255,0.18);border:none;color:white;border-radius:12px;padding:14px;font-weight:700;font-size:0.92rem;cursor:pointer;font-family:inherit">Passer</button>
+      <button id="onb-next" onclick="onbNext()" style="flex:2;background:white;border:none;color:#6366f1;border-radius:12px;padding:14px;font-weight:800;font-size:1rem;cursor:pointer;font-family:inherit">Suivant →</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── Bottom Navigation ── -->
 <nav id="bottom-nav">
   <button class="nav-item" onclick="showTab('menu')">
@@ -1776,11 +1794,22 @@
     const tid = getTidByName(u.username);
     const adminClass = (tid && isAdmin(tid)) ? ' admin-name' : '';
     const avHtml = _avatarEl(tid, 32, (u.username||'?')[0].toUpperCase(), u.gender || 'homme', 'flex-shrink:0;', !!u.is_premium);
+    const levelBadge = u.level && u.level.emoji
+      ? `<span style="font-size:0.7rem;color:var(--sub);font-weight:700;flex-shrink:0" title="Niveau ${u.level.level} — ${esc(u.level.title)}">${u.level.emoji}</span>`
+      : '';
+    const streakBadge = (u.streak && u.streak > 0)
+      ? `<span style="font-size:0.7rem;color:#f97316;font-weight:700;flex-shrink:0">🔥${u.streak}</span>`
+      : '';
     return `
     <div class="card ${!u.has_session?'no-session':''}" onclick="openProfile('${esc(u.username)}',true)">
       <div class="card-stripe" style="background:${color}"></div>
       <div class="card-head">
-        <div style="display:flex;align-items:center;gap:8px;min-width:0">${avHtml}<div class="card-name${adminClass}" style="min-width:0">${esc(u.username)}</div></div>
+        <div style="display:flex;align-items:center;gap:6px;min-width:0">
+          ${avHtml}
+          <div class="card-name${adminClass}" style="min-width:0">${esc(u.username)}</div>
+          ${levelBadge}
+          ${streakBadge}
+        </div>
         <div class="card-emoji">${EMOJIS[lvl]}</div>
       </div>
       <div class="bac-block">
@@ -2768,6 +2797,7 @@
           <div class="p-card-label">Compte</div>
           <button class="p-action-btn" id="push-btn" onclick="togglePush()">🔔 Activer les notifications</button>
           <button class="p-action-btn" id="push-test-btn" onclick="testPush()" style="display:none">📨 Envoyer une notif test</button>
+          <button class="p-action-btn" onclick="localStorage.removeItem('onboarding_v1');onbShow()">🎓 Revoir le tuto</button>
           <button class="p-action-btn" onclick="logout();showTab('profil')">🚪 Se déconnecter</button>
           <button class="p-action-btn danger" onclick="openDeleteModal()">🗑️ Supprimer mon compte</button>
         </div>
@@ -3250,8 +3280,10 @@
       myTid = data.telegram_id; myName = data.username;
       _saveAuth(data);
       localStorage.removeItem('referrer_id');
+      localStorage.removeItem('onboarding_v1');  // force le tuto pour les nouveaux
       await loadFollowing(); loadFollowers(); updateIdentityBtn(); render(lastData);
       showToast(refId ? '✅ Compte créé ! 🎁 +200 🪙 (bonus parrainage)' : '✅ Compte créé ! Bienvenue 🍺');
+      setTimeout(onbShow, 400);
       loadProfil();
       autoSubscribePush();
     } catch(e) { err.textContent = 'Erreur réseau.'; err.style.display = 'block'; }
@@ -3776,6 +3808,52 @@
   }
 
   // ── Init ──
+  // ── Onboarding 5 étapes ────────────────────────────────────────────────────
+  const ONBOARDING_STEPS = [
+    { emoji: '🍺', title: 'Bienvenue sur Drunk !',  body: "L'app pour tracker tes soirées entre potes en temps réel — taux d'alcool, jeux, paris, et bien plus." },
+    { emoji: '🍻', title: 'Logge ce que tu bois',    body: "Va dans l'onglet Menu pour ajouter tes verres. Plus tu bois, plus tu montes en niveau et débloques des badges 🏅" },
+    { emoji: '👥', title: 'Suis tes amis',           body: "Dans Amis, retrouve tes potes et suis-les pour voir leur taux d'alcool en live sur la carte 📍" },
+    { emoji: '🎰', title: 'Joue et parie',           body: "Joue au Blackjack multijoueur 🃏 et défie tes amis avec des paris (verres, alcool max, coinflip). Gagne des 🪙 !" },
+    { emoji: '🎁', title: 'Invite tes amis',         body: "Dans ton Profil, partage ton lien magique : 200 🪙 offertes à toi ET ton pote dès qu'il s'inscrit 🚀" },
+  ];
+  let _onbStep = 0;
+
+  function onbShow() {
+    if (localStorage.getItem('onboarding_v1') === 'done') return;
+    if (!myTid) return; // seulement pour les utilisateurs connectés
+    _onbStep = 0;
+    _onbRender();
+    document.getElementById('onboarding-overlay').style.display = 'flex';
+  }
+
+  function _onbRender() {
+    const step = ONBOARDING_STEPS[_onbStep];
+    document.getElementById('onb-emoji').textContent = step.emoji;
+    document.getElementById('onb-title').textContent = step.title;
+    document.getElementById('onb-body').textContent  = step.body;
+    const dots = ONBOARDING_STEPS.map((_, i) =>
+      `<div style="width:8px;height:8px;border-radius:50%;background:${i === _onbStep ? 'white' : 'rgba(255,255,255,0.3)'};transition:background .2s"></div>`
+    ).join('');
+    document.getElementById('onb-dots').innerHTML = dots;
+    const lastStep = _onbStep === ONBOARDING_STEPS.length - 1;
+    document.getElementById('onb-next').textContent = lastStep ? "C'est parti ! 🚀" : 'Suivant →';
+    document.getElementById('onb-skip').style.display = lastStep ? 'none' : '';
+  }
+
+  function onbNext() {
+    if (_onbStep < ONBOARDING_STEPS.length - 1) {
+      _onbStep++;
+      _onbRender();
+    } else {
+      onbSkip();
+    }
+  }
+
+  function onbSkip() {
+    localStorage.setItem('onboarding_v1', 'done');
+    document.getElementById('onboarding-overlay').style.display = 'none';
+  }
+
   async function init() {
     updateIdentityBtn();
     // Affichage immédiat avec le cache (sans attendre les fetch)
