@@ -226,6 +226,24 @@ def init_db():
         )""")
     except Exception:
         pass
+    try:
+        _execute("ALTER TABLE users ADD COLUMN last_spin_at TEXT")
+    except Exception:
+        pass
+    try:
+        _execute("ALTER TABLE users ADD COLUMN discreet_mode INTEGER DEFAULT 0")
+    except Exception:
+        pass
+    try:
+        _execute("""CREATE TABLE IF NOT EXISTS challenge_claims (
+            user_id       INTEGER NOT NULL,
+            challenge_key TEXT NOT NULL,
+            week_iso      TEXT NOT NULL,
+            claimed_at    TEXT NOT NULL DEFAULT (datetime('now')),
+            PRIMARY KEY (user_id, challenge_key, week_iso)
+        )""")
+    except Exception:
+        pass
     _pipeline([
         ("""CREATE TABLE IF NOT EXISTS users (
             user_id     INTEGER PRIMARY KEY,

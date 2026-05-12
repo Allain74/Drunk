@@ -332,6 +332,9 @@ def build_snapshot() -> list[dict]:
     admin_id = int(os.environ.get("ADMIN_ID", "0"))
     result = []
     for uid, user in users.items():
+        # Mode discret : on saute complètement les users qui ne veulent pas être vus
+        if user.get("discreet_mode"):
+            continue
         drinks = drinks_by_user.get(uid, [])
         bac = total_bac(drinks, user["weight_kg"], user["gender"], now)
         # Peak BAC during current session (last 24h)
@@ -1029,6 +1032,7 @@ def get_me(telegram_id: int):
         "badges_total": len(BADGES),
         "streak": streak,
         "referrals_count": count_referrals(uid),
+        "discreet_mode": bool(user.get("discreet_mode")),
     }
 
 
@@ -1040,6 +1044,184 @@ def get_badges(telegram_id: int):
         {**b, "unlocked": b["key"] in unlocked}
         for b in all_badges_meta()
     ]
+
+
+# ── Roue de la fortune ────────────────────────────────────────────────────────
+
+# (poids, montant_coins, label). Le total des poids n'a pas besoin de faire 1.
+SPIN_WHEEL = [
+    (30,  10,   "10 🪙"),
+    (25,  25,   "25 🪙"),
+    (20,  50,   "50 🪙"),
+    (15,  100,  "100 🪙"),
+    (7,   250,  "250 🪙"),
+    (3,   1000, "JACKPOT 1000 🪙"),
+]
+
+
+def _can_spin_today(user) -> bool:
+    last = (user or {}).get("last_spin_at")
+    if not last:
+        return True
+    try:
+        last_dt = datetime.fromisoformat(last)
+        return last_dt.date() < datetime.now(timezone.utc).date()
+    except Exception:
+        return True
+
+
+@app.get("/spin/{telegram_id}")
+def get_spin_status(telegram_id: int):
+    """Retourne si l'utilisateur peut tourner la roue aujourd'hui."""
+    user = get_user(telegram_id)
+    if not user:
+        return {"ok": False}
+    return {"ok": True, "can_spin": _can_spin_today(user), "wheel": [{"coins": w[1], "label": w[2]} for w in SPIN_WHEEL]}
+
+
+@app.post("/spin")
+async def post_spin(request: Request):
+    """Fait tourner la roue : crédite des coins. 1x/jour."""
+    body = await request.json()
+    telegram_id = _resolve_user(request, body)
+    if not telegram_id:
+        return {"ok": False, "error": "Non authentifié"}
+    user = get_user(telegram_id)
+    if not user:
+        return {"ok": False, "error": "Utilisateur introuvable"}
+    if not _can_spin_today(user):
+        return {"ok": False, "error": "Déjà tourné aujourd'hui — reviens demain ! 🌙"}
+    # Tirage pondéré
+    import random
+    total_w = sum(w[0] for w in SPIN_WHEEL)
+    n = random.uniform(0, total_w)
+    cumul = 0
+    winner = SPIN_WHEEL[0]
+    for w in SPIN_WHEEL:
+        cumul += w[0]
+        if n <= cumul:
+            winner = w
+            break
+    weight, coins, label = winner
+    add_coins(telegram_id, coins, f"Roue de la fortune : {label}")
+    from data.database import _fetchone as _fo
+    _execute("UPDATE users SET last_spin_at=? WHERE user_id=?",
+             [datetime.now(timezone.utc).isoformat(), telegram_id])
+    _check_badges_for_user(telegram_id)
+    return {"ok": True, "coins": coins, "label": label, "balance": get_coins(telegram_id)}
+
+
+# ── Défis hebdomadaires ───────────────────────────────────────────────────────
+
+# (key, label, target, reward_coins, stat_key)
+WEEKLY_CHALLENGES = [
+    {"key": "drinks_10",   "label": "🍺 Bois 10 verres cette semaine",   "target": 10, "reward": 200, "stat": "drinks_week"},
+    {"key": "bets_win_3",  "label": "🎰 Gagne 3 paris cette semaine",     "target": 3,  "reward": 300, "stat": "bets_won_week"},
+    {"key": "bj_played_5", "label": "🃏 Joue 5 parties de Blackjack",    "target": 5,  "reward": 150, "stat": "bj_played_week"},
+]
+
+
+def _current_iso_week() -> str:
+    d = datetime.now(timezone.utc)
+    y, w, _ = d.isocalendar()
+    return f"{y}-W{w:02d}"
+
+
+def _week_stats(user_id: int) -> dict:
+    """Calcule les stats de la semaine courante pour les défis."""
+    from data.database import _fetchone as _fo
+    week_start = "datetime('now', 'weekday 0', '-6 days', 'start of day')"
+    drinks = _fo(
+        f"SELECT COUNT(*) c FROM drink_logs WHERE user_id=? AND logged_at >= {week_start}",
+        [user_id]
+    )
+    bets_won = _fo(
+        f"SELECT COUNT(*) c FROM bets WHERE winner_id=? AND status='settled' AND created_at >= {week_start}",
+        [user_id]
+    )
+    bj_played = _fo(
+        f"""SELECT COUNT(DISTINCT bp.session_id) c
+            FROM blackjack_players bp JOIN blackjack_sessions bs ON bp.session_id=bs.id
+            WHERE bp.user_id=? AND bs.created_at >= {week_start} AND bp.result IS NOT NULL""",
+        [user_id]
+    )
+    return {
+        "drinks_week":    int((drinks or {}).get("c") or 0),
+        "bets_won_week":  int((bets_won or {}).get("c") or 0),
+        "bj_played_week": int((bj_played or {}).get("c") or 0),
+    }
+
+
+@app.get("/challenges/{telegram_id}")
+def get_challenges(telegram_id: int):
+    """Retourne les 3 défis de la semaine avec progress et état claimed."""
+    from data.database import _fetchall as _fa
+    user = get_user(telegram_id)
+    if not user:
+        return {"ok": False}
+    stats = _week_stats(telegram_id)
+    week = _current_iso_week()
+    claims = _fa(
+        "SELECT challenge_key FROM challenge_claims WHERE user_id=? AND week_iso=?",
+        [telegram_id, week]
+    )
+    claimed_keys = {c["challenge_key"] for c in claims}
+    out = []
+    for c in WEEKLY_CHALLENGES:
+        prog = stats.get(c["stat"], 0)
+        out.append({
+            "key": c["key"],
+            "label": c["label"],
+            "target": c["target"],
+            "reward": c["reward"],
+            "progress": min(prog, c["target"]),
+            "completed": prog >= c["target"],
+            "claimed": c["key"] in claimed_keys,
+        })
+    return {"ok": True, "week": week, "challenges": out}
+
+
+@app.post("/challenges/claim")
+async def claim_challenge(request: Request):
+    body = await request.json()
+    telegram_id = _resolve_user(request, body)
+    key = body.get("key")
+    if not telegram_id or not key:
+        return {"ok": False, "error": "Non authentifié"}
+    challenge = next((c for c in WEEKLY_CHALLENGES if c["key"] == key), None)
+    if not challenge:
+        return {"ok": False, "error": "Défi inconnu"}
+    week = _current_iso_week()
+    from data.database import _fetchone as _fo
+    already = _fo(
+        "SELECT 1 FROM challenge_claims WHERE user_id=? AND challenge_key=? AND week_iso=?",
+        [telegram_id, key, week]
+    )
+    if already:
+        return {"ok": False, "error": "Déjà réclamé"}
+    stats = _week_stats(telegram_id)
+    if stats.get(challenge["stat"], 0) < challenge["target"]:
+        return {"ok": False, "error": "Défi non complété"}
+    _execute(
+        "INSERT INTO challenge_claims (user_id, challenge_key, week_iso) VALUES (?, ?, ?)",
+        [telegram_id, key, week]
+    )
+    add_coins(telegram_id, challenge["reward"], f"Défi hebdo : {challenge['label']}")
+    return {"ok": True, "reward": challenge["reward"], "balance": get_coins(telegram_id)}
+
+
+# ── Mode discret (privacy toggle) ─────────────────────────────────────────────
+
+@app.post("/profile/discreet")
+async def toggle_discreet(request: Request):
+    body = await request.json()
+    telegram_id = _resolve_user(request, body)
+    if not telegram_id:
+        return {"ok": False, "error": "Non authentifié"}
+    val = 1 if body.get("on") else 0
+    _execute("UPDATE users SET discreet_mode=? WHERE user_id=?", [val, telegram_id])
+    await _broadcast(build_snapshot())
+    return {"ok": True, "discreet": bool(val)}
 
 
 @app.get("/recap/{telegram_id}")

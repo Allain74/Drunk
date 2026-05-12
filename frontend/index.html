@@ -1192,6 +1192,14 @@
   <div id="profil-content"></div>
 </div>
 
+<!-- ── Modal Roue de la fortune ── -->
+<div id="spin-overlay" onclick="closeSpin(event)" style="display:none;position:fixed;inset:0;background:#0009;z-index:3500;align-items:center;justify-content:center;padding:16px">
+  <div onclick="event.stopPropagation()" style="background:linear-gradient(135deg,#7c2d12,#facc15);color:white;border-radius:20px;max-width:380px;width:100%;padding:28px 22px;position:relative;box-shadow:0 20px 60px #0008;text-align:center">
+    <button onclick="closeSpin()" style="position:absolute;top:12px;right:12px;background:rgba(0,0,0,0.2);border:none;color:white;border-radius:50%;width:32px;height:32px;font-size:0.9rem;cursor:pointer">✕</button>
+    <div id="spin-content"></div>
+  </div>
+</div>
+
 <!-- ── Modal Récap soirée ── -->
 <div id="recap-overlay" onclick="closeRecap(event)" style="display:none;position:fixed;inset:0;background:#0009;z-index:3500;align-items:center;justify-content:center;padding:16px">
   <div onclick="event.stopPropagation()" id="recap-card" style="background:linear-gradient(135deg,#1e1b4b,#581c87);color:white;border-radius:20px;max-width:400px;width:100%;padding:28px 22px;position:relative;box-shadow:0 20px 60px #0008">
@@ -2702,6 +2710,16 @@
           <div id="profil-level-content" style="text-align:center;color:var(--sub);font-size:0.85rem">Chargement…</div>
         </div>
 
+        <!-- Roue + Défis hebdo -->
+        <div class="p-card">
+          <div class="p-card-label">🎰 Récompenses</div>
+          <button class="p-action-btn" style="background:linear-gradient(135deg,#facc15,#f97316);color:white;font-weight:800" onclick="openSpin()">🎲 Tourner la roue (1× par jour)</button>
+          <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
+            <div style="font-size:0.72rem;font-weight:700;color:var(--sub);letter-spacing:1px;text-transform:uppercase;margin-bottom:10px">🎯 Défis de la semaine</div>
+            <div id="profil-challenges"><div style="color:var(--sub);font-size:0.85rem">Chargement…</div></div>
+          </div>
+        </div>
+
         <!-- Badges -->
         <div class="p-card">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
@@ -2806,6 +2824,16 @@
         <div class="p-card">
           <div class="p-card-label">Compte</div>
           <button class="p-action-btn" onclick="openRecap()">📊 Voir mon récap de soirée</button>
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:10px;margin-bottom:8px">
+            <div>
+              <div style="font-size:0.9rem;font-weight:600">🥷 Mode discret</div>
+              <div style="font-size:0.72rem;color:var(--sub);margin-top:2px">Cache ton taux d'alcool et ta position</div>
+            </div>
+            <label style="position:relative;display:inline-block;width:44px;height:24px">
+              <input type="checkbox" id="profil-discreet-toggle" onchange="toggleDiscreet(this.checked)" style="opacity:0;width:0;height:0">
+              <span style="position:absolute;cursor:pointer;inset:0;background:var(--border);border-radius:24px;transition:.3s" id="profil-discreet-slider"></span>
+            </label>
+          </div>
           <button class="p-action-btn" id="push-btn" onclick="togglePush()">🔔 Activer les notifications</button>
           <button class="p-action-btn" id="push-test-btn" onclick="testPush()" style="display:none">📨 Envoyer une notif test</button>
           <button class="p-action-btn" onclick="localStorage.removeItem('onboarding_v1');onbShow()">🎓 Revoir le tuto</button>
@@ -2867,6 +2895,14 @@
         }
         _renderLevelCard(meData);
         _renderRefSection(meData);
+        // Toggle mode discret
+        const tgl = document.getElementById('profil-discreet-toggle');
+        const sld = document.getElementById('profil-discreet-slider');
+        if (tgl) tgl.checked = !!meData.discreet_mode;
+        if (sld) {
+          sld.style.background = meData.discreet_mode ? '#6366f1' : 'var(--border)';
+          sld.innerHTML = `<span style="position:absolute;top:3px;${meData.discreet_mode ? 'right:3px' : 'left:3px'};width:18px;height:18px;background:white;border-radius:50%;transition:.3s"></span>`;
+        }
       }
     } catch(e) {}
 
@@ -2875,6 +2911,9 @@
       const badges = await fetch(`${API}/badges/${myTid}`).then(r => r.json());
       _renderBadges(badges);
     } catch(e) {}
+
+    // Fetch défis hebdo
+    _loadChallenges();
 
     // Fetch pièces
     try {
@@ -3819,6 +3858,140 @@
   }
 
   // ── Init ──
+  // ── Roue de la fortune ─────────────────────────────────────────────────────
+  async function openSpin() {
+    if (!myTid) return;
+    const overlay = document.getElementById('spin-overlay');
+    const box = document.getElementById('spin-content');
+    box.innerHTML = '<div style="padding:40px 0;opacity:0.85">⏳ Chargement…</div>';
+    overlay.style.display = 'flex';
+    try {
+      const r = await fetch(`${API}/spin/${myTid}`).then(r => r.json());
+      if (!r.ok) { box.innerHTML = `<div>❌ Erreur</div>`; return; }
+      if (!r.can_spin) {
+        box.innerHTML = `<div style="padding:20px 0">
+          <div style="font-size:3.5rem;margin-bottom:10px">🌙</div>
+          <div style="font-size:1.2rem;font-weight:800;margin-bottom:6px">Reviens demain !</div>
+          <div style="opacity:0.85;font-size:0.9rem">Tu as déjà fait ton tour aujourd'hui.</div>
+        </div>`;
+        return;
+      }
+      box.innerHTML = `
+        <div style="padding:14px 0">
+          <div style="font-size:3rem;margin-bottom:10px">🎰</div>
+          <div style="font-size:1.4rem;font-weight:800;margin-bottom:8px">Roue de la fortune</div>
+          <div style="opacity:0.9;font-size:0.85rem;margin-bottom:20px;line-height:1.4">
+            Tente ta chance ! Tu peux gagner de 10 🪙 à 1000 🪙.<br>
+            (1 tour gratuit par jour)
+          </div>
+          <button id="spin-go" onclick="doSpin()" class="btn-primary" style="background:white;color:#7c2d12;font-size:1.1rem;padding:14px">🎲 TOURNER LA ROUE !</button>
+        </div>
+      `;
+    } catch(e) {
+      box.innerHTML = `<div>❌ Erreur réseau</div>`;
+    }
+  }
+
+  function closeSpin(e) {
+    if (!e || e.target === document.getElementById('spin-overlay')) {
+      document.getElementById('spin-overlay').style.display = 'none';
+    }
+  }
+
+  async function doSpin() {
+    const btn = document.getElementById('spin-go');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Tirage…'; }
+    const box = document.getElementById('spin-content');
+    box.innerHTML = `<div style="padding:50px 0;font-size:4rem;animation:spinroll 1s linear">🎰</div>`;
+    try {
+      const r = await fetch(`${API}/spin`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ telegram_id: myTid }),
+      }).then(r => r.json());
+      await new Promise(r => setTimeout(r, 900));
+      if (!r.ok) {
+        box.innerHTML = `<div style="padding:30px 0">
+          <div style="font-size:2.5rem">😬</div>
+          <div style="font-size:1.1rem;font-weight:700;margin-top:10px">${esc(r.error)}</div>
+        </div>`;
+        return;
+      }
+      box.innerHTML = `<div style="padding:14px 0">
+        <div style="font-size:4rem;margin-bottom:12px">🎉</div>
+        <div style="font-size:0.8rem;letter-spacing:1.5px;opacity:0.85;text-transform:uppercase;font-weight:700">Tu gagnes</div>
+        <div style="font-size:2.4rem;font-weight:900;margin:8px 0">${esc(r.label)}</div>
+        <div style="opacity:0.9;margin-bottom:18px">Solde : ${r.balance} 🪙</div>
+        <button class="btn-primary" style="background:white;color:#7c2d12" onclick="closeSpin()">Cool, à demain !</button>
+      </div>`;
+    } catch(e) {
+      box.innerHTML = `<div>❌ Erreur réseau</div>`;
+    }
+  }
+
+  // ── Défis hebdo ────────────────────────────────────────────────────────────
+  async function _loadChallenges() {
+    if (!myTid) return;
+    const box = document.getElementById('profil-challenges');
+    if (!box) return;
+    try {
+      const data = await fetch(`${API}/challenges/${myTid}`).then(r => r.json());
+      if (!data.ok) { box.innerHTML = '<div style="color:var(--sub);font-size:0.8rem">—</div>'; return; }
+      box.innerHTML = data.challenges.map(c => {
+        const pct = Math.round((c.progress / c.target) * 100);
+        let action = '';
+        if (c.claimed) action = '<span style="color:#22c55e;font-weight:700;font-size:0.78rem">✅ Réclamé</span>';
+        else if (c.completed) action = `<button class="admin-action-btn primary" style="padding:4px 10px;font-size:0.75rem" onclick="claimChallenge('${c.key}')">🎁 +${c.reward}🪙</button>`;
+        else action = `<span style="color:var(--sub);font-size:0.78rem;font-weight:700">+${c.reward}🪙</span>`;
+        return `<div style="margin-bottom:10px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+            <span style="font-size:0.85rem;font-weight:600">${esc(c.label)}</span>
+            ${action}
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <div style="flex:1;height:6px;background:var(--border);border-radius:99px;overflow:hidden">
+              <div style="height:100%;width:${pct}%;background:${c.completed ? '#22c55e' : '#6366f1'};border-radius:99px;transition:width .4s"></div>
+            </div>
+            <span style="font-size:0.72rem;color:var(--sub);font-weight:700;min-width:40px;text-align:right">${c.progress}/${c.target}</span>
+          </div>
+        </div>`;
+      }).join('');
+    } catch(e) { box.innerHTML = '<div style="color:#ef4444;font-size:0.8rem">Erreur</div>'; }
+  }
+
+  async function claimChallenge(key) {
+    try {
+      const r = await fetch(`${API}/challenges/claim`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ telegram_id: myTid, key }),
+      }).then(r => r.json());
+      if (!r.ok) { showToast('❌ ' + r.error); return; }
+      showToast(`🎁 +${r.reward} 🪙 !`);
+      _loadChallenges();
+      const cel = document.getElementById('profil-coins');
+      if (cel) cel.textContent = r.balance;
+    } catch(e) { showToast('❌ Erreur réseau'); }
+  }
+
+  // ── Mode discret ───────────────────────────────────────────────────────────
+  async function toggleDiscreet(on) {
+    const sld = document.getElementById('profil-discreet-slider');
+    if (sld) {
+      sld.style.background = on ? '#6366f1' : 'var(--border)';
+      sld.innerHTML = `<span style="position:absolute;top:3px;${on ? 'right:3px' : 'left:3px'};width:18px;height:18px;background:white;border-radius:50%;transition:.3s"></span>`;
+    }
+    try {
+      const r = await fetch(`${API}/profile/discreet`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ telegram_id: myTid, on }),
+      }).then(r => r.json());
+      if (!r.ok) { showToast('❌ ' + (r.error || 'Erreur')); return; }
+      showToast(on ? '🥷 Mode discret activé' : '👀 Tu es de nouveau visible');
+    } catch(e) { showToast('❌ Erreur réseau'); }
+  }
+
   // ── Récap soirée ───────────────────────────────────────────────────────────
   let _lastRecap = null;
 
