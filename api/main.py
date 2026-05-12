@@ -799,8 +799,9 @@ def admin_get_users(caller_id: int = 0, admin_secret: str = ""):
 
 
 def _get_banned_list():
-    from data.database import _fetchall as _fa
-    return _fa("SELECT telegram_id FROM banned_users")
+    # La colonne s'appelle user_id en DB (renommée par migration). L'alias
+    # bidirectionnel du _pipeline renvoie aussi telegram_id côté Python.
+    return _fetchall("SELECT user_id FROM banned_users")
 
 
 @app.post("/admin/ban")
