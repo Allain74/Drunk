@@ -2545,16 +2545,26 @@
       return;
     }
     try {
-      const favs = await fetch(`${API}/favorites/${myTid}?limit=3`).then(r => r.json());
-      if (!Array.isArray(favs) || !favs.length) {
+      const data = await fetch(`${API}/favorites/${myTid}?limit=2`).then(r => r.json());
+      const drinks = Array.isArray(data) ? data : (data.drinks || []);
+      const favoriteGame = (data && data.favorite_game) || 'blackjack';
+      const labels = window.DRINK_NAMES || {};
+      // 2 favoris boissons
+      const drinkBtns = drinks.slice(0, 2).map(f => {
+        const lbl = labels[f.drink_key] || f.drink_key;
+        return `<button class="picker-btn" onclick="quickDrink('${f.drink_key}')">${esc(lbl)}<span>×${f.count}</span></button>`;
+      });
+      // 3e bouton : jeu favori
+      const gameBtn = favoriteGame === 'paris'
+        ? `<button class="picker-btn" style="background:linear-gradient(135deg,#f43f5e,#a855f7);color:white" onclick="showTab('menu');setTimeout(openParis,200)">🎰 Paris<span>Jouer</span></button>`
+        : `<button class="picker-btn" style="background:linear-gradient(135deg,#6366f1,#06b6d4);color:white" onclick="showTab('menu');setTimeout(openBlackjack,200)">🃏 Blackjack<span>Jouer</span></button>`;
+      const allBtns = [...drinkBtns, gameBtn];
+      if (allBtns.length === 1) {
+        // Aucune boisson, juste le bouton jeu : pas de section "favoris"
         section.style.display = 'none';
         return;
       }
-      const labels = window.DRINK_NAMES || {};
-      grid.innerHTML = favs.map(f => {
-        const lbl = labels[f.drink_key] || f.drink_key;
-        return `<button class="picker-btn" onclick="quickDrink('${f.drink_key}')">${esc(lbl)}<span>×${f.count}</span></button>`;
-      }).join('');
+      grid.innerHTML = allBtns.join('');
       section.style.display = '';
     } catch(e) {
       section.style.display = 'none';

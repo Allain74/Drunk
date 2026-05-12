@@ -1132,18 +1132,31 @@ def get_friend_suggestions(telegram_id: int, limit: int = 5):
 
 @app.get("/favorites/{telegram_id}")
 def get_favorites(telegram_id: int, limit: int = 3):
-    """Retourne les drink_keys les plus utilisés par l'utilisateur."""
-    from data.database import _fetchall as _fa
-    rows = _fa(
+    """Retourne les drink_keys les plus utilisés par l'utilisateur ET le jeu
+    favori (BJ vs Paris)."""
+    rows = _fetchall(
         """SELECT drink_key, COUNT(*) as c FROM drink_logs
            WHERE user_id=? GROUP BY drink_key ORDER BY c DESC LIMIT ?""",
         [telegram_id, max(1, min(limit, 10))]
     )
-    return [
+    drinks = [
         {"drink_key": r["drink_key"], "count": int(r["c"])}
         for r in rows
         if r["drink_key"] in DRINKS
     ]
+    # Jeu favori : nb parties BJ vs nb paris créés. BJ par défaut.
+    bj_row = _fetchone(
+        "SELECT COUNT(*) c FROM blackjack_players WHERE user_id=? AND result IS NOT NULL",
+        [telegram_id]
+    )
+    bj_count = int((bj_row or {}).get("c") or 0)
+    bets_row = _fetchone(
+        "SELECT COUNT(*) c FROM bets WHERE challenger_id=? OR opponent_id=?",
+        [telegram_id, telegram_id]
+    )
+    bets_count = int((bets_row or {}).get("c") or 0)
+    favorite_game = "paris" if bets_count > bj_count else "blackjack"
+    return {"drinks": drinks, "favorite_game": favorite_game}
 
 
 @app.get("/badges/{telegram_id}")
