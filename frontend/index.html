@@ -2076,40 +2076,61 @@
     renderModal(null, null, isActive ? null : [], null);
     document.getElementById('modal-bg4').classList.add('open');
 
-    // Fetch en parallèle : coins + social (sauf si hideSocial) + session si actif
-    // + gamification (me + badges) si on a un tid
-    const fetches = [
-      fetch(`${API}/coins`).then(r => r.json()),
-      (!hideSocial && tid) ? fetch(`${API}/following/${tid}`).then(r => r.json()) : Promise.resolve({ following: [] }),
-      (!hideSocial && tid) ? fetch(`${API}/followers/${tid}`).then(r => r.json()) : Promise.resolve({ followers: [] }),
-      isActive && tid ? fetch(`${API}/session/${tid}`).then(r => r.json()) : Promise.resolve({ drinks: [] }),
-      tid ? fetch(`${API}/me/${tid}`).then(r => r.json()) : Promise.resolve(null),
-      tid ? fetch(`${API}/badges/${tid}`).then(r => r.json()) : Promise.resolve([]),
-    ];
-    const [coinsData, followingData, followersData, sessionData, meData, badgesData] = await Promise.allSettled(fetches);
+    if (!tid) return;
+    // UN SEUL fetch /profile/{tid} qui agrège tout (au lieu de 6 round-trips).
+    try {
+      const p = await fetch(`${API}/profile/${tid}`).then(r => r.json());
+      if (_profileGen !== gen) return;
+      if (!p || !p.ok) { renderModal(null, null, [], null); return; }
 
-    if (_profileGen !== gen) return;
+      const userCoins = (typeof p.coins === 'number') ? p.coins : null;
+      const socialInfo = hideSocial ? null : {
+        following: (p.following || []).map(u => u.user_id || u.telegram_id).filter(Boolean),
+        followers: [],  // get_profile_follows ne renvoie pas la liste, juste le count
+      };
+      // Pour les followers, on a juste le count → on évite le fetch détaillé.
+      // (followers liste est rarement consultée — peut être rajoutée ultérieurement)
+      if (!hideSocial && p.followers_count != null) {
+        socialInfo.followersCount = p.followers_count;
+      }
+      const sessionDrinks = p.session_drinks || [];
+      // Construit les badges avec emoji/desc depuis le mapping côté frontend
+      const unlocked = new Set(p.badges_unlocked || []);
+      // Pour afficher au moins les 6 derniers, on doit avoir les meta des badges.
+      // On va piocher dans une variable globale `_allBadgesMeta` si elle existe,
+      // sinon faire un fetch unique et cacher.
+      let badges = [];
+      if (_allBadgesMeta && _allBadgesMeta.length) {
+        badges = _allBadgesMeta.map(b => ({...b, unlocked: unlocked.has(b.key)}));
+      }
+      const gameInfo = {
+        level: p.level,
+        streak: p.streak,
+        badges,
+        badges_unlocked_count: unlocked.size,
+      };
 
-    const userCoins = coinsData.status === 'fulfilled'
-      ? (coinsData.value.find(c => c.username.toLowerCase() === username.toLowerCase())?.coins ?? null)
-      : null;
-    const socialInfo = hideSocial ? null : {
-      following: followingData.status === 'fulfilled' ? (followingData.value.following || []) : [],
-      followers: followersData.status === 'fulfilled' ? (followersData.value.followers || []) : [],
-    };
-    const sessionDrinks = sessionData.status === 'fulfilled'
-      ? (sessionData.value.drinks || [])
-      : [];
-    const me = (meData.status === 'fulfilled' && meData.value && meData.value.ok) ? meData.value : null;
-    const allBadges = (badgesData.status === 'fulfilled' && Array.isArray(badgesData.value)) ? badgesData.value : [];
-    const gameInfo = me ? {
-      level: me.level,
-      streak: me.streak,
-      badges: allBadges,
-      badges_unlocked_count: allBadges.filter(b => b.unlocked).length,
-    } : null;
+      renderModal(userCoins, socialInfo, sessionDrinks, gameInfo);
 
-    renderModal(userCoins, socialInfo, sessionDrinks, gameInfo);
+      // Si on n'a pas encore les metadata badges, on les fetch en background une seule fois
+      if (!_allBadgesMeta || !_allBadgesMeta.length) {
+        fetch(`${API}/badges/${tid}`).then(r => r.json()).then(d => {
+          if (Array.isArray(d)) {
+            // d est [{key, name, emoji, desc, unlocked: bool}]. On garde la meta sans le unlocked.
+            _allBadgesMeta = d.map(b => ({key: b.key, name: b.name, emoji: b.emoji, desc: b.desc}));
+            // Re-render si on est encore sur le même profil
+            if (_profileGen === gen) {
+              const refreshed = _allBadgesMeta.map(b => ({...b, unlocked: unlocked.has(b.key)}));
+              renderModal(userCoins, socialInfo, sessionDrinks, {
+                ...gameInfo, badges: refreshed,
+              });
+            }
+          }
+        }).catch(() => {});
+      }
+    } catch(e) {
+      renderModal(null, null, [], null);
+    }
   }
 
   function openSocialList(type, ids, title) {
@@ -4596,6 +4617,7 @@
   let _recordsCache = null;
   let _challengesCache = null;
   let _suggestionsCache = null;
+  let _allBadgesMeta = [];  // [{key, name, emoji, desc}] — cache global (badges fixes)
 
   function _preloadAll() {
     if (!myTid) return;
@@ -4626,6 +4648,10 @@
     }).catch(() => {});
     fetch(`${API}/badges/${myTid}`).then(r => r.json()).then(d => {
       _badgesCache = Array.isArray(d) ? d : [];
+      // Cache de la metadata badges (utilisé par openProfile pour les autres users)
+      if (!_allBadgesMeta.length && Array.isArray(d)) {
+        _allBadgesMeta = d.map(b => ({key: b.key, name: b.name, emoji: b.emoji, desc: b.desc}));
+      }
       if (document.getElementById('profil-badges-content')) _renderBadges(_badgesCache);
     }).catch(() => {});
     fetch(`${API}/records/${myTid}`).then(r => r.json()).then(d => {

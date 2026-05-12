@@ -2674,18 +2674,40 @@ async def refuse_bet_web(request: Request):
 
 @app.get("/profile/{telegram_id}")
 def get_profile(telegram_id: int):
-    """Retourne le profil public d'un utilisateur : abonnés/abonnements + stats BJ."""
+    """Retourne le profil complet d'un utilisateur en un seul fetch :
+    user info + level + streak + badges + followers + following + session drinks
+    + bj stats. Permet à openProfile() côté frontend de tout afficher
+    immédiatement au lieu de faire 6 round-trips parallèles."""
     user = get_user(telegram_id)
     if not user:
         return {"ok": False, "error": "Utilisateur introuvable"}
+    admin_id = int(os.environ.get("ADMIN_ID", "0"))
+    uid = user.get("telegram_id") or user.get("user_id")
     follows = get_profile_follows(telegram_id)
     bj      = get_blackjack_stats(telegram_id)
+    xp      = int(user.get("xp") or 0)
+    lvl     = calc_level(xp)
+    badges_unlocked = get_user_badges(telegram_id)
+    streak  = get_streak(telegram_id)
+    session_detail = get_session_drinks_detail(telegram_id)
     return {
         "ok": True,
-        "telegram_id": telegram_id,
-        "username": user["username"],
-        **follows,
+        "telegram_id":   uid,
+        "username":      user["username"],
+        "gender":        user.get("gender", "homme"),
+        "is_admin":      uid == admin_id,
+        "is_premium":    uid == admin_id or bool(user.get("is_premium")),
+        "active_skin":   user.get("active_skin") or "default",
+        "coins":         int(user.get("coins") or 0),
+        "level":         lvl,
+        "badges_unlocked": badges_unlocked,
+        "streak":        streak,
+        "session_drinks": [
+            {"drink_key": d["drink_key"], "logged_at": d["logged_at"]}
+            for d in session_detail
+        ],
         "bj": bj,
+        **follows,
     }
 
 
