@@ -14,6 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 
 from data.database import (
+    _execute, _fetchall, _fetchone,
     init_db, get_all_users, get_all_active_drinks, get_active_session,
     get_drinks_by_session, get_all_time_stats, get_last_drink_time,
     set_last_inactivity_notif, get_last_inactivity_notif,
@@ -1156,15 +1157,19 @@ def get_badges(telegram_id: int):
 
 # ── Boutique de skins (cadres d'avatar) ──────────────────────────────────────
 
-# Skins disponibles. La key 'default' est offerte à tout le monde.
-# 'frame' = couleur du contour de l'avatar (CSS box-shadow).
+# Skins disponibles = accessoires posés au-dessus de l'avatar (visible par tous).
+# 'emoji' est l'overlay rendu côté frontend. 'default' = aucun accessoire.
 SKINS = [
-    {"key": "default", "name": "Classique",  "price": 0,    "frame": "none",                           "emoji": "⚪"},
-    {"key": "gold",    "name": "Or",          "price": 200,  "frame": "#facc15",                         "emoji": "🟡"},
-    {"key": "purple",  "name": "Violet",      "price": 400,  "frame": "#a855f7",                         "emoji": "🟣"},
-    {"key": "neon",    "name": "Néon",        "price": 800,  "frame": "#06b6d4",                         "emoji": "🔵"},
-    {"key": "fire",    "name": "Feu",         "price": 1500, "frame": "linear:#ef4444,#f97316",          "emoji": "🔥"},
-    {"key": "rainbow", "name": "Arc-en-ciel", "price": 3000, "frame": "linear:#f43f5e,#a855f7,#06b6d4",  "emoji": "🌈"},
+    {"key": "default",   "name": "Aucun",           "price": 0,    "emoji": "",     "icon": "⚪"},
+    {"key": "top_hat",   "name": "Haut-de-forme",   "price": 200,  "emoji": "🎩",   "icon": "🎩"},
+    {"key": "sunglasses","name": "Lunettes soleil", "price": 400,  "emoji": "🕶",    "icon": "🕶"},
+    {"key": "party",     "name": "Fêtard",          "price": 600,  "emoji": "🥳",   "icon": "🥳"},
+    {"key": "cowboy",    "name": "Cowboy",          "price": 800,  "emoji": "🤠",   "icon": "🤠"},
+    {"key": "pirate",    "name": "Pirate",          "price": 1200, "emoji": "🏴‍☠️", "icon": "🏴‍☠️"},
+    {"key": "horns",     "name": "Diable",          "price": 1500, "emoji": "😈",   "icon": "😈"},
+    {"key": "halo",      "name": "Ange",            "price": 2000, "emoji": "😇",   "icon": "😇"},
+    {"key": "santa",     "name": "Père Noël",       "price": 2500, "emoji": "🎅",   "icon": "🎅"},
+    {"key": "alien",     "name": "Alien",           "price": 3000, "emoji": "👽",   "icon": "👽"},
 ]
 
 

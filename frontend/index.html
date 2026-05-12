@@ -2574,29 +2574,23 @@
     } catch(e) {}
   }
 
-  // Mapping skin_key → CSS box-shadow color (ou gradient pour fire/rainbow).
-  const SKIN_FRAMES = {
-    default: null,
-    gold:    '#facc15',
-    purple:  '#a855f7',
-    neon:    '#06b6d4',
-    fire:    'linear-gradient(135deg,#ef4444,#f97316)',
-    rainbow: 'linear-gradient(135deg,#f43f5e,#a855f7,#06b6d4)',
+  // Mapping skin_key → emoji accessoire posé au-dessus de l'avatar.
+  const SKIN_OVERLAYS = {
+    default:    null,
+    top_hat:    '🎩',
+    sunglasses: '🕶',
+    party:      '🥳',
+    cowboy:     '🤠',
+    pirate:     '🏴‍☠️',
+    horns:      '😈',
+    halo:       '😇',
+    santa:      '🎅',
+    alien:      '👽',
   };
 
-  function _skinFrameStyle(skinKey, sizePx) {
-    const v = SKIN_FRAMES[skinKey];
-    if (!v) return '';
-    const border = Math.max(2, Math.round(sizePx * 0.06));
-    if (v.startsWith('linear')) {
-      // Cadre dégradé : on l'applique via un wrapper padding + background
-      return { wrapBg: v, border };
-    }
-    return { wrapBg: v, border };
-  }
-
   /** Génère le HTML d'un avatar : photo si dispo, sinon initiale sur gradient (bleu=homme, rose=femme).
-   *  Si isPremium, ajoute une couronne 👑 en overlay au-dessus. Skin = cadre coloré. */
+   *  Si isPremium → couronne 👑 (sauf si un skin est équipé).
+   *  Si skinKey → accessoire emoji posé au-dessus de l'avatar (priorité sur la couronne). */
   function _avatarEl(telegramId, sizePx, initLetter, gender, extraStyle = '', isPremium = false, skinKey = null) {
     const av = telegramId ? _avatarCache[String(telegramId)] : null;
     let inner;
@@ -2609,18 +2603,22 @@
         : 'linear-gradient(135deg,#6366f1,#06b6d4)';
       inner = `<div style="width:${sizePx}px;height:${sizePx}px;border-radius:50%;background:${gradient};display:flex;align-items:center;justify-content:center;font-weight:800;font-size:${fs}px;color:#fff;flex-shrink:0;${extraStyle}">${initLetter}</div>`;
     }
-    // Applique le cadre du skin (autour de l'avatar)
-    const frame = _skinFrameStyle(skinKey || 'default', sizePx);
-    if (frame) {
-      inner = `<div style="display:inline-block;padding:${frame.border}px;border-radius:50%;background:${frame.wrapBg};flex-shrink:0;line-height:0">${inner}</div>`;
+    const skinOverlay = SKIN_OVERLAYS[skinKey || 'default'];
+    const showCrown = isPremium && !skinOverlay;
+    if (!skinOverlay && !showCrown) return inner;
+
+    const accSize = Math.max(14, Math.round(sizePx * 0.55));
+    const accTop  = -Math.round(sizePx * 0.36);
+    let acc = '';
+    if (skinOverlay) {
+      acc = `<div style="position:absolute;top:${accTop}px;left:50%;transform:translateX(-50%);font-size:${accSize}px;line-height:1;pointer-events:none;filter:drop-shadow(0 2px 3px rgba(0,0,0,0.5))">${skinOverlay}</div>`;
+    } else {
+      // Couronne premium (rotation légère pour le style)
+      const cT = -Math.round(sizePx * 0.22);
+      const cS = Math.max(12, Math.round(sizePx * 0.45));
+      acc = `<div style="position:absolute;top:${cT}px;left:50%;transform:translateX(-50%) rotate(-15deg);font-size:${cS}px;line-height:1;pointer-events:none;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.4))">👑</div>`;
     }
-    if (!isPremium) return inner;
-    const crownSize = Math.max(12, Math.round(sizePx * 0.45));
-    const crownTop  = -Math.round(sizePx * 0.22);
-    return `<div style="position:relative;display:inline-block;flex-shrink:0;line-height:0">
-      ${inner}
-      <div style="position:absolute;top:${crownTop}px;left:50%;transform:translateX(-50%) rotate(-15deg);font-size:${crownSize}px;line-height:1;pointer-events:none;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.4))">👑</div>
-    </div>`;
+    return `<div style="position:relative;display:inline-block;flex-shrink:0;line-height:0">${inner}${acc}</div>`;
   }
 
   /** Redimensionne une image via canvas et renvoie un data URL JPEG compressé */
@@ -4081,23 +4079,25 @@
       const r = await fetch(`${API}/shop/${myTid}`).then(r => r.json());
       if (!r.ok) { grid.innerHTML = '<div style="color:#ef4444;text-align:center">❌ Erreur</div>'; return; }
       bal.textContent = `Solde : ${r.balance} 🪙`;
-      grid.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px">${
+      grid.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px">${
         r.skins.map(s => {
-          const previewBg = SKIN_FRAMES[s.key] || 'var(--border)';
-          const previewStyle = previewBg.startsWith('linear')
-            ? `background:${previewBg}`
-            : `background:${previewBg}`;
+          const overlay = SKIN_OVERLAYS[s.key];
           let action = '';
           if (s.active) action = '<div style="color:#22c55e;font-weight:700;font-size:0.75rem">✅ Équipé</div>';
           else if (s.owned) action = `<button class="admin-action-btn primary" style="padding:5px 10px;font-size:0.75rem;width:100%" onclick="equipSkin('${s.key}')">Équiper</button>`;
           else action = `<button class="admin-action-btn primary" style="padding:5px 10px;font-size:0.75rem;width:100%" onclick="buySkin('${s.key}')">💰 ${s.price} 🪙</button>`;
-          return `<div style="background:var(--bg);border:1px solid ${s.active ? '#22c55e' : 'var(--border)'};border-radius:12px;padding:12px 8px;text-align:center">
+          // Preview : avatar avec accessoire en overlay
+          const accHtml = overlay
+            ? `<div style="position:absolute;top:-20px;left:50%;transform:translateX(-50%);font-size:26px;line-height:1;filter:drop-shadow(0 2px 3px rgba(0,0,0,0.5))">${overlay}</div>`
+            : '';
+          return `<div style="background:var(--bg);border:1px solid ${s.active ? '#22c55e' : 'var(--border)'};border-radius:12px;padding:14px 8px 12px;text-align:center;${overlay ? 'padding-top:28px' : ''}">
             <div style="display:flex;justify-content:center;margin-bottom:8px">
-              <div style="padding:${s.key==='default'?'0':'4px'};border-radius:50%;${previewStyle};display:inline-block;line-height:0">
-                <div style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#06b6d4);display:flex;align-items:center;justify-content:center;font-weight:800;color:white;font-size:18px">🍺</div>
+              <div style="position:relative;display:inline-block;line-height:0">
+                <div style="width:54px;height:54px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#06b6d4);display:flex;align-items:center;justify-content:center;font-weight:800;color:white;font-size:22px">🍺</div>
+                ${accHtml}
               </div>
             </div>
-            <div style="font-weight:700;font-size:0.85rem;margin-bottom:4px">${s.emoji} ${esc(s.name)}</div>
+            <div style="font-weight:700;font-size:0.85rem;margin-bottom:6px">${esc(s.name)}</div>
             ${action}
           </div>`;
         }).join('')

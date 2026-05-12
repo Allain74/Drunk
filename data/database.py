@@ -257,6 +257,21 @@ def init_db():
         )""")
     except Exception:
         pass
+    # Reset les anciens skins "cadres" qui n'existent plus (gold/purple/neon/fire/rainbow)
+    try:
+        done = _fetchone("SELECT 1 FROM _migration_flags WHERE key='skins_v2_2026_05'")
+        if not done:
+            _execute(
+                "UPDATE users SET active_skin='default' "
+                "WHERE active_skin IN ('gold','purple','neon','fire','rainbow')"
+            )
+            _execute(
+                "DELETE FROM user_skins "
+                "WHERE skin_key IN ('gold','purple','neon','fire','rainbow')"
+            )
+            _execute("INSERT INTO _migration_flags (key) VALUES ('skins_v2_2026_05')")
+    except Exception:
+        pass
     _pipeline([
         ("""CREATE TABLE IF NOT EXISTS users (
             user_id     INTEGER PRIMARY KEY,
