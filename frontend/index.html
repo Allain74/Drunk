@@ -1005,6 +1005,11 @@
     <div style="font-size:0.82rem;color:var(--sub);margin-bottom:12px">Connecte-toi pour enregistrer tes verres.</div>
     <button class="btn-primary" style="width:auto;padding:10px 24px" onclick="showTab('profil')">Se connecter →</button>
   </div>
+  <!-- Top 3 favoris (rempli dynamiquement, vide si pas connecté) -->
+  <div class="picker-section" id="picker-favorites-section" style="display:none">
+    <div class="picker-label">⭐ Tes favoris</div>
+    <div class="picker-grid" id="picker-favorites-grid"></div>
+  </div>
   <div class="picker-section"><div class="picker-label">🍺 Bières</div>
     <div class="picker-grid">
       <button class="picker-btn" onclick="quickDrink('demi')">Demi<span>25cl · 5%</span></button>
@@ -2431,6 +2436,31 @@
   function loadMenu() {
     const note = document.getElementById('menu-note');
     if (note) note.style.display = myTid ? 'none' : 'block';
+    loadFavorites();
+  }
+
+  async function loadFavorites() {
+    const section = document.getElementById('picker-favorites-section');
+    const grid    = document.getElementById('picker-favorites-grid');
+    if (!section || !grid || !myTid) {
+      if (section) section.style.display = 'none';
+      return;
+    }
+    try {
+      const favs = await fetch(`${API}/favorites/${myTid}?limit=3`).then(r => r.json());
+      if (!Array.isArray(favs) || !favs.length) {
+        section.style.display = 'none';
+        return;
+      }
+      const labels = window.DRINK_NAMES || {};
+      grid.innerHTML = favs.map(f => {
+        const lbl = labels[f.drink_key] || f.drink_key;
+        return `<button class="picker-btn" onclick="quickDrink('${f.drink_key}')">${esc(lbl)}<span>×${f.count}</span></button>`;
+      }).join('');
+      section.style.display = '';
+    } catch(e) {
+      section.style.display = 'none';
+    }
   }
 
   // ── Avatars cache ────────────────────────────────────────────────────────────
@@ -4346,6 +4376,8 @@
           setTimeout(() => showToast(`🏅 Badge débloqué : ${b.emoji} ${b.name}`), 1200 * (i + 1));
         });
       }
+      // Rafraîchit la section "Tes favoris"
+      loadFavorites();
     } catch(e) {
       showToast('❌ Erreur réseau');
     } finally {

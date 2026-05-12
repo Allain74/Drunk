@@ -1036,6 +1036,22 @@ def get_me(telegram_id: int):
     }
 
 
+@app.get("/favorites/{telegram_id}")
+def get_favorites(telegram_id: int, limit: int = 3):
+    """Retourne les drink_keys les plus utilisés par l'utilisateur."""
+    from data.database import _fetchall as _fa
+    rows = _fa(
+        """SELECT drink_key, COUNT(*) as c FROM drink_logs
+           WHERE user_id=? GROUP BY drink_key ORDER BY c DESC LIMIT ?""",
+        [telegram_id, max(1, min(limit, 10))]
+    )
+    return [
+        {"drink_key": r["drink_key"], "count": int(r["c"])}
+        for r in rows
+        if r["drink_key"] in DRINKS
+    ]
+
+
 @app.get("/badges/{telegram_id}")
 def get_badges(telegram_id: int):
     """Liste tous les badges du système avec leur état (unlocked: bool)."""
