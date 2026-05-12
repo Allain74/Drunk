@@ -253,7 +253,7 @@ app.add_middleware(
 from collections import defaultdict
 _rate_buckets: dict[str, list[float]] = defaultdict(list)
 RATE_LIMIT_WINDOW = 60.0   # secondes
-RATE_LIMIT_MAX = 60        # requêtes par fenêtre
+RATE_LIMIT_MAX = 180       # requêtes par fenêtre (3/sec en moyenne)
 _RATE_SKIP_PREFIXES = ("/stripe/webhook", "/telegram-webhook")
 
 
