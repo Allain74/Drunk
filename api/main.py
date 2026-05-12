@@ -126,6 +126,9 @@ _first_drink_notified: dict[tuple, datetime] = {}
 # user_id → task asyncio des notifs FOMO en attente (30s après log-drink).
 # Annulé si undo-drink dans les 30s.
 _pending_first_drink_notifs: dict[int, asyncio.Task] = {}
+# user_id → timestamp UTC du dernier verre (cooldown 30s en mémoire, évite
+# une query SELECT MAX(logged_at) sur le chemin critique).
+_last_drink_at: dict[int, datetime] = {}
 _last_weekly_recap_date: str = ""  # "YYYY-MM-DD" du dernier lundi envoyé
 PARIS = ZoneInfo("Europe/Paris")
 
@@ -2091,128 +2094,129 @@ async def log_drink_web(request: Request):
 
     if not telegram_id or not drink_key:
         return {"ok": False, "error": "Paramètres manquants"}
-
-    user = get_user(telegram_id)
-    if not user:
-        return {"ok": False, "error": "Utilisateur introuvable"}
     if drink_key not in DRINKS:
         return {"ok": False, "error": "Boisson inconnue"}
 
-    # Cooldown 30s : empêche les double-clics et le spam
-    last = _fetchone(
-        "SELECT MAX(logged_at) m FROM drink_logs WHERE user_id=?",
-        [telegram_id]
-    )
-    last_at = (last or {}).get("m")
-    if last_at:
-        try:
-            last_dt = datetime.fromisoformat(last_at)
-            if last_dt.tzinfo is None:
-                last_dt = last_dt.replace(tzinfo=timezone.utc)
-            delta = (datetime.now(timezone.utc) - last_dt).total_seconds()
-            if delta < 30:
-                remaining = int(30 - delta) + 1
-                return {"ok": False, "error": f"Attends encore {remaining}s avant le prochain verre"}
-        except Exception:
-            pass
+    # Cooldown 30s : check en mémoire (avant : 1 SELECT par drink).
+    now_ts = datetime.now(timezone.utc)
+    last_dt = _last_drink_at.get(telegram_id)
+    if last_dt and (now_ts - last_dt).total_seconds() < 30:
+        remaining = int(30 - (now_ts - last_dt).total_seconds()) + 1
+        return {"ok": False, "error": f"Attends encore {remaining}s avant le prochain verre"}
+
+    # User : réutilise le map cached (évite 1 query)
+    users_by_id = _cached("users_by_id_map", 30.0,
+                          lambda: {u["telegram_id"]: u for u in get_all_users()})
+    user = users_by_id.get(telegram_id)
+    if not user:
+        # Fallback DB (cache pas encore peuplé pour ce user)
+        user = get_user(telegram_id)
+        if not user:
+            return {"ok": False, "error": "Utilisateur introuvable"}
 
     drink = DRINKS[drink_key]
     _ensure_session(telegram_id)
 
-    # Vérifie si c'est le premier verre de la session AVANT d'enregistrer
+    # Une seule query : on récupère les verres existants
     existing_drinks = get_session_drinks(telegram_id)
     is_first = len(existing_drinks) == 0
 
-    db_log_drink(telegram_id, drink_key, alcohol_grams(drink.volume_ml, drink.abv))
+    if not db_log_drink(telegram_id, drink_key, alcohol_grams(drink.volume_ml, drink.abv)):
+        return {"ok": False, "error": "Erreur d'enregistrement"}
+
+    # Marque le cooldown immédiatement
+    _last_drink_at[telegram_id] = now_ts
     _invalidate_alltime_cache()
     _invalidate_cache("snapshot", "coins_all")
-    add_coins(telegram_id, 5, f"Verre bu ({drink.name})")
 
-    # Gamification : XP, streak, badges
-    award = _award_drink(telegram_id)
-
-    # Mise à jour de la position si fournie
-    if lat is not None and lon is not None:
-        try:
-            update_location(telegram_id, float(lat), float(lon))
-        except Exception:
-            pass
-
-    drinks_data = get_session_drinks(telegram_id)
+    # BAC calculé en mémoire : drinks existants + le nouveau qu'on vient
+    # d'insérer (format (alc_grams, datetime)). Pas besoin d'un 2e get_session_drinks.
+    g = alcohol_grams(drink.volume_ml, drink.abv)
+    drinks_data = list(existing_drinks) + [(g, now_ts)]
     bac = total_bac(drinks_data, user["weight_kg"], user["gender"])
-    update_max_bac(telegram_id, bac)
 
-    await _broadcast(build_snapshot())
+    # ── Tout ce qui suit est différé en background : XP, badges, streak,
+    # ── max_bac update, broadcast, notifs push. Le user voit son verre
+    # ── ajouté instantanément.
+    async def _post_drink_work():
+        try:
+            add_coins(telegram_id, 5, f"Verre bu ({drink.name})")
+            _award_drink(telegram_id)
+            update_max_bac(telegram_id, bac)
+            if lat is not None and lon is not None:
+                try:
+                    update_location(telegram_id, float(lat), float(lon))
+                except Exception:
+                    pass
+            await _broadcast(build_snapshot())
 
-    # ── Notifications aux abonnés (différées 30s, annulables si undo) ────────
-    if is_first:
-        # On capture les infos maintenant mais on retarde l'envoi des push de
-        # 30s pour permettre un éventuel undo-drink sans avoir spammé les amis.
-        gender   = user.get("gender", "homme")
-        le_la    = "la" if gender == "femme" else "le"
-        name     = user["username"]
-        followers = get_followers(telegram_id)
-        active_drinkers = set(get_all_active_drinks().keys()) - {telegram_id}
-        all_follows = get_all_follows()
-        follower_following: dict[int, set[int]] = {}
-        for row in all_follows:
-            follower_following.setdefault(row["follower_id"], set()).add(row["following_id"])
+            # Notifs aux abonnés (premier verre uniquement, différé 30s)
+            if is_first:
+                gender = user.get("gender", "homme")
+                le_la  = "la" if gender == "femme" else "le"
+                name   = user["username"]
+                followers = get_followers(telegram_id)
+                active_drinkers = set(get_all_active_drinks().keys()) - {telegram_id}
+                all_follows = get_all_follows()
+                follower_following: dict[int, set[int]] = {}
+                for row in all_follows:
+                    follower_following.setdefault(row["follower_id"], set()).add(row["following_id"])
 
-        # Pré-calcule la liste (fid, title, body) à envoyer
-        plan = []
-        now_ts = datetime.now(timezone.utc)
-        for fid in followers:
-            key = (telegram_id, fid)
-            last_fn = _first_drink_notified.get(key)
-            if last_fn and (now_ts - last_fn).total_seconds() < 8 * 3600:
-                continue
-            fid_following = follower_following.get(fid, set())
-            others = [oid for oid in fid_following if oid != telegram_id and oid in active_drinkers]
-            n_others = len(others)
-            if n_others == 0:
-                title = "🍺 Drunk"
-                body  = f"{name} est en train de se mettre des verres, rejoins {le_la} !"
-            elif n_others == 1:
-                other_user = get_user(others[0])
-                other_name = other_user["username"] if other_user else "quelqu'un"
-                title = "🍺 Drunk"
-                body  = (f"{name} et {other_name} sont en train de se péter le cabanon, "
-                         f"sers toi un verre en urgence !")
-            else:
-                title = "🍺 Drunk"
-                body  = f"{name} s'est également envoyé un godet, tu attends quoi toi ?"
-            plan.append((fid, key, title, body))
+                plan = []
+                now_ts2 = datetime.now(timezone.utc)
+                for fid in followers:
+                    key = (telegram_id, fid)
+                    last_fn = _first_drink_notified.get(key)
+                    if last_fn and (now_ts2 - last_fn).total_seconds() < 8 * 3600:
+                        continue
+                    fid_following = follower_following.get(fid, set())
+                    others = [oid for oid in fid_following if oid != telegram_id and oid in active_drinkers]
+                    n_others = len(others)
+                    if n_others == 0:
+                        title = "🍺 Drunk"
+                        body  = f"{name} est en train de se mettre des verres, rejoins {le_la} !"
+                    elif n_others == 1:
+                        other_user = users_by_id.get(others[0])
+                        other_name = other_user["username"] if other_user else "quelqu'un"
+                        title = "🍺 Drunk"
+                        body  = (f"{name} et {other_name} sont en train de se péter le cabanon, "
+                                 f"sers toi un verre en urgence !")
+                    else:
+                        title = "🍺 Drunk"
+                        body  = f"{name} s'est également envoyé un godet, tu attends quoi toi ?"
+                    plan.append((fid, key, title, body))
 
-        async def _delayed_first_drink_notifs(drinker_id, plan):
-            try:
-                await asyncio.sleep(30)
-            except asyncio.CancelledError:
-                return  # undo dans les 30s → on n'envoie rien
-            loop = asyncio.get_event_loop()
-            now2 = datetime.now(timezone.utc)
-            for fid, key, title, body in plan:
-                _first_drink_notified[key] = now2
-                loop.run_in_executor(None, _send_push, fid, title, body, "/?tab=live")
-            _pending_first_drink_notifs.pop(drinker_id, None)
+                async def _delayed_first_drink_notifs(drinker_id, plan):
+                    try:
+                        await asyncio.sleep(30)
+                    except asyncio.CancelledError:
+                        return
+                    loop = asyncio.get_event_loop()
+                    now3 = datetime.now(timezone.utc)
+                    for fid, key, title, body in plan:
+                        _first_drink_notified[key] = now3
+                        loop.run_in_executor(None, _send_push, fid, title, body, "/?tab=live")
+                    _pending_first_drink_notifs.pop(drinker_id, None)
 
-        # Annule une éventuelle notif déjà programmée pour ce user
-        old = _pending_first_drink_notifs.get(telegram_id)
-        if old and not old.done():
-            old.cancel()
-        if plan:
-            _pending_first_drink_notifs[telegram_id] = asyncio.create_task(
-                _delayed_first_drink_notifs(telegram_id, plan)
-            )
+                old = _pending_first_drink_notifs.get(telegram_id)
+                if old and not old.done():
+                    old.cancel()
+                if plan:
+                    _pending_first_drink_notifs[telegram_id] = asyncio.create_task(
+                        _delayed_first_drink_notifs(telegram_id, plan)
+                    )
+        except Exception as e:
+            print(f"[post_drink_work] erreur (non-critique) : {e}")
 
+    asyncio.create_task(_post_drink_work())
+
+    # Réponse instantanée. Les badges seront visibles au prochain refresh.
     return {
         "ok": True,
         "bac": round(bac, 3),
         "nb_drinks": len(drinks_data),
         "label": bac_label(bac),
-        "new_badges": [
-            {"key": k, **BADGES.get(k, {})} for k in (award.get("new_badges") or [])
-        ],
-        "xp": get_xp(telegram_id),
+        "new_badges": [],
     }
 
 
@@ -2232,6 +2236,8 @@ async def undo_drink_web(request: Request):
 
     if not delete_last_drink(telegram_id):
         return {"ok": False, "error": "Aucun verre à annuler"}
+    # Libère le cooldown mémoire — l'user peut recliquer immédiatement
+    _last_drink_at.pop(telegram_id, None)
     # Annule toute notif FOMO en attente pour ce user (si dans les 30s)
     pending = _pending_first_drink_notifs.get(telegram_id)
     if pending and not pending.done():
