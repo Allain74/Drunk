@@ -3905,15 +3905,22 @@
     }
   }
 
-  function openModal3(username) {
+  async function openModal3(username) {
     const user = _thune.find(u => u.username === username);
     if (!user) return;
     document.getElementById('modal3-title').textContent = `🪙 ${username} — ${user.coins} pièces`;
     const content = document.getElementById('modal3-content');
-    if (!user.transactions || !user.transactions.length) {
-      content.innerHTML = '<p style="color:var(--sub);margin-top:8px">Aucune transaction.</p>';
-    } else {
-      content.innerHTML = user.transactions.map(t => {
+    document.getElementById('modal-bg3').classList.add('open');
+    // Fetch des transactions à la demande (avant elles étaient dans /coins
+    // pour TOUS les users, ce qui faisait du N+1 catastrophique côté serveur).
+    content.innerHTML = '<p style="color:var(--sub);margin-top:8px">Chargement…</p>';
+    try {
+      const txs = await fetch(`${API}/coins/${user.telegram_id}/transactions?limit=20`).then(r => r.json());
+      if (!txs || !txs.length) {
+        content.innerHTML = '<p style="color:var(--sub);margin-top:8px">Aucune transaction.</p>';
+        return;
+      }
+      content.innerHTML = txs.map(t => {
         const pos = t.amount >= 0;
         const sign = pos ? '+' : '';
         const cls = pos ? 'tx-pos' : 'tx-neg';
@@ -3927,8 +3934,9 @@
           </span>
         </div>`;
       }).join('');
+    } catch(e) {
+      content.innerHTML = '<p style="color:var(--sub);margin-top:8px">Erreur de chargement.</p>';
     }
-    document.getElementById('modal-bg3').classList.add('open');
   }
 
   function closeModal3(e) {
@@ -4682,52 +4690,73 @@
   let _suggestionsCache = null;
   let _allBadgesMeta = [];  // [{key, name, emoji, desc}] — cache global (badges fixes)
 
-  function _preloadAll() {
+  async function _preloadAll() {
     if (!myTid) return;
-    // Tous en parallèle. .catch silencieux pour ne pas spammer si Render
-    // est en cold start.
-    fetch(`${API}/alltime`).then(r => r.json()).then(d => {
-      _palmares = d || []; _cacheSet('palmares', _palmares);
-      if (document.getElementById('palmares-list')) _renderPalmares();
-    }).catch(() => {});
-    fetch(`${API}/coins`).then(r => r.json()).then(d => {
-      _thune = d || []; _cacheSet('thune', _thune);
-      if (document.getElementById('thune-list')) _renderThune();
-    }).catch(() => {});
-    fetch(`${API}/blackjack/stats/all`).then(r => r.json()).then(d => {
-      _bjStats = d || []; _cacheSet('bjstats', _bjStats);
-      if (document.getElementById('bj-stats-list')) _renderBjStats();
-    }).catch(() => {});
-    fetch(`${API}/bets/stats/all`).then(r => r.json()).then(d => {
-      _parisStats = d || []; _cacheSet('parisstats', _parisStats);
-      if (document.getElementById('paris-stats-list')) _renderParisStats();
-    }).catch(() => {});
-    fetch(`${API}/me/${myTid}`).then(r => r.json()).then(d => {
-      if (d && d.ok) {
-        _meCache = d;
-        _refCount = d.referrals_count || 0;
-        if (document.getElementById('profil-level-content')) _renderLevelCard(d);
-      }
-    }).catch(() => {});
-    fetch(`${API}/badges/${myTid}`).then(r => r.json()).then(d => {
-      _badgesCache = Array.isArray(d) ? d : [];
-      // Cache de la metadata badges (utilisé par openProfile pour les autres users)
-      if (!_allBadgesMeta.length && Array.isArray(d)) {
-        _allBadgesMeta = d.map(b => ({key: b.key, name: b.name, emoji: b.emoji, desc: b.desc}));
-      }
-      if (document.getElementById('profil-badges-content')) _renderBadges(_badgesCache);
-    }).catch(() => {});
-    fetch(`${API}/records/${myTid}`).then(r => r.json()).then(d => {
-      _recordsCache = d || {};
-      if (document.getElementById('profil-records')) _loadRecords();
-    }).catch(() => {});
-    fetch(`${API}/challenges/${myTid}`).then(r => r.json()).then(d => {
-      _challengesCache = d || {};
-      if (document.getElementById('profil-challenges')) _loadChallenges();
-    }).catch(() => {});
-    fetch(`${API}/suggestions/${myTid}?limit=5`).then(r => r.json()).then(d => {
-      _suggestionsCache = Array.isArray(d) ? d : [];
-    }).catch(() => {});
+    // Avant : 9 fetchs en parallèle au boot → saturation du serveur Render
+    // (0.5 CPU + Turso HTTP latency). Maintenant : par batches de 2, avec
+    // un petit délai entre les batches pour laisser respirer le backend.
+    const batches = [
+      // Batch 1 : les plus utiles immédiatement (profil + classement principal)
+      [
+        ['/me/'+myTid, d => {
+          if (d && d.ok) {
+            _meCache = d;
+            _refCount = d.referrals_count || 0;
+            if (document.getElementById('profil-level-content')) _renderLevelCard(d);
+          }
+        }],
+        ['/alltime', d => {
+          _palmares = d || []; _cacheSet('palmares', _palmares);
+          if (document.getElementById('palmares-list')) _renderPalmares();
+        }],
+      ],
+      // Batch 2 : classements secondaires
+      [
+        ['/coins', d => {
+          _thune = d || []; _cacheSet('thune', _thune);
+          if (document.getElementById('thune-list')) _renderThune();
+        }],
+        ['/badges/'+myTid, d => {
+          _badgesCache = Array.isArray(d) ? d : [];
+          if (!_allBadgesMeta.length && Array.isArray(d)) {
+            _allBadgesMeta = d.map(b => ({key: b.key, name: b.name, emoji: b.emoji, desc: b.desc}));
+          }
+          if (document.getElementById('profil-badges-content')) _renderBadges(_badgesCache);
+        }],
+      ],
+      // Batch 3 : jeux
+      [
+        ['/blackjack/stats/all', d => {
+          _bjStats = d || []; _cacheSet('bjstats', _bjStats);
+          if (document.getElementById('bj-stats-list')) _renderBjStats();
+        }],
+        ['/bets/stats/all', d => {
+          _parisStats = d || []; _cacheSet('parisstats', _parisStats);
+          if (document.getElementById('paris-stats-list')) _renderParisStats();
+        }],
+      ],
+      // Batch 4 : profil et autres (le moins urgent)
+      [
+        ['/records/'+myTid, d => {
+          _recordsCache = d || {};
+          if (document.getElementById('profil-records')) _loadRecords();
+        }],
+        ['/challenges/'+myTid, d => {
+          _challengesCache = d || {};
+          if (document.getElementById('profil-challenges')) _loadChallenges();
+        }],
+        ['/suggestions/'+myTid+'?limit=5', d => {
+          _suggestionsCache = Array.isArray(d) ? d : [];
+        }],
+      ],
+    ];
+    for (const batch of batches) {
+      await Promise.all(batch.map(([path, handler]) =>
+        fetch(API + path).then(r => r.json()).then(handler).catch(() => {})
+      ));
+      // Petit délai entre batches : laisse le serveur traiter d'autres requêtes.
+      await new Promise(r => setTimeout(r, 250));
+    }
   }
 
   async function init() {

@@ -980,7 +980,9 @@ async def admin_close_all_bj(request: Request):
 
 @app.get("/snapshot")
 def get_snapshot():
-    return build_snapshot()
+    # Cache 5s : sans ça, chaque user qui ouvre l'app + WS qui broadcast
+    # = saturation Turso. 5s de fraîcheur est largement acceptable pour le Live.
+    return _cached("snapshot", 5.0, build_snapshot)
 
 
 @app.websocket("/ws")
@@ -1024,6 +1026,33 @@ ALLTIME_CACHE_TTL = 60.0
 def _invalidate_alltime_cache():
     _alltime_cache["data"] = None
     _alltime_cache["ts"] = 0.0
+
+
+# ── Cache TTL générique pour endpoints lourds ─────────────────────────────────
+# Coupe la cascade DB sur Render free tier (chaque requête Turso = 100-300ms
+# HTTP). Sans ce cache, 50 users qui ouvrent l'app = 50× tous les fetchs en
+# parallèle = saturation du serveur.
+_endpoint_cache: dict[str, dict] = {}
+
+
+def _cached(key: str, ttl: float, builder):
+    """Retourne la valeur cachée si fraîche, sinon rebuild et cache."""
+    now = time.time()
+    entry = _endpoint_cache.get(key)
+    if entry and (now - entry["ts"]) < ttl:
+        return entry["data"]
+    data = builder()
+    _endpoint_cache[key] = {"data": data, "ts": now}
+    return data
+
+
+def _invalidate_cache(*keys: str):
+    """Invalide une ou plusieurs entrées de cache."""
+    if not keys:
+        _endpoint_cache.clear()
+        return
+    for k in keys:
+        _endpoint_cache.pop(k, None)
 
 
 @app.get("/me/{telegram_id}")
@@ -1711,20 +1740,31 @@ def get_history():
 
 @app.get("/coins")
 def get_coins_endpoint():
-    balances = get_all_balances()
-    result = []
-    for b in balances:
-        txs = get_transactions(b["telegram_id"], 10)
-        result.append({
-            "telegram_id": b["telegram_id"],
-            "username": b["username"],
-            "coins": b["coins"] or 0,
-            "transactions": [
-                {"amount": t["amount"], "reason": t["reason"], "at": t["created_at"]}
-                for t in txs
-            ],
-        })
-    return result
+    # Avant : 1 + N queries Turso (1 par user pour les transactions). Sur 50
+    # users = 51 calls HTTP en série = 10-20s par appel. Maintenant : 1 query.
+    # Les transactions sont fetchées à la demande via /coins/{tid}/transactions
+    # quand l'user clique sur quelqu'un dans le classement.
+    def _build():
+        balances = get_all_balances()
+        return [
+            {
+                "telegram_id": b["telegram_id"],
+                "username":    b["username"],
+                "coins":       b["coins"] or 0,
+            }
+            for b in balances
+        ]
+    return _cached("coins_all", 10.0, _build)
+
+
+@app.get("/coins/{telegram_id}/transactions")
+def get_coins_transactions(telegram_id: int, limit: int = 10):
+    """Transactions récentes d'un user (fetchées à la demande)."""
+    txs = get_transactions(telegram_id, limit)
+    return [
+        {"amount": t["amount"], "reason": t["reason"], "at": t["created_at"]}
+        for t in txs
+    ]
 
 
 @app.get("/balance/{telegram_id}")
@@ -2085,6 +2125,7 @@ async def log_drink_web(request: Request):
 
     db_log_drink(telegram_id, drink_key, alcohol_grams(drink.volume_ml, drink.abv))
     _invalidate_alltime_cache()
+    _invalidate_cache("snapshot", "coins_all")
     add_coins(telegram_id, 5, f"Verre bu ({drink.name})")
 
     # Gamification : XP, streak, badges
@@ -2205,6 +2246,7 @@ async def undo_drink_web(request: Request):
     # Note : on ne retire pas les badges (ce serait incohérent pour les
     # achievements de type "record" comme max_bac).
     _invalidate_alltime_cache()
+    _invalidate_cache("snapshot", "coins_all")
 
     drinks_data = get_session_drinks(telegram_id)
     bac = total_bac(drinks_data, user["weight_kg"], user["gender"])
@@ -2858,7 +2900,11 @@ async def upload_avatar(request: Request):
 
 @app.get("/bets/stats/all")
 def get_all_bets_stats():
-    """Stats de paris (settleduniquement) pour le classement."""
+    """Stats de paris (settled uniquement) pour le classement."""
+    return _cached("bets_stats_all", 15.0, _build_bets_stats_all)
+
+
+def _build_bets_stats_all():
     from data.database import _fetchall as _fa
     bets  = _fa("SELECT * FROM bets WHERE status='settled'")
     users = {u["telegram_id"]: u for u in get_all_users()}
@@ -2887,17 +2933,21 @@ def get_all_bets_stats():
 
 @app.get("/blackjack/stats/all")
 def get_all_bj_stats():
-    """Retourne les stats blackjack de tous les utilisateurs."""
-    users = get_all_users()
-    result = []
-    for u in users:
-        bj = get_blackjack_stats(u["telegram_id"])
-        result.append({
-            "telegram_id": u["telegram_id"],
-            "username":    u["username"],
-            **bj,
-        })
-    return result
+    """Stats blackjack de tous les utilisateurs (classement)."""
+    # Avant : N+1 (1 query par user). Maintenant : cache 15s + 1 query par user.
+    # Le cache absorbe le burst de plusieurs users qui ouvrent l'app en même temps.
+    def _build():
+        users = get_all_users()
+        result = []
+        for u in users:
+            bj = get_blackjack_stats(u["telegram_id"])
+            result.append({
+                "telegram_id": u["telegram_id"],
+                "username":    u["username"],
+                **bj,
+            })
+        return result
+    return _cached("bj_stats_all", 15.0, _build)
 
 
 async def _resolve_hand(sess_id: int, token: str):
