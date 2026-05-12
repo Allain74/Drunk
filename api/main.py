@@ -2291,9 +2291,11 @@ def get_bj_state(token: str):
     players = get_blackjack_players(sess["id"])
     dealer_hand = json.loads(sess["dealer_hand"])
     hide_dealer = sess["status"] == "active"
+    users_by_id = _cached("users_by_id_map", 30.0,
+                          lambda: {u["telegram_id"]: u for u in get_all_users()})
     player_data = []
     for p in players:
-        u = get_user(p["telegram_id"])
+        u = users_by_id.get(p["telegram_id"])
         player_data.append({
             "telegram_id": p["telegram_id"],
             "username": u["username"] if u else str(p["telegram_id"]),
@@ -2325,10 +2327,14 @@ def get_my_bj_session(telegram_id: int):
     if not row:
         return {"ok": False}
     players = get_blackjack_players(row["id"])
-    creator = get_user(row["creator_id"])
+    # Avant : 1 get_user(creator) + N get_user(player) → N+1.
+    # Maintenant : 1 query cached pour tous les users, résolution en mémoire.
+    users_by_id = _cached("users_by_id_map", 30.0,
+                          lambda: {u["telegram_id"]: u for u in get_all_users()})
+    creator = users_by_id.get(row["creator_id"])
     player_data = []
     for p in players:
-        u = get_user(p["telegram_id"])
+        u = users_by_id.get(p["telegram_id"])
         player_data.append({
             "telegram_id": p["telegram_id"],
             "username": u["username"] if u else str(p["telegram_id"]),
@@ -2354,11 +2360,17 @@ def get_my_bj_session(telegram_id: int):
 @app.get("/blackjack/sessions")
 async def list_bj_sessions():
     """Liste toutes les sessions blackjack en attente ou actives."""
+    # Avant : N+1 imbriqué — get_user pour chaque creator + chaque player.
+    # 5 sessions × 3 players = 25 calls Turso. Maintenant : 1 cache + résolution mémoire.
     sessions = get_active_blackjack_sessions()
+    if not sessions:
+        return []
+    users_by_id = _cached("users_by_id_map", 30.0,
+                          lambda: {u["telegram_id"]: u for u in get_all_users()})
     result = []
     for s in sessions:
         players = get_blackjack_players(s["id"])
-        creator = get_user(s["creator_id"])
+        creator = users_by_id.get(s["creator_id"])
         result.append({
             "token":   s["token"],
             "status":  s["status"],
@@ -2367,7 +2379,7 @@ async def list_bj_sessions():
             "players": [
                 {
                     "telegram_id": p["telegram_id"],
-                    "username": (get_user(p["telegram_id"]) or {}).get("username", "?"),
+                    "username": (users_by_id.get(p["telegram_id"]) or {}).get("username", "?"),
                     "bet": p["bet"],
                     "status": p["status"],
                 }
@@ -2641,17 +2653,24 @@ async def bj_action_web(token: str, request: Request):
 @app.get("/bets/user/{telegram_id}")
 async def get_bets_user(telegram_id: int):
     """Retourne les paris d'un utilisateur."""
+    # Avant : N+1 (3 queries get_user par pari → 30 paris = 91 calls Turso).
+    # Maintenant : 1 query pour les paris + 1 query pour tous les users en
+    # cache 30s (les usernames ne changent quasi jamais), résolution en mémoire.
     bets = get_user_bets(telegram_id)
+    if not bets:
+        return []
+    users_by_id = _cached("users_by_id_map", 30.0,
+                          lambda: {u["telegram_id"]: u for u in get_all_users()})
     result = []
     for b in bets:
-        challenger = get_user(b["challenger_id"])
-        opponent   = get_user(b["opponent_id"])
-        winner     = get_user(b["winner_id"]) if b.get("winner_id") else None
+        ch = users_by_id.get(b["challenger_id"])
+        op = users_by_id.get(b["opponent_id"])
+        wn = users_by_id.get(b["winner_id"]) if b.get("winner_id") else None
         result.append({
             **b,
-            "challenger_name": challenger["username"] if challenger else "?",
-            "opponent_name":   opponent["username"]   if opponent   else "?",
-            "winner_name":     winner["username"]     if winner     else None,
+            "challenger_name": ch["username"] if ch else "?",
+            "opponent_name":   op["username"] if op else "?",
+            "winner_name":     wn["username"] if wn else None,
         })
     return result
 
@@ -3007,9 +3026,12 @@ async def _bj_broadcast(token: str):
     dealer_hand = json.loads(sess["dealer_hand"])
     hide_dealer = sess["status"] == "active"
 
+    # Cache users (évite N get_user calls par broadcast)
+    users_by_id = _cached("users_by_id_map", 30.0,
+                          lambda: {u["telegram_id"]: u for u in get_all_users()})
     player_data = []
     for p in players:
-        u = get_user(p["telegram_id"])
+        u = users_by_id.get(p["telegram_id"])
         player_data.append({
             "telegram_id": p["telegram_id"],
             "username": u["username"] if u else str(p["telegram_id"]),
