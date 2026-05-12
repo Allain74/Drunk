@@ -2209,47 +2209,63 @@
     document.body.appendChild(overlay);
   }
 
-  async function socialListToggleFollow(tid, doFollow) {
+  function socialListToggleFollow(tid, doFollow) {
     if (!myTid) return;
     const endpoint = doFollow ? '/follow' : '/unfollow';
-    await fetch(`${API}${endpoint}`, {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ follower_id: myTid, following_id: tid }),
-    });
-    if (doFollow) followingSet.add(tid);
-    else followingSet.delete(tid);
-    // Rafraîchit le profil ouvert (re-fetch social) — conserve le contexte hideSocial
+    // Optimistic UI : update local state immédiatement
+    const numTid = Number(tid);
+    if (doFollow) followingSet.add(numTid);
+    else followingSet.delete(numTid);
+    _cacheSet('following', [...followingSet]);
     openProfile(_profileUsername, _profileHideSocial);
     if (lastData.length) render(lastData);
+    // Fetch en background
+    fetch(`${API}${endpoint}`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ follower_id: myTid, following_id: tid }),
+    }).catch(() => {
+      // Rollback en cas d'erreur
+      if (doFollow) followingSet.delete(numTid);
+      else followingSet.add(numTid);
+      _cacheSet('following', [...followingSet]);
+      showToast('❌ Erreur réseau');
+    });
   }
 
-  async function toggleFollow(tid, doFollow) {
+  function toggleFollow(tid, doFollow) {
     if (!myTid) return;
     const endpoint = doFollow ? '/follow' : '/unfollow';
-    try {
-      const r = await fetch(`${API}${endpoint}`, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({follower_id: myTid, following_id: tid})
-      }).then(r => r.json()).catch(() => ({ok: false, error: 'Erreur réseau'}));
+    // Optimistic UI : update immédiat
+    const numTid = Number(tid);
+    if (doFollow) followingSet.add(numTid);
+    else followingSet.delete(numTid);
+    _cacheSet('following', [...followingSet]);
+    loadFollowing();
+    openProfile(_profileUsername, _profileHideSocial);
+    if (myTid) render(lastData);
+    const aboPanel = document.getElementById('amis-panel');
+    if (aboPanel && aboPanel.classList.contains('active')) loadAbonnements();
+    // Fetch en background
+    fetch(`${API}${endpoint}`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({follower_id: myTid, following_id: tid})
+    }).then(r => r.json()).then(r => {
       if (!r.ok) {
+        // Rollback : on inverse l'opération localement
+        if (doFollow) followingSet.delete(numTid);
+        else followingSet.add(numTid);
+        _cacheSet('following', [...followingSet]);
+        loadFollowing();
         showToast('❌ ' + (r.error || 'Erreur'));
-        return;
       }
-      if (doFollow) followingSet.add(Number(tid));
-      else followingSet.delete(Number(tid));
+    }).catch(() => {
+      if (doFollow) followingSet.delete(numTid);
+      else followingSet.add(numTid);
       _cacheSet('following', [...followingSet]);
       loadFollowing();
-      // Re-render profile modal
-      openProfile(_profileUsername, _profileHideSocial);
-      // Re-render live grid if filtered
-      if (myTid) render(lastData);
-      // Refresh abonnements if open
-      const aboPanel = document.getElementById('amis-panel');
-      if (aboPanel.classList.contains('active')) loadAbonnements();
-    } catch(e) {
       showToast('❌ Erreur réseau');
-    }
+    });
   }
 
   function openChartFromProfile(username) {
@@ -2729,20 +2745,28 @@
     const file = input.files[0];
     if (!file) return;
     if (!myTid) { showToast('❌ Non connecté'); return; }
-    showToast('⏳ Traitement…');
     try {
       const dataUrl = await _resizeImage(file, 200, 0.72);
-      const res = await fetch(`${API}/profile/avatar`, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ telegram_id: myTid, avatar: dataUrl }),
-      }).then(r => r.json());
-      if (!res.ok) { showToast('❌ ' + (res.error || 'Erreur')); return; }
-      // Met à jour le cache immédiatement
+      // Optimistic UI : update cache + UI immédiatement
       _avatarCache[String(myTid)] = dataUrl;
       _avatarCacheTs = Date.now();
       showToast('✅ Photo de profil mise à jour !');
       loadProfil();
+      // Upload en background
+      fetch(`${API}/profile/avatar`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ telegram_id: myTid, avatar: dataUrl }),
+      }).then(r => r.json()).then(res => {
+        if (!res.ok) {
+          showToast('❌ ' + (res.error || 'Échec de l\'upload'));
+          // Rollback cache
+          delete _avatarCache[String(myTid)];
+        }
+      }).catch(() => {
+        showToast('❌ Erreur réseau lors de l\'upload');
+        delete _avatarCache[String(myTid)];
+      });
     } catch(e) { showToast('❌ Erreur lors du traitement'); }
     input.value = '';
   }
@@ -4190,29 +4214,39 @@
     } catch(e) { box.innerHTML = ''; }
   }
 
-  async function aboToggle(tid, doFollow) {
+  function aboToggle(tid, doFollow) {
     if (!myTid) return;
     const endpoint = doFollow ? '/follow' : '/unfollow';
-    try {
-      const r = await fetch(`${API}${endpoint}`, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({follower_id: myTid, following_id: tid})
-      }).then(r => r.json()).catch(() => ({ok: false, error: 'Erreur réseau'}));
+    // Optimistic UI : update immédiat
+    const numTid = Number(tid);
+    if (doFollow) followingSet.add(numTid);
+    else followingSet.delete(numTid);
+    _cacheSet('following', [...followingSet]);
+    loadFollowing();
+    loadAbonnements();
+    if (lastData.length) render(lastData);
+    // Fetch en background
+    fetch(`${API}${endpoint}`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({follower_id: myTid, following_id: tid})
+    }).then(r => r.json()).then(r => {
       if (!r.ok) {
+        // Rollback
+        if (doFollow) followingSet.delete(numTid);
+        else followingSet.add(numTid);
+        _cacheSet('following', [...followingSet]);
+        loadFollowing();
+        loadAbonnements();
         showToast('❌ ' + (r.error || 'Erreur'));
-        return;
       }
-      if (doFollow) followingSet.add(Number(tid));
-      else followingSet.delete(Number(tid));
+    }).catch(() => {
+      if (doFollow) followingSet.delete(numTid);
+      else followingSet.add(numTid);
       _cacheSet('following', [...followingSet]);
-      // Re-fetch authoritative depuis le serveur pour rester sync
       loadFollowing();
-      loadAbonnements();
-      if (lastData.length) render(lastData);
-    } catch(e) {
       showToast('❌ Erreur réseau');
-    }
+    });
   }
 
   // ── Init ──
@@ -4262,32 +4296,31 @@
     }
   }
 
-  async function buySkin(skin_key) {
-    try {
-      const r = await fetch(`${API}/shop/buy`, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ telegram_id: myTid, skin_key }),
-      }).then(r => r.json());
+  function buySkin(skin_key) {
+    // Optimistic UI : feedback immédiat. Si erreur (solde insuffisant), on annonce après.
+    showToast('✅ Skin acheté et équipé !');
+    fetch(`${API}/shop/buy`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ telegram_id: myTid, skin_key }),
+    }).then(r => r.json()).then(r => {
       if (!r.ok) { showToast('❌ ' + (r.error || 'Erreur')); return; }
-      showToast('✅ Skin acheté et équipé !');
       openShop();
       if (lastData.length) render(lastData);
-    } catch(e) { showToast('❌ Erreur réseau'); }
+    }).catch(() => showToast('❌ Erreur réseau'));
   }
 
-  async function equipSkin(skin_key) {
-    try {
-      const r = await fetch(`${API}/shop/equip`, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ telegram_id: myTid, skin_key }),
-      }).then(r => r.json());
+  function equipSkin(skin_key) {
+    showToast('🎨 Skin équipé !');
+    fetch(`${API}/shop/equip`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ telegram_id: myTid, skin_key }),
+    }).then(r => r.json()).then(r => {
       if (!r.ok) { showToast('❌ ' + (r.error || 'Erreur')); return; }
-      showToast('🎨 Skin équipé !');
       openShop();
       if (lastData.length) render(lastData);
-    } catch(e) { showToast('❌ Erreur réseau'); }
+    }).catch(() => showToast('❌ Erreur réseau'));
   }
 
   // ── QR code de profil (parrainage) ─────────────────────────────────────────
@@ -4506,37 +4539,38 @@
     }).join('');
   }
 
-  async function claimChallenge(key) {
-    try {
-      const r = await fetch(`${API}/challenges/claim`, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ telegram_id: myTid, key }),
-      }).then(r => r.json());
-      if (!r.ok) { showToast('❌ ' + r.error); return; }
-      showToast(`🎁 +${r.reward} 🪙 !`);
+  function claimChallenge(key) {
+    // Optimistic : toast immédiat. Le montant exact arrive après.
+    showToast('🎁 Récompense récupérée !');
+    fetch(`${API}/challenges/claim`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ telegram_id: myTid, key }),
+    }).then(r => r.json()).then(r => {
+      if (!r.ok) { showToast('❌ ' + (r.error || 'Erreur')); return; }
+      setTimeout(() => showToast(`💰 +${r.reward} 🪙`), 600);
       _loadChallenges();
       const cel = document.getElementById('profil-coins');
       if (cel) cel.textContent = r.balance;
-    } catch(e) { showToast('❌ Erreur réseau'); }
+    }).catch(() => showToast('❌ Erreur réseau'));
   }
 
   // ── Mode discret ───────────────────────────────────────────────────────────
-  async function toggleDiscreet(on) {
+  function toggleDiscreet(on) {
+    // Optimistic UI : slider et toast immédiats
     const sld = document.getElementById('profil-discreet-slider');
     if (sld) {
       sld.style.background = on ? '#6366f1' : 'var(--border)';
       sld.innerHTML = `<span style="position:absolute;top:3px;${on ? 'right:3px' : 'left:3px'};width:18px;height:18px;background:white;border-radius:50%;transition:.3s"></span>`;
     }
-    try {
-      const r = await fetch(`${API}/profile/discreet`, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ telegram_id: myTid, on }),
-      }).then(r => r.json());
-      if (!r.ok) { showToast('❌ ' + (r.error || 'Erreur')); return; }
-      showToast(on ? '🥷 Ta position est cachée sur la carte' : '📍 Ta position est de nouveau visible');
-    } catch(e) { showToast('❌ Erreur réseau'); }
+    showToast(on ? '🥷 Ta position est cachée sur la carte' : '📍 Ta position est de nouveau visible');
+    fetch(`${API}/profile/discreet`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ telegram_id: myTid, on }),
+    }).then(r => r.json()).then(r => {
+      if (!r.ok) showToast('❌ ' + (r.error || 'Erreur'));
+    }).catch(() => showToast('❌ Erreur réseau'));
   }
 
   // ── Récap soirée ───────────────────────────────────────────────────────────
@@ -5022,32 +5056,37 @@
     });
   }
 
-  async function undoDrink() {
+  function undoDrink() {
     if (!myTid) return;
-    const data = await fetch(`${API}/undo-drink`, {
+    // Optimistic UI : feedback immédiat, fetch en background
+    showToast('↩️ Verre annulé');
+    _lastDrinkAt = 0;
+    _drinkButtonsDisabled(false);
+    fetch(`${API}/undo-drink`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({ telegram_id: myTid }),
-    }).then(r => r.json()).catch(() => ({ok: false}));
-    if (data.ok) {
-      showToast(`↩️ Verre annulé — ${data.bac.toFixed(2)} g/L · -5 🪙 -10 XP`);
-      // Permet de recliquer immédiatement (on a "défait" l'action)
-      _lastDrinkAt = 0;
-      _drinkButtonsDisabled(false);
-    } else {
-      showToast('❌ ' + (data.error || 'Erreur'));
-    }
+    }).then(r => r.json()).then(data => {
+      if (data.ok && typeof data.bac === 'number') {
+        setTimeout(() => showToast(`📊 ${data.bac.toFixed(2)} g/L · -5 🪙 -10 XP`), 600);
+      } else if (!data.ok) {
+        showToast('❌ ' + (data.error || 'Erreur'));
+      }
+    }).catch(() => showToast('❌ Erreur réseau'));
   }
 
-  async function resetSession() {
+  function resetSession() {
     if (!myTid) return;
     if (!confirm('Remettre tous tes compteurs à zéro ?')) return;
-    const data = await fetch(`${API}/reset-session`, {
+    // Optimistic UI
+    showToast('🔄 Session remise à zéro');
+    fetch(`${API}/reset-session`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({ telegram_id: myTid }),
-    }).then(r => r.json()).catch(() => ({ok: false}));
-    if (data.ok) showToast('🔄 Session remise à zéro');
+    }).then(r => r.json()).then(data => {
+      if (!data.ok) showToast('❌ ' + (data.error || 'Erreur'));
+    }).catch(() => showToast('❌ Erreur réseau'));
   }
 
   function openDrinkPicker()  { document.getElementById('modal-bg-picker').classList.add('open'); }
@@ -5840,19 +5879,29 @@ function parisSelectType(btn) {
   timeRow.style.display = _parisType === 'coinflip' ? 'none' : 'block';
 }
 
-async function parisCreate() {
+function parisCreate() {
   const opponent = document.getElementById('paris-opponent').value.trim();
   const amount   = parseInt(document.getElementById('paris-amount').value) || 0;
   const endTime  = document.getElementById('paris-time').value || null;
   if (!opponent) { showToast('❌ Entre le prénom de ton adversaire'); return; }
-  const r = await fetch(`${API}/bets/create`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ challenger_id: myTid, opponent_name: opponent, bet_type: _parisType, amount, end_time: endTime }),
-  }).then(r => r.json()).catch(() => ({ ok: false, error: 'Erreur réseau' }));
-  if (!r.ok) { showToast('❌ ' + r.error); return; }
+  // Optimistic UI : toast immédiat + clear input
   showToast('✅ Défi envoyé !');
   document.getElementById('paris-opponent').value = '';
-  parisLoadBets();
+  fetch(`${API}/bets/create`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ challenger_id: myTid, opponent_name: opponent, bet_type: _parisType, amount, end_time: endTime }),
+  }).then(r => r.json()).then(r => {
+    if (!r.ok) {
+      showToast('❌ ' + (r.error || 'Erreur'));
+      // Restore input pour que le user puisse retenter
+      document.getElementById('paris-opponent').value = opponent;
+      return;
+    }
+    parisLoadBets();
+  }).catch(() => {
+    showToast('❌ Erreur réseau');
+    document.getElementById('paris-opponent').value = opponent;
+  });
 }
 
 async function parisLoadBets() {
@@ -5892,38 +5941,45 @@ async function parisLoadBets() {
   }
 }
 
-async function parisRelance(betId) {
-  const r = await fetch(`${API}/bets/relance`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ telegram_id: myTid, bet_id: betId }),
-  }).then(r => r.json()).catch(() => ({ ok: false, error: 'Erreur réseau' }));
-  if (!r.ok) { showToast('❌ ' + r.error); return; }
+function parisRelance(betId) {
   showToast('⏰ Relance envoyée !');
-}
-
-async function parisAccept(betId) {
-  const r = await fetch(`${API}/bets/accept`, {
+  fetch(`${API}/bets/relance`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ telegram_id: myTid, bet_id: betId }),
-  }).then(r => r.json()).catch(() => ({ ok: false, error: 'Erreur réseau' }));
-  if (!r.ok) { showToast('❌ ' + r.error); return; }
-  if (r.coinflip) {
-    showToast(r.winner === myName ? '🎉 Pile ou face : TU GAGNES !' : `😅 Pile ou face : ${r.winner} gagne`);
-  } else {
-    showToast('✅ Pari accepté !');
-  }
-  parisLoadBets();
-  _parisRefreshCoins();
+  }).then(r => r.json()).then(r => {
+    if (!r.ok) showToast('❌ ' + (r.error || 'Erreur'));
+  }).catch(() => showToast('❌ Erreur réseau'));
 }
 
-async function parisRefuse(betId) {
-  const r = await fetch(`${API}/bets/refuse`, {
+function parisAccept(betId) {
+  // Pour coinflip, le résultat (winner) vient du serveur — on attend la réponse.
+  // Pour les autres types, optimistic.
+  showToast('✅ Pari accepté !');
+  fetch(`${API}/bets/accept`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ telegram_id: myTid, bet_id: betId }),
-  }).then(r => r.json()).catch(() => ({ ok: false, error: 'Erreur réseau' }));
-  if (!r.ok) { showToast('❌ ' + r.error); return; }
+  }).then(r => r.json()).then(r => {
+    if (!r.ok) { showToast('❌ ' + (r.error || 'Erreur')); return; }
+    if (r.coinflip) {
+      setTimeout(() => showToast(r.winner === myName
+        ? '🎉 Pile ou face : TU GAGNES !'
+        : `😅 Pile ou face : ${r.winner} gagne`), 600);
+    }
+    parisLoadBets();
+    _parisRefreshCoins();
+  }).catch(() => showToast('❌ Erreur réseau'));
+}
+
+function parisRefuse(betId) {
   showToast('Pari refusé.');
+  // Optimistic : retire visuellement le pari de la liste si possible
   parisLoadBets();
+  fetch(`${API}/bets/refuse`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ telegram_id: myTid, bet_id: betId }),
+  }).then(r => r.json()).then(r => {
+    if (!r.ok) showToast('❌ ' + (r.error || 'Erreur'));
+  }).catch(() => showToast('❌ Erreur réseau'));
 }
 </script>
 
