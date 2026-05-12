@@ -1036,6 +1036,97 @@ def get_me(telegram_id: int):
     }
 
 
+@app.get("/records/{telegram_id}")
+def get_records(telegram_id: int):
+    """Records personnels d'un user : pic alcool, plus grosse session, plus
+    gros pari gagné, jours depuis l'inscription."""
+    from data.database import _fetchone as _fo, _fetchall as _fa
+    user = get_user(telegram_id)
+    if not user:
+        return {"ok": False}
+    max_bac = float(user.get("max_bac") or 0)
+    max_session = _fo(
+        """SELECT MAX(c) m FROM (
+             SELECT COUNT(*) c FROM drink_logs WHERE user_id=? GROUP BY session_id
+           )""", [telegram_id]
+    )
+    max_session_drinks = int((max_session or {}).get("m") or 0)
+    biggest_bet = _fo(
+        "SELECT MAX(amount) m FROM bets WHERE winner_id=? AND status='settled'",
+        [telegram_id]
+    )
+    biggest_bet_won = int((biggest_bet or {}).get("m") or 0)
+    biggest_bj = _fo(
+        "SELECT MAX(bet) m FROM blackjack_players WHERE user_id=? AND result IN ('win','blackjack')",
+        [telegram_id]
+    )
+    biggest_bj_win = int((biggest_bj or {}).get("m") or 0)
+    # Premier verre = "anniversaire"
+    first = _fo(
+        "SELECT MIN(logged_at) m FROM drink_logs WHERE user_id=?",
+        [telegram_id]
+    )
+    first_drink = (first or {}).get("m")
+    days_since_first = None
+    if first_drink:
+        try:
+            d = datetime.fromisoformat(first_drink).replace(tzinfo=timezone.utc)
+            days_since_first = (datetime.now(timezone.utc) - d).days
+        except Exception:
+            pass
+    total_drinks = _fo("SELECT COUNT(*) c FROM drink_logs WHERE user_id=?", [telegram_id])
+    return {
+        "ok": True,
+        "max_bac": round(max_bac, 2),
+        "max_session_drinks": max_session_drinks,
+        "biggest_bet_won": biggest_bet_won,
+        "biggest_bj_win": biggest_bj_win,
+        "first_drink_at": first_drink,
+        "days_since_first": days_since_first,
+        "total_drinks": int((total_drinks or {}).get("c") or 0),
+    }
+
+
+@app.get("/suggestions/{telegram_id}")
+def get_friend_suggestions(telegram_id: int, limit: int = 5):
+    """Suggestions d'amis : amis d'amis non encore suivis par l'utilisateur."""
+    from data.database import _fetchall as _fa
+    my_following = set(get_following(telegram_id))
+    if not my_following:
+        return []
+    # Récupère les follows des gens que je suis
+    placeholders = ",".join("?" * len(my_following))
+    rows = _fa(
+        f"""SELECT following_id, COUNT(*) as score
+            FROM follows
+            WHERE follower_id IN ({placeholders})
+              AND following_id != ?
+            GROUP BY following_id
+            ORDER BY score DESC
+            LIMIT ?""",
+        [*my_following, telegram_id, max(1, min(limit, 20))]
+    )
+    # Exclure ceux que je suis déjà
+    suggestions = []
+    admin_id = int(os.environ.get("ADMIN_ID", "0"))
+    for r in rows:
+        fid = int(r["following_id"])
+        if fid in my_following:
+            continue
+        u = get_user(fid)
+        if not u or u.get("discreet_mode"):
+            continue
+        suggestions.append({
+            "telegram_id": fid,
+            "username": u.get("username"),
+            "gender": u.get("gender", "homme"),
+            "is_admin": fid == admin_id,
+            "is_premium": fid == admin_id or bool(u.get("is_premium")),
+            "mutual_count": int(r["score"]),
+        })
+    return suggestions
+
+
 @app.get("/favorites/{telegram_id}")
 def get_favorites(telegram_id: int, limit: int = 3):
     """Retourne les drink_keys les plus utilisés par l'utilisateur."""

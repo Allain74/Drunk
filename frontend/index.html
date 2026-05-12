@@ -1197,6 +1197,20 @@
   <div id="profil-content"></div>
 </div>
 
+<!-- ── Modal QR code ── -->
+<div id="qr-overlay" onclick="closeQR(event)" style="display:none;position:fixed;inset:0;background:#0009;z-index:3500;align-items:center;justify-content:center;padding:16px">
+  <div onclick="event.stopPropagation()" style="background:white;border-radius:20px;max-width:360px;width:100%;padding:24px;position:relative;box-shadow:0 20px 60px #0008;text-align:center">
+    <button onclick="closeQR()" style="position:absolute;top:10px;right:10px;background:#eee;border:none;color:#444;border-radius:50%;width:30px;height:30px;font-size:0.85rem;cursor:pointer">✕</button>
+    <div style="font-size:0.7rem;letter-spacing:1.5px;color:#666;font-weight:700;text-transform:uppercase;margin-bottom:6px">SCAN POUR REJOINDRE</div>
+    <div style="font-size:1.15rem;color:#111;font-weight:800;margin-bottom:16px" id="qr-username">@</div>
+    <img id="qr-image" alt="QR code" style="width:240px;height:240px;display:block;margin:0 auto;border-radius:14px"/>
+    <div style="font-size:0.78rem;color:#666;margin-top:14px;line-height:1.5">
+      Demande à un pote de scanner avec son téléphone.<br>
+      Il gagnera <strong style="color:#a16207">200 🪙</strong> en s'inscrivant.
+    </div>
+  </div>
+</div>
+
 <!-- ── Modal Roue de la fortune ── -->
 <div id="spin-overlay" onclick="closeSpin(event)" style="display:none;position:fixed;inset:0;background:#0009;z-index:3500;align-items:center;justify-content:center;padding:16px">
   <div onclick="event.stopPropagation()" style="background:linear-gradient(135deg,#7c2d12,#facc15);color:white;border-radius:20px;max-width:380px;width:100%;padding:28px 22px;position:relative;box-shadow:0 20px 60px #0008;text-align:center">
@@ -2729,6 +2743,12 @@
           </div>
         </div>
 
+        <!-- Records -->
+        <div class="p-card">
+          <div class="p-card-label">🏆 Records perso</div>
+          <div id="profil-records"><div style="color:var(--sub);font-size:0.85rem">Chargement…</div></div>
+        </div>
+
         <!-- Infos -->
         <div class="p-card">
           <div class="p-card-label">Infos</div>
@@ -2896,8 +2916,9 @@
       _renderBadges(badges);
     } catch(e) {}
 
-    // Fetch défis hebdo
+    // Fetch défis hebdo + records
     _loadChallenges();
+    _loadRecords();
 
     // Fetch pièces
     try {
@@ -3783,7 +3804,8 @@
               </svg>
               ${myTid ? 'Partager mon lien' : "Partager l'app"}
             </button>
-            ${myTid ? `<button class="amis-invite-btn" onclick="copyRefLink()" style="flex:0 0 auto" title="Copier mon lien">📋</button>` : ''}
+            ${myTid ? `<button class="amis-invite-btn" onclick="copyRefLink()" style="flex:0 0 auto" title="Copier">📋</button>` : ''}
+            ${myTid ? `<button class="amis-invite-btn" onclick="openQR()" style="flex:0 0 auto" title="QR code">📱</button>` : ''}
           </div>
         </div>
       </div>`;
@@ -3843,13 +3865,18 @@
             <div class="amis-empty-sub">Invite tes potes pour qu'ils te suivent et voient ton taux d'alcool !</div>
            </div>`;
     } else {
+      // Découvrir : suggestions amis-d'amis en haut + recherche + liste
+      const suggestionsBlock = `<div id="abo-suggestions"></div>`;
       listHtml = `
+        ${suggestionsBlock}
         <input class="amis-search" type="text" placeholder="🔍 Rechercher un joueur…"
                value="${esc(searchVal)}" oninput="aboSearch(this.value)"/>
         <div class="amis-list">${decouvrirList.length
           ? decouvrirList.map(_renderAmiRow).join('')
           : `<div class="amis-empty"><div class="amis-empty-icon">🔍</div><div class="amis-empty-title">Aucun résultat</div><div class="amis-empty-sub">Essaie un autre pseudo.</div></div>`
         }</div>`;
+      // Charge les suggestions en arrière-plan
+      _loadFriendSuggestions();
     }
 
     content.innerHTML = inviteBanner + `
@@ -3867,6 +3894,31 @@
       ${listHtml}`;
   }
 
+  async function _loadFriendSuggestions() {
+    const box = document.getElementById('abo-suggestions');
+    if (!box || !myTid) return;
+    try {
+      const sug = await fetch(`${API}/suggestions/${myTid}?limit=5`).then(r => r.json());
+      if (!Array.isArray(sug) || !sug.length) { box.innerHTML = ''; return; }
+      box.innerHTML = `
+        <div style="margin-bottom:14px">
+          <div style="font-size:0.72rem;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">🤝 Suggestions (amis d'amis)</div>
+          <div style="display:flex;gap:8px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:4px">
+            ${sug.map(s => {
+              const init = (s.username||'?')[0].toUpperCase();
+              const av = _avatarEl(s.telegram_id, 44, init, s.gender || 'homme', '', !!s.is_premium);
+              return `<div style="flex-shrink:0;width:110px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:10px;text-align:center">
+                <div style="display:flex;justify-content:center;margin-bottom:6px">${av}</div>
+                <div style="font-weight:700;font-size:0.82rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s.username)}</div>
+                <div style="font-size:0.68rem;color:var(--sub);margin:2px 0 8px">${s.mutual_count} ami${s.mutual_count>1?'s':''} en commun</div>
+                <button class="amis-btn follow" style="width:100%;padding:5px 0;font-size:0.75rem" onclick="event.stopPropagation();aboToggle(${s.telegram_id},true)">+ Suivre</button>
+              </div>`;
+            }).join('')}
+          </div>
+        </div>`;
+    } catch(e) { box.innerHTML = ''; }
+  }
+
   async function aboToggle(tid, doFollow) {
     if (!myTid) return;
     const endpoint = doFollow ? '/follow' : '/unfollow';
@@ -3882,6 +3934,51 @@
   }
 
   // ── Init ──
+  // ── QR code de profil (parrainage) ─────────────────────────────────────────
+  function openQR() {
+    if (!myTid) return;
+    const base = location.origin + location.pathname.replace(/\/+$/, '');
+    const url = `${base}/?ref=${myTid}`;
+    const img = document.getElementById('qr-image');
+    if (img) img.src = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(url)}`;
+    const u = document.getElementById('qr-username');
+    if (u) u.textContent = '@' + (myName || '');
+    document.getElementById('qr-overlay').style.display = 'flex';
+  }
+  function closeQR(e) {
+    if (!e || e.target === document.getElementById('qr-overlay')) {
+      document.getElementById('qr-overlay').style.display = 'none';
+    }
+  }
+
+  // ── Records perso ──────────────────────────────────────────────────────────
+  async function _loadRecords() {
+    const box = document.getElementById('profil-records');
+    if (!box || !myTid) return;
+    try {
+      const r = await fetch(`${API}/records/${myTid}`).then(r => r.json());
+      if (!r.ok) { box.innerHTML = '<div style="color:var(--sub);font-size:0.85rem">—</div>'; return; }
+      const items = [
+        { label: 'Pic d\'alcool',      val: r.max_bac > 0 ? r.max_bac.toFixed(2) + ' g/L' : '—', color: '#f97316' },
+        { label: 'Plus grosse soirée', val: r.max_session_drinks > 0 ? r.max_session_drinks + ' v' : '—', color: '#a855f7' },
+        { label: 'Plus gros pari',     val: r.biggest_bet_won > 0 ? r.biggest_bet_won + ' 🪙' : '—', color: '#22c55e' },
+        { label: 'Plus grosse mise BJ', val: r.biggest_bj_win > 0 ? r.biggest_bj_win + ' 🪙' : '—', color: '#06b6d4' },
+      ];
+      const itemsHtml = items.map(it => `
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px;text-align:center">
+          <div style="font-size:1.05rem;font-weight:800;color:${it.color}">${esc(it.val)}</div>
+          <div style="font-size:0.7rem;color:var(--sub);text-transform:uppercase;letter-spacing:0.5px;margin-top:3px">${it.label}</div>
+        </div>
+      `).join('');
+      const anniv = r.days_since_first
+        ? `<div style="text-align:center;margin-top:12px;font-size:0.78rem;color:var(--sub)">🎂 Sur Drunk depuis <strong>${r.days_since_first} jour${r.days_since_first>1?'s':''}</strong> — ${r.total_drinks} verres au total</div>`
+        : '';
+      box.innerHTML = `
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">${itemsHtml}</div>
+        ${anniv}`;
+    } catch(e) { box.innerHTML = '<div style="color:#ef4444;font-size:0.85rem">Erreur</div>'; }
+  }
+
   // ── Roue de la fortune ─────────────────────────────────────────────────────
   async function openSpin() {
     if (!myTid) return;
