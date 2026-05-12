@@ -129,6 +129,11 @@ _pending_first_drink_notifs: dict[int, asyncio.Task] = {}
 # user_id → timestamp UTC du dernier verre (cooldown 30s en mémoire, évite
 # une query SELECT MAX(logged_at) sur le chemin critique).
 _last_drink_at: dict[int, datetime] = {}
+# user_id → liste des verres de la session courante [(alc_grams, datetime), ...].
+# Permet de calculer le BAC sans aucune query DB sur le chemin critique du
+# /log-drink. Mis à jour au log-drink (append) et au undo-drink (pop last).
+# Invalidé sur reset-session. Lazy-load depuis DB au premier log d'un user.
+_user_drinks_cache: dict[int, list[tuple[float, datetime]]] = {}
 _last_weekly_recap_date: str = ""  # "YYYY-MM-DD" du dernier lundi envoyé
 PARIS = ZoneInfo("Europe/Paris")
 
@@ -597,13 +602,30 @@ async def admin_set_coins(request: Request):
 
 # ── Admin helpers ──────────────────────────────────────────────────────────────
 
+_auth_token_cache: dict[str, tuple[int, float]] = {}  # token → (uid, expiry_ts)
+_AUTH_TOKEN_TTL = 300.0  # 5 min en mémoire
+
+
 def _authed_uid(request: Request) -> int | None:
     """Extrait l'user_id du header Authorization: Bearer <token>.
-    Renvoie None si pas de token, token invalide ou expiré."""
+    Renvoie None si pas de token, token invalide ou expiré.
+    Cache mémoire 5min pour éviter 1 query DB à chaque requête."""
     auth = request.headers.get("authorization", "")
     if not auth.lower().startswith("bearer "):
         return None
-    return get_uid_from_token(auth[7:].strip())
+    token = auth[7:].strip()
+    if not token:
+        return None
+    cached = _auth_token_cache.get(token)
+    if cached:
+        uid, exp = cached
+        if exp > time.time():
+            return uid
+        _auth_token_cache.pop(token, None)
+    uid = get_uid_from_token(token)
+    if uid is not None:
+        _auth_token_cache[token] = (uid, time.time() + _AUTH_TOKEN_TTL)
+    return uid
 
 
 def _resolve_user(request: Request, body: dict, key: str = "telegram_id") -> int | None:
@@ -831,6 +853,11 @@ async def admin_ban(request: Request):
     # Révoque tous les auth_token du user banni : il sera déconnecté au prochain
     # appel API et ne pourra pas se reconnecter (login vérifie aussi is_banned).
     revoke_all_user_sessions(tid)
+    # Vider le cache mémoire des tokens pour ce user (sinon il pourrait
+    # continuer à passer pendant 5min avec un token caché)
+    for tok, (uid, _) in list(_auth_token_cache.items()):
+        if uid == tid:
+            _auth_token_cache.pop(tok, None)
     # Virer de toute session BJ active
     bj_sess = get_blackjack_session_by_player(tid)
     if bj_sess:
@@ -2097,49 +2124,63 @@ async def log_drink_web(request: Request):
     if drink_key not in DRINKS:
         return {"ok": False, "error": "Boisson inconnue"}
 
-    # Cooldown 30s : check en mémoire (avant : 1 SELECT par drink).
+    # ─── CHEMIN CRITIQUE : 0 query DB (tout en mémoire) ─────────────────────
+    # Cooldown 30s
     now_ts = datetime.now(timezone.utc)
     last_dt = _last_drink_at.get(telegram_id)
     if last_dt and (now_ts - last_dt).total_seconds() < 30:
         remaining = int(30 - (now_ts - last_dt).total_seconds()) + 1
         return {"ok": False, "error": f"Attends encore {remaining}s avant le prochain verre"}
 
-    # User : réutilise le map cached (évite 1 query)
+    # User : réutilise le map cached
     users_by_id = _cached("users_by_id_map", 30.0,
                           lambda: {u["telegram_id"]: u for u in get_all_users()})
     user = users_by_id.get(telegram_id)
     if not user:
-        # Fallback DB (cache pas encore peuplé pour ce user)
+        # Fallback DB (très rare : 1er accès après restart serveur)
         user = get_user(telegram_id)
         if not user:
             return {"ok": False, "error": "Utilisateur introuvable"}
 
     drink = DRINKS[drink_key]
-    _ensure_session(telegram_id)
+    g = alcohol_grams(drink.volume_ml, drink.abv)
 
-    # Une seule query : on récupère les verres existants
-    existing_drinks = get_session_drinks(telegram_id)
+    # Drinks de la session : cache mémoire (lazy-load DB seulement au 1er log)
+    existing_drinks = _user_drinks_cache.get(telegram_id)
+    # Si le dernier verre du cache est > 6h, on considère une nouvelle session
+    # (cohérent avec _ensure_session) → on vide le cache pour repartir frais.
+    if existing_drinks and (now_ts - existing_drinks[-1][1]).total_seconds() > 6 * 3600:
+        existing_drinks = None
+        _user_drinks_cache.pop(telegram_id, None)
+    if existing_drinks is None:
+        existing_drinks = get_session_drinks(telegram_id)
+        # Même check : si les drinks DB sont vieux, on démarre frais
+        if existing_drinks and (now_ts - existing_drinks[-1][1]).total_seconds() > 6 * 3600:
+            existing_drinks = []
+        _user_drinks_cache[telegram_id] = list(existing_drinks)
     is_first = len(existing_drinks) == 0
 
-    if not db_log_drink(telegram_id, drink_key, alcohol_grams(drink.volume_ml, drink.abv)):
-        return {"ok": False, "error": "Erreur d'enregistrement"}
-
-    # Marque le cooldown immédiatement
+    # Compute le BAC + update cache mémoire ATOMIQUEMENT
+    new_drinks = existing_drinks + [(g, now_ts)]
+    _user_drinks_cache[telegram_id] = new_drinks
     _last_drink_at[telegram_id] = now_ts
+    bac = total_bac(new_drinks, user["weight_kg"], user["gender"])
+
     _invalidate_alltime_cache()
     _invalidate_cache("snapshot", "coins_all")
 
-    # BAC calculé en mémoire : drinks existants + le nouveau qu'on vient
-    # d'insérer (format (alc_grams, datetime)). Pas besoin d'un 2e get_session_drinks.
-    g = alcohol_grams(drink.volume_ml, drink.abv)
-    drinks_data = list(existing_drinks) + [(g, now_ts)]
-    bac = total_bac(drinks_data, user["weight_kg"], user["gender"])
-
-    # ── Tout ce qui suit est différé en background : XP, badges, streak,
-    # ── max_bac update, broadcast, notifs push. Le user voit son verre
-    # ── ajouté instantanément.
+    # ─── BACKGROUND : INSERT DB + gamification + broadcast + notifs ─────────
+    # Le user a déjà sa réponse. Tout ça tourne sans bloquer.
     async def _post_drink_work():
         try:
+            # 1) DB write (essentiel, en premier)
+            _ensure_session(telegram_id)
+            if not db_log_drink(telegram_id, drink_key, g):
+                # Très rare. Le cache mémoire reste avec le drink "fantôme"
+                # mais sera ré-aligné au prochain reset ou redémarrage serveur.
+                print(f"[log_drink] INSERT failed pour user {telegram_id}")
+                return
+            # 2) Gamification + coins
             add_coins(telegram_id, 5, f"Verre bu ({drink.name})")
             _award_drink(telegram_id)
             update_max_bac(telegram_id, bac)
@@ -2148,9 +2189,10 @@ async def log_drink_web(request: Request):
                     update_location(telegram_id, float(lat), float(lon))
                 except Exception:
                     pass
+            # 3) Broadcast snapshot aux WS
             await _broadcast(build_snapshot())
 
-            # Notifs aux abonnés (premier verre uniquement, différé 30s)
+            # 4) Notifs aux abonnés (premier verre uniquement, différé 30s)
             if is_first:
                 gender = user.get("gender", "homme")
                 le_la  = "la" if gender == "femme" else "le"
@@ -2210,11 +2252,11 @@ async def log_drink_web(request: Request):
 
     asyncio.create_task(_post_drink_work())
 
-    # Réponse instantanée. Les badges seront visibles au prochain refresh.
+    # Réponse instantanée (0 query DB). Badges visibles au prochain refresh.
     return {
         "ok": True,
         "bac": round(bac, 3),
-        "nb_drinks": len(drinks_data),
+        "nb_drinks": len(new_drinks),
         "label": bac_label(bac),
         "new_badges": [],
     }
@@ -2238,6 +2280,10 @@ async def undo_drink_web(request: Request):
         return {"ok": False, "error": "Aucun verre à annuler"}
     # Libère le cooldown mémoire — l'user peut recliquer immédiatement
     _last_drink_at.pop(telegram_id, None)
+    # Met à jour le cache mémoire (retire le dernier verre)
+    cached = _user_drinks_cache.get(telegram_id)
+    if cached:
+        cached.pop()
     # Annule toute notif FOMO en attente pour ce user (si dans les 30s)
     pending = _pending_first_drink_notifs.get(telegram_id)
     if pending and not pending.done():
@@ -2281,6 +2327,9 @@ async def reset_session_web(request: Request):
 
     end_session(telegram_id)
     start_session(telegram_id)
+    # Vide le cache mémoire — nouvelle session = 0 verre
+    _user_drinks_cache.pop(telegram_id, None)
+    _last_drink_at.pop(telegram_id, None)
 
     await _broadcast(build_snapshot())
     return {"ok": True}
