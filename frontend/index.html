@@ -2186,20 +2186,30 @@
   async function toggleFollow(tid, doFollow) {
     if (!myTid) return;
     const endpoint = doFollow ? '/follow' : '/unfollow';
-    await fetch(`${API}${endpoint}`, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({follower_id: myTid, following_id: tid})
-    });
-    if (doFollow) followingSet.add(tid);
-    else followingSet.delete(tid);
-    // Re-render profile modal
-    openProfile(_profileUsername, _profileHideSocial);
-    // Re-render live grid if filtered
-    if (myTid) render(lastData);
-    // Refresh abonnements if open
-    const aboPanel = document.getElementById('amis-panel');
-    if (aboPanel.classList.contains('active')) loadAbonnements();
+    try {
+      const r = await fetch(`${API}${endpoint}`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({follower_id: myTid, following_id: tid})
+      }).then(r => r.json()).catch(() => ({ok: false, error: 'Erreur réseau'}));
+      if (!r.ok) {
+        showToast('❌ ' + (r.error || 'Erreur'));
+        return;
+      }
+      if (doFollow) followingSet.add(Number(tid));
+      else followingSet.delete(Number(tid));
+      _cacheSet('following', [...followingSet]);
+      loadFollowing();
+      // Re-render profile modal
+      openProfile(_profileUsername, _profileHideSocial);
+      // Re-render live grid if filtered
+      if (myTid) render(lastData);
+      // Refresh abonnements if open
+      const aboPanel = document.getElementById('amis-panel');
+      if (aboPanel.classList.contains('active')) loadAbonnements();
+    } catch(e) {
+      showToast('❌ Erreur réseau');
+    }
   }
 
   function openChartFromProfile(username) {
@@ -4087,15 +4097,26 @@
   async function aboToggle(tid, doFollow) {
     if (!myTid) return;
     const endpoint = doFollow ? '/follow' : '/unfollow';
-    await fetch(`${API}${endpoint}`, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({follower_id: myTid, following_id: tid})
-    });
-    if (doFollow) followingSet.add(tid);
-    else followingSet.delete(tid);
-    loadAbonnements();
-    if (lastData.length) render(lastData);
+    try {
+      const r = await fetch(`${API}${endpoint}`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({follower_id: myTid, following_id: tid})
+      }).then(r => r.json()).catch(() => ({ok: false, error: 'Erreur réseau'}));
+      if (!r.ok) {
+        showToast('❌ ' + (r.error || 'Erreur'));
+        return;
+      }
+      if (doFollow) followingSet.add(Number(tid));
+      else followingSet.delete(Number(tid));
+      _cacheSet('following', [...followingSet]);
+      // Re-fetch authoritative depuis le serveur pour rester sync
+      loadFollowing();
+      loadAbonnements();
+      if (lastData.length) render(lastData);
+    } catch(e) {
+      showToast('❌ Erreur réseau');
+    }
   }
 
   // ── Init ──
