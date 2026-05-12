@@ -2255,8 +2255,8 @@ async def bj_join_web(token: str, request: Request):
     if sess["status"] == "waiting":
         # Salle d'attente → rejoindre normalement et payer la mise
         non_left = [p for p in players if p["status"] != "left"]
-        if len(non_left) >= 6:
-            return {"ok": False, "error": "Table complète (6 joueurs max)"}
+        if len(non_left) >= 4:
+            return {"ok": False, "error": "Table complète (4 joueurs max)"}
         # Débit atomique avant d'ajouter le joueur — pas de double-spend possible
         if not try_debit_coins(telegram_id, bet, "Blackjack - mise"):
             return {"ok": False, "error": f"Solde insuffisant ({get_coins(telegram_id)} 🪙)"}
@@ -2272,8 +2272,8 @@ async def bj_join_web(token: str, request: Request):
         # Rejoindre comme waiting_next (pas de débit immédiat)
         active_count = len([p for p in players
                             if p["status"] not in ("left", "waiting_next", "waiting")])
-        if active_count >= 6:
-            return {"ok": False, "error": "Table complète (6 joueurs max)"}
+        if active_count >= 4:
+            return {"ok": False, "error": "Table complète (4 joueurs max)"}
         if me:  # était "left" → réactiver
             update_blackjack_player(sess["id"], telegram_id,
                 bet=bet, status="waiting_next", hand="[]", result=None)
@@ -2852,7 +2852,7 @@ async def blackjack_ws(ws: WebSocket, token: str):
 
 @app.post("/blackjack/{token}/rematch")
 async def blackjack_rematch(token: str, request: Request):
-    """Relance une partie sur la MÊME session (même token). Tout joueur non-parti peut initier."""
+    """Relance une partie sur la MÊME session. Seul le créateur de la table peut initier."""
     body = await request.json()
     caller_id = _resolve_user(request, body) or 0
 
@@ -2861,6 +2861,9 @@ async def blackjack_rematch(token: str, request: Request):
         return {"ok": False, "error": "Session introuvable"}
     if session["status"] not in ("finished", "active"):
         return {"ok": False, "error": "La partie n'est pas encore terminée"}
+
+    if int(session.get("creator_id") or 0) != caller_id:
+        return {"ok": False, "error": "Seul le créateur de la table peut lancer la revanche"}
 
     from data.database import _execute
 

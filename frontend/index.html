@@ -726,7 +726,7 @@
   color: rgba(255,255,255,0.35); margin-bottom: 8px;
 }
 .bj-cards { display: flex; gap: 5px; justify-content: center; flex-wrap: wrap; margin-bottom: 5px; }
-.bj-total { font-size: 0.7rem; color: rgba(255,255,255,0.45); font-weight: 600; }
+.bj-total { font-size: 1.05rem; color: rgba(255,255,255,0.85); font-weight: 800; }
 .bj-players-zone { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 7px; }
 
 /* Player slots */
@@ -750,11 +750,11 @@
   50%      { box-shadow: 0 0 0 5px rgba(99,102,241,0.28), 0 0 28px rgba(99,102,241,0.25); }
 }
 .bj-slot-left { flex: 1; min-width: 0; }
-.bj-slot-name { font-weight: 800; font-size: 0.88rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #fff; }
-.bj-slot-bet  { font-size: 0.62rem; color: rgba(255,255,255,0.38); margin-top: 2px; }
+.bj-slot-name { font-weight: 800; font-size: 0.95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #fff; }
+.bj-slot-bet  { font-size: 0.75rem; color: rgba(255,255,255,0.5); margin-top: 2px; font-weight: 600; }
 .bj-slot-right { text-align: right; flex-shrink: 0; }
 .bj-slot-cards { display: flex; gap: 4px; justify-content: flex-end; margin-bottom: 4px; }
-.bj-slot-total { font-size: 0.62rem; color: rgba(255,255,255,0.4); font-weight: 600; }
+.bj-slot-total { font-size: 1.1rem; color: #fff; font-weight: 800; }
 .bj-badge {
   display: inline-block; font-size: 0.58rem; font-weight: 700;
   padding: 2px 7px; border-radius: 99px; margin-top: 3px;
@@ -2726,6 +2726,19 @@
     _refCount = me.referrals_count || 0;
   }
 
+  function profilSwitchSub(sub) {
+    window._profilSub = sub;
+    ['moi','recompenses','parametres'].forEach(s => {
+      const el = document.getElementById('profil-sub-' + s);
+      if (el) el.style.display = s === sub ? 'block' : 'none';
+    });
+    // Met à jour les boutons actifs sans rerender
+    document.querySelectorAll('#profil-panel .amis-sub-btn').forEach((btn, i) => {
+      const keys = ['moi','recompenses','parametres'];
+      btn.classList.toggle('active', keys[i] === sub);
+    });
+  }
+
   async function loadProfil() {
     const box = document.getElementById('profil-content');
     if (!box) return;
@@ -2806,15 +2819,15 @@
       : '';
 
     // Rendu immédiat avec poids vide → mis à jour après fetch
+    const _sub = window._profilSub || 'moi';
     box.innerHTML = `
       <div class="page-hd">
         <div class="page-hd-label">PROFIL</div>
         <div class="page-hd-title">Mon profil</div>
-        <div class="page-hd-sub">Tes stats et paramètres.</div>
       </div>
       <div style="max-width:440px;margin:0 auto">
 
-        <!-- Avatar + pseudo -->
+        <!-- Avatar + pseudo (toujours visible en haut) -->
         <div class="p-card" style="text-align:center;padding-bottom:24px;${isPremium ? 'padding-top:30px' : ''}">
           <input type="file" id="avatar-file-input" accept="image/*" style="display:none" onchange="handleAvatarUpload(this)">
           <div class="p-avatar-wrap" onclick="document.getElementById('avatar-file-input').click()" title="Changer la photo de profil">
@@ -2826,134 +2839,145 @@
           <div style="font-size:0.72rem;color:var(--sub);margin-top:4px">${isPremium ? 'Membre Premium' : 'Appuie sur la photo pour la changer'}</div>
         </div>
 
-        <!-- Niveau / XP / Streak -->
-        <div class="p-card" id="profil-level-card">
-          <div class="p-card-label">Niveau</div>
-          <div id="profil-level-content" style="text-align:center;color:var(--sub);font-size:0.85rem">Chargement…</div>
+        <!-- Sub-nav -->
+        <div class="amis-sub-nav" style="margin-bottom:16px">
+          <button class="amis-sub-btn ${_sub==='moi'?'active':''}"          onclick="profilSwitchSub('moi')">👤 Moi</button>
+          <button class="amis-sub-btn ${_sub==='recompenses'?'active':''}"  onclick="profilSwitchSub('recompenses')">🎁 Récompenses</button>
+          <button class="amis-sub-btn ${_sub==='parametres'?'active':''}"   onclick="profilSwitchSub('parametres')">⚙️ Paramètres</button>
         </div>
 
-        <!-- Roue + Défis hebdo -->
-        <div class="p-card">
-          <div class="p-card-label">🎰 Récompenses</div>
-          <button class="p-action-btn" style="background:linear-gradient(135deg,#facc15,#f97316);color:white;font-weight:800" onclick="openSpin()">🎲 Tourner la roue (1× par jour)</button>
-          <button class="p-action-btn" style="background:linear-gradient(135deg,#6366f1,#a855f7);color:white;font-weight:800" onclick="openShop()">🛍 Boutique de skins</button>
-          <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
-            <div style="font-size:0.72rem;font-weight:700;color:var(--sub);letter-spacing:1px;text-transform:uppercase;margin-bottom:10px">🎯 Défis de la semaine</div>
+        <!-- ─── Sub-tab : MOI ─── -->
+        <div id="profil-sub-moi" style="display:${_sub==='moi'?'block':'none'}">
+          <div class="p-card" id="profil-level-card">
+            <div class="p-card-label">Niveau</div>
+            <div id="profil-level-content" style="text-align:center;color:var(--sub);font-size:0.85rem">Chargement…</div>
+          </div>
+          <div class="p-card">
+            <div class="p-card-label">Statistiques</div>
+            <div class="p-stat-grid">
+              <div class="p-stat">
+                <div class="p-stat-val" style="color:${color}">${bac.toFixed(2)} g/L</div>
+                <div class="p-stat-lbl">Taux d'alcool · ${label}</div>
+              </div>
+              <div class="p-stat">
+                <div class="p-stat-val">${drinks}</div>
+                <div class="p-stat-lbl">Verre(s) ce soir</div>
+              </div>
+              <div class="p-stat">
+                <div class="p-stat-val" style="color:#f97316">${peak > 0 ? peak + ' g/L' : '—'}</div>
+                <div class="p-stat-lbl">Record 24h</div>
+              </div>
+              <div class="p-stat">
+                <div class="p-stat-val" id="profil-coins">…</div>
+                <div class="p-stat-lbl">🪙 Pièces</div>
+              </div>
+            </div>
+          </div>
+          <div class="p-card">
+            <div class="p-card-label">🏆 Records perso</div>
+            <div id="profil-records"><div style="color:var(--sub);font-size:0.85rem">Chargement…</div></div>
+          </div>
+          <div class="p-card">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+              <div class="p-card-label" style="margin:0">🏅 Badges</div>
+              <span id="profil-badges-count" style="font-size:0.75rem;color:var(--sub);font-weight:700"></span>
+            </div>
+            <div id="profil-badges-content">
+              <div style="color:var(--sub);font-size:0.85rem;text-align:center;padding:8px 0">Chargement…</div>
+            </div>
+          </div>
+          <button class="p-action-btn" style="background:linear-gradient(135deg,#1e1b4b,#581c87);color:white;font-weight:800" onclick="openRecap()">📊 Mon récap de soirée</button>
+        </div>
+
+        <!-- ─── Sub-tab : RÉCOMPENSES ─── -->
+        <div id="profil-sub-recompenses" style="display:${_sub==='recompenses'?'block':'none'}">
+          <div class="p-card">
+            <div class="p-card-label">🎰 Tour de la chance</div>
+            <button class="p-action-btn" style="background:linear-gradient(135deg,#facc15,#f97316);color:white;font-weight:800" onclick="openSpin()">🎲 Tourner la roue (1× par jour)</button>
+          </div>
+          <div class="p-card">
+            <div class="p-card-label">🛍 Boutique</div>
+            <button class="p-action-btn" style="background:linear-gradient(135deg,#6366f1,#a855f7);color:white;font-weight:800" onclick="openShop()">🛍 Boutique de skins</button>
+          </div>
+          <div class="p-card">
+            <div class="p-card-label">🎯 Défis de la semaine</div>
             <div id="profil-challenges"><div style="color:var(--sub);font-size:0.85rem">Chargement…</div></div>
           </div>
         </div>
 
-        <!-- Badges -->
-        <div class="p-card">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-            <div class="p-card-label" style="margin:0">🏅 Badges</div>
-            <span id="profil-badges-count" style="font-size:0.75rem;color:var(--sub);font-weight:700"></span>
+        <!-- ─── Sub-tab : PARAMÈTRES ─── -->
+        <div id="profil-sub-parametres" style="display:${_sub==='parametres'?'block':'none'}">
+          <div class="p-card" style="${isPremium ? 'background:linear-gradient(135deg,rgba(250,204,21,0.08),rgba(250,204,21,0.02));border:1px solid rgba(250,204,21,0.35)' : ''}">
+            <div class="p-card-label">${isPremium ? '👑 Abonnement Premium' : '👑 Devenir Premium'}</div>
+            ${isPremium ? `
+              <div style="text-align:center;padding:8px 0 4px">
+                <div style="font-weight:800;font-size:1.05rem">Tu es Membre Premium ✨</div>
+                <div style="color:var(--sub);font-size:0.85rem;margin-top:4px">${isAdminUser ? 'Accès admin — gratuit à vie' : "Merci de soutenir l'équipe ❤️"}</div>
+              </div>
+              ${!isAdminUser ? `<button class="p-action-btn" onclick="openPremiumPortal()" style="margin-top:10px">⚙️ Gérer mon abonnement</button>` : ''}
+            ` : `
+              <p style="font-size:0.9rem;line-height:1.55;color:var(--text);margin:4px 0 12px">
+                Soutiens l'équipe pour <strong>0,99 €/mois</strong> et obtiens :
+              </p>
+              <div style="font-size:0.88rem;line-height:1.85;color:var(--text);margin:0 0 14px">
+                <div>👑 &nbsp;Une couronne sur ton avatar, visible de tous</div>
+                <div>❤️ &nbsp;Tu soutiens directement l'équipe</div>
+                <div>🚀 &nbsp;Accès aux futures fonctionnalités premium</div>
+              </div>
+              <button class="btn-primary" id="premium-cta-btn" onclick="subscribePremium()">👑 Devenir Premium · 0,99 €/mois</button>
+              <div style="text-align:center;margin-top:8px;font-size:0.72rem;color:var(--sub)">Paiement Stripe · Annulable à tout moment</div>
+            `}
           </div>
-          <div id="profil-badges-content">
-            <div style="color:var(--sub);font-size:0.85rem;text-align:center;padding:8px 0">Chargement…</div>
-          </div>
-        </div>
 
-        <!-- Records -->
-        <div class="p-card">
-          <div class="p-card-label">🏆 Records perso</div>
-          <div id="profil-records"><div style="color:var(--sub);font-size:0.85rem">Chargement…</div></div>
-        </div>
-
-        <!-- Infos -->
-        <div class="p-card">
-          <div class="p-card-label">Infos</div>
-          <div class="p-field-label">Pseudo</div>
-          <input type="text" id="profil-pseudo" value="${esc(myName)}" placeholder="Pseudo…" autocomplete="off"
-                 style="width:100%;padding:10px 14px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.95rem;font-family:inherit;box-sizing:border-box;margin-bottom:14px"/>
-          <div class="p-field-label">Poids (kg)</div>
-          <input type="number" id="profil-poids" value="" placeholder="Chargement…" min="30" max="250"
-                 style="width:100%;padding:10px 14px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.95rem;font-family:inherit;box-sizing:border-box"/>
-          <div class="modal-id-err" id="profil-infos-err" style="margin-top:6px"></div>
-          <button class="btn-primary" style="margin-top:12px" onclick="profilSaveInfos()">Enregistrer les infos</button>
-        </div>
-
-        <!-- Statistiques -->
-        <div class="p-card">
-          <div class="p-card-label">Statistiques</div>
-          <div class="p-stat-grid">
-            <div class="p-stat">
-              <div class="p-stat-val" style="color:${color}">${bac.toFixed(2)} g/L</div>
-              <div class="p-stat-lbl">Taux d'alcool · ${label}</div>
-            </div>
-            <div class="p-stat">
-              <div class="p-stat-val">${drinks}</div>
-              <div class="p-stat-lbl">Verre(s) ce soir</div>
-            </div>
-            <div class="p-stat">
-              <div class="p-stat-val" style="color:#f97316">${peak > 0 ? peak + ' g/L' : '—'}</div>
-              <div class="p-stat-lbl">Record 24h</div>
-            </div>
-            <div class="p-stat">
-              <div class="p-stat-val" id="profil-coins">…</div>
-              <div class="p-stat-lbl">🪙 Pièces</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Premium -->
-        <div class="p-card" style="${isPremium ? 'background:linear-gradient(135deg,rgba(250,204,21,0.08),rgba(250,204,21,0.02));border:1px solid rgba(250,204,21,0.35)' : ''}">
-          <div class="p-card-label">${isPremium ? '👑 Abonnement Premium' : '👑 Devenir Premium'}</div>
-          ${isPremium ? `
-            <div style="text-align:center;padding:8px 0 4px">
-              <div style="font-weight:800;font-size:1.05rem">Tu es Membre Premium ✨</div>
-              <div style="color:var(--sub);font-size:0.85rem;margin-top:4px">${isAdminUser ? 'Accès admin — gratuit à vie' : "Merci de soutenir l'équipe ❤️"}</div>
-            </div>
-            ${!isAdminUser ? `<button class="p-action-btn" onclick="openPremiumPortal()" style="margin-top:10px">⚙️ Gérer mon abonnement</button>` : ''}
-          ` : `
-            <p style="font-size:0.9rem;line-height:1.55;color:var(--text);margin:4px 0 12px">
-              Soutiens l'équipe pour <strong>0,99 €/mois</strong> et obtiens :
-            </p>
-            <div style="font-size:0.88rem;line-height:1.85;color:var(--text);margin:0 0 14px">
-              <div>👑 &nbsp;Une couronne sur ton avatar, visible de tous</div>
-              <div>❤️ &nbsp;Tu soutiens directement l'équipe de développeurs</div>
-              <div>🚀 &nbsp;Accès aux futures fonctionnalités premium</div>
-            </div>
-            <button class="btn-primary" id="premium-cta-btn" onclick="subscribePremium()">👑 Devenir Premium · 0,99 €/mois</button>
-            <div style="text-align:center;margin-top:8px;font-size:0.72rem;color:var(--sub)">Paiement sécurisé par Stripe · Annulable à tout moment</div>
-          `}
-        </div>
-
-        <!-- Mot de passe -->
-        <div class="p-card">
-          <div class="p-card-label">Sécurité</div>
-          <input type="password" id="profil-new-pwd"  placeholder="Nouveau mot de passe…"
-                 style="width:100%;padding:10px 14px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.95rem;font-family:inherit;box-sizing:border-box;margin-bottom:8px"/>
-          <input type="password" id="profil-new-pwd2" placeholder="Confirmer le nouveau mot de passe…"
-                 style="width:100%;padding:10px 14px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.95rem;font-family:inherit;box-sizing:border-box"/>
-          <div style="margin-top:10px">
-            <div class="p-field-label">Mot de passe actuel (requis)</div>
-            <input type="password" id="profil-cur-pwd2" placeholder="Mot de passe actuel…"
+          <div class="p-card">
+            <div class="p-card-label">Infos</div>
+            <div class="p-field-label">Pseudo</div>
+            <input type="text" id="profil-pseudo" value="${esc(myName)}" placeholder="Pseudo…" autocomplete="off"
+                   style="width:100%;padding:10px 14px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.95rem;font-family:inherit;box-sizing:border-box;margin-bottom:14px"/>
+            <div class="p-field-label">Poids (kg)</div>
+            <input type="number" id="profil-poids" value="" placeholder="Chargement…" min="30" max="250"
                    style="width:100%;padding:10px 14px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.95rem;font-family:inherit;box-sizing:border-box"/>
+            <div class="modal-id-err" id="profil-infos-err" style="margin-top:6px"></div>
+            <button class="btn-primary" style="margin-top:12px" onclick="profilSaveInfos()">Enregistrer</button>
           </div>
-          <div class="modal-id-err" id="profil-pwd-err" style="margin-top:6px"></div>
-          <button class="btn-primary" style="margin-top:12px" onclick="profilSavePwd()">Changer le mot de passe</button>
-        </div>
 
-        <!-- Actions compte -->
-        <div class="p-card">
-          <div class="p-card-label">Compte</div>
-          <button class="p-action-btn" onclick="openRecap()">📊 Voir mon récap de soirée</button>
-          <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:10px;margin-bottom:8px">
-            <div>
-              <div style="font-size:0.9rem;font-weight:600">🥷 Mode discret</div>
-              <div style="font-size:0.72rem;color:var(--sub);margin-top:2px">Cache ton taux d'alcool et ta position</div>
+          <div class="p-card">
+            <div class="p-card-label">🔐 Mot de passe</div>
+            <input type="password" id="profil-new-pwd"  placeholder="Nouveau mot de passe…"
+                   style="width:100%;padding:10px 14px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.95rem;font-family:inherit;box-sizing:border-box;margin-bottom:8px"/>
+            <input type="password" id="profil-new-pwd2" placeholder="Confirmer le nouveau mot de passe…"
+                   style="width:100%;padding:10px 14px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.95rem;font-family:inherit;box-sizing:border-box"/>
+            <div style="margin-top:10px">
+              <div class="p-field-label">Mot de passe actuel</div>
+              <input type="password" id="profil-cur-pwd2" placeholder="Mot de passe actuel…"
+                     style="width:100%;padding:10px 14px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.95rem;font-family:inherit;box-sizing:border-box"/>
             </div>
-            <label style="position:relative;display:inline-block;width:44px;height:24px">
-              <input type="checkbox" id="profil-discreet-toggle" onchange="toggleDiscreet(this.checked)" style="opacity:0;width:0;height:0">
-              <span style="position:absolute;cursor:pointer;inset:0;background:var(--border);border-radius:24px;transition:.3s" id="profil-discreet-slider"></span>
-            </label>
+            <div class="modal-id-err" id="profil-pwd-err" style="margin-top:6px"></div>
+            <button class="btn-primary" style="margin-top:12px" onclick="profilSavePwd()">Changer</button>
           </div>
-          <button class="p-action-btn" id="push-btn" onclick="togglePush()">🔔 Activer les notifications</button>
-          <button class="p-action-btn" id="push-test-btn" onclick="testPush()" style="display:none">📨 Envoyer une notif test</button>
-          <button class="p-action-btn" onclick="localStorage.removeItem('onboarding_v1');onbShow()">🎓 Revoir le tuto</button>
-          <button class="p-action-btn" onclick="logout();showTab('profil')">🚪 Se déconnecter</button>
-          <button class="p-action-btn danger" onclick="openDeleteModal()">🗑️ Supprimer mon compte</button>
+
+          <div class="p-card">
+            <div class="p-card-label">🔔 Confidentialité & notifs</div>
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:10px;margin-bottom:8px">
+              <div>
+                <div style="font-size:0.9rem;font-weight:600">🥷 Mode discret</div>
+                <div style="font-size:0.72rem;color:var(--sub);margin-top:2px">Cache ton taux et ta position</div>
+              </div>
+              <label style="position:relative;display:inline-block;width:44px;height:24px">
+                <input type="checkbox" id="profil-discreet-toggle" onchange="toggleDiscreet(this.checked)" style="opacity:0;width:0;height:0">
+                <span style="position:absolute;cursor:pointer;inset:0;background:var(--border);border-radius:24px;transition:.3s" id="profil-discreet-slider"></span>
+              </label>
+            </div>
+            <button class="p-action-btn" id="push-btn" onclick="togglePush()">🔔 Activer les notifications</button>
+            <button class="p-action-btn" id="push-test-btn" onclick="testPush()" style="display:none">📨 Notif test</button>
+          </div>
+
+          <div class="p-card">
+            <div class="p-card-label">Compte</div>
+            <button class="p-action-btn" onclick="localStorage.removeItem('onboarding_v1');onbShow()">🎓 Revoir le tuto</button>
+            <button class="p-action-btn" onclick="logout();showTab('profil')">🚪 Se déconnecter</button>
+            <button class="p-action-btn danger" onclick="openDeleteModal()">🗑️ Supprimer mon compte</button>
+          </div>
         </div>
 
         ${myTid === adminId ? `
@@ -5307,6 +5331,8 @@ function _bjRender(state) {
     } else {
       // Pas mon tour : juste Quitter
       quitBar.style.display = 'flex';
+      const qb = quitBar.querySelector('button');
+      if (qb) qb.textContent = '🚪 Quitter la table';
     }
   } else if (state.status === 'waiting') {
     // startBar contient déjà Lancer + Quitter
@@ -5315,10 +5341,19 @@ function _bjRender(state) {
     startBtn.disabled = !isCreator;
     startBtn.textContent = isCreator ? '🚀 Lancer la partie' : '⏳ En attente du créateur…';
   } else if (state.status === 'finished') {
-    // Rejouer + Quitter pour tous
-    rematchBar.style.display = 'flex';
-    document.getElementById('bj-rematch-btn').disabled = false;
-    document.getElementById('bj-rematch-btn').textContent = '🔄 Rejouer';
+    // Rejouer : visible uniquement pour le créateur. Les autres voient juste Quitter
+    // (le créateur a un bouton "Rejouer" + Quitter, les autres juste Quitter avec
+    // une indication "En attente du créateur").
+    if (isCreator) {
+      rematchBar.style.display = 'flex';
+      const rbtn = document.getElementById('bj-rematch-btn');
+      rbtn.disabled = false;
+      rbtn.textContent = '🔄 Rejouer';
+    } else {
+      quitBar.style.display = 'flex';
+      const qb = quitBar.querySelector('button');
+      if (qb) qb.textContent = '🚪 Quitter (attend le créateur…)';
+    }
   }
 
   _bjRefreshCoins();
