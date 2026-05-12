@@ -360,6 +360,7 @@ def build_snapshot() -> list[dict]:
             "is_premium":  uid == admin_id or bool(user.get("is_premium")),
             "level":       calc_level(int(user.get("xp") or 0)),
             "streak":      int(user.get("current_streak") or 0),
+            "active_skin": user.get("active_skin") or "default",
             "is_banned":   uid in banned_ids,
         })
     result.sort(key=lambda x: x["bac"], reverse=True)
@@ -1153,6 +1154,83 @@ def get_badges(telegram_id: int):
     ]
 
 
+# ── Boutique de skins (cadres d'avatar) ──────────────────────────────────────
+
+# Skins disponibles. La key 'default' est offerte à tout le monde.
+# 'frame' = couleur du contour de l'avatar (CSS box-shadow).
+SKINS = [
+    {"key": "default", "name": "Classique",  "price": 0,    "frame": "none",                           "emoji": "⚪"},
+    {"key": "gold",    "name": "Or",          "price": 200,  "frame": "#facc15",                         "emoji": "🟡"},
+    {"key": "purple",  "name": "Violet",      "price": 400,  "frame": "#a855f7",                         "emoji": "🟣"},
+    {"key": "neon",    "name": "Néon",        "price": 800,  "frame": "#06b6d4",                         "emoji": "🔵"},
+    {"key": "fire",    "name": "Feu",         "price": 1500, "frame": "linear:#ef4444,#f97316",          "emoji": "🔥"},
+    {"key": "rainbow", "name": "Arc-en-ciel", "price": 3000, "frame": "linear:#f43f5e,#a855f7,#06b6d4",  "emoji": "🌈"},
+]
+
+
+def _get_user_skins(user_id: int) -> list[str]:
+    from data.database import _fetchall as _fa
+    rows = _fa("SELECT skin_key FROM user_skins WHERE user_id=?", [user_id])
+    return [r["skin_key"] for r in rows]
+
+
+@app.get("/shop/{telegram_id}")
+def get_shop(telegram_id: int):
+    user = get_user(telegram_id)
+    if not user:
+        return {"ok": False}
+    owned = set(_get_user_skins(telegram_id))
+    owned.add("default")  # toujours owned
+    active = user.get("active_skin") or "default"
+    return {
+        "ok": True,
+        "balance": int(user.get("coins") or 0),
+        "active_skin": active,
+        "skins": [
+            {**s, "owned": s["key"] in owned, "active": s["key"] == active}
+            for s in SKINS
+        ],
+    }
+
+
+@app.post("/shop/buy")
+async def shop_buy(request: Request):
+    body = await request.json()
+    telegram_id = _resolve_user(request, body)
+    if not telegram_id:
+        return {"ok": False, "error": "Non authentifié"}
+    skin_key = body.get("skin_key")
+    skin = next((s for s in SKINS if s["key"] == skin_key), None)
+    if not skin:
+        return {"ok": False, "error": "Skin inconnu"}
+    if skin["price"] <= 0:
+        return {"ok": False, "error": "Skin gratuit"}
+    # Déjà possédé ?
+    if skin_key in _get_user_skins(telegram_id):
+        return {"ok": False, "error": "Tu possèdes déjà ce skin"}
+    if not try_debit_coins(telegram_id, skin["price"], f"Achat skin {skin['name']}"):
+        return {"ok": False, "error": f"Solde insuffisant ({get_coins(telegram_id)} 🪙)"}
+    _execute("INSERT OR IGNORE INTO user_skins (user_id, skin_key) VALUES (?, ?)",
+             [telegram_id, skin_key])
+    _execute("UPDATE users SET active_skin=? WHERE user_id=?", [skin_key, telegram_id])
+    await _broadcast(build_snapshot())
+    return {"ok": True, "balance": get_coins(telegram_id), "active_skin": skin_key}
+
+
+@app.post("/shop/equip")
+async def shop_equip(request: Request):
+    body = await request.json()
+    telegram_id = _resolve_user(request, body)
+    if not telegram_id:
+        return {"ok": False, "error": "Non authentifié"}
+    skin_key = body.get("skin_key")
+    if skin_key != "default" and skin_key not in _get_user_skins(telegram_id):
+        return {"ok": False, "error": "Tu ne possèdes pas ce skin"}
+    _execute("UPDATE users SET active_skin=? WHERE user_id=?", [skin_key, telegram_id])
+    await _broadcast(build_snapshot())
+    return {"ok": True, "active_skin": skin_key}
+
+
 # ── Roue de la fortune ────────────────────────────────────────────────────────
 
 # (poids, montant_coins, label). Le total des poids n'a pas besoin de faire 1.
@@ -1607,6 +1685,7 @@ def get_all_users_endpoint():
             "is_premium":  uid == admin_id or bool(u.get("is_premium")),
             "level":       calc_level(int(u.get("xp") or 0)),
             "streak":      int(u.get("current_streak") or 0),
+            "active_skin": u.get("active_skin") or "default",
         })
     return result
 

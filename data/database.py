@@ -244,6 +244,19 @@ def init_db():
         )""")
     except Exception:
         pass
+    try:
+        _execute("ALTER TABLE users ADD COLUMN active_skin TEXT DEFAULT 'default'")
+    except Exception:
+        pass
+    try:
+        _execute("""CREATE TABLE IF NOT EXISTS user_skins (
+            user_id  INTEGER NOT NULL,
+            skin_key TEXT NOT NULL,
+            owned_at TEXT NOT NULL DEFAULT (datetime('now')),
+            PRIMARY KEY (user_id, skin_key)
+        )""")
+    except Exception:
+        pass
     _pipeline([
         ("""CREATE TABLE IF NOT EXISTS users (
             user_id     INTEGER PRIMARY KEY,
