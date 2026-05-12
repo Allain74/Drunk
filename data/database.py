@@ -849,15 +849,18 @@ def get_blackjack_stats(user_id: int) -> dict:
 
 
 def get_profile_follows(user_id: int) -> dict:
-    """Retourne le nombre d'abonnés/abonnements + la liste de ceux que suit cet utilisateur."""
+    """Retourne abonnés/abonnements (counts + listes username+id)."""
     following_ids = get_following(user_id)
     follower_ids  = get_followers(user_id)
     following_users = [get_user(fid) for fid in following_ids]
     following_users = [u for u in following_users if u]
+    follower_users  = [get_user(fid) for fid in follower_ids]
+    follower_users  = [u for u in follower_users if u]
     return {
         "followers_count": len(follower_ids),
         "following_count": len(following_ids),
         "following": [{"user_id": u["user_id"], "username": u["username"]} for u in following_users],
+        "followers": [{"user_id": u["user_id"], "username": u["username"]} for u in follower_users],
     }
 
 

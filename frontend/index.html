@@ -2099,13 +2099,8 @@
       const userCoins = (typeof p.coins === 'number') ? p.coins : null;
       const socialInfo = hideSocial ? null : {
         following: (p.following || []).map(u => u.user_id || u.telegram_id).filter(Boolean),
-        followers: [],  // get_profile_follows ne renvoie pas la liste, juste le count
+        followers: (p.followers || []).map(u => u.user_id || u.telegram_id).filter(Boolean),
       };
-      // Pour les followers, on a juste le count → on évite le fetch détaillé.
-      // (followers liste est rarement consultée — peut être rajoutée ultérieurement)
-      if (!hideSocial && p.followers_count != null) {
-        socialInfo.followersCount = p.followers_count;
-      }
       const sessionDrinks = p.session_drinks || [];
       // Construit les badges avec emoji/desc depuis le mapping côté frontend
       const unlocked = new Set(p.badges_unlocked || []);
