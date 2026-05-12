@@ -1521,17 +1521,41 @@ async def _bet_settlement_loop():
 
 @app.get("/history")
 def get_history():
+    """Pour chaque user, renvoie tous les verres des dernières 24h
+    (peu importe que la session soit encore active ou pas). Sert au
+    graphique Historique côté frontend."""
+    from data.database import _fetchall as _fa
     users = get_all_users()
+    # Récupère tous les verres des dernières 24h en une seule query
+    all_drinks = _fa(
+        """SELECT user_id, drink_key, alc_grams, logged_at
+           FROM drink_logs
+           WHERE logged_at >= datetime('now','-24 hours')
+           ORDER BY user_id, logged_at"""
+    )
+    drinks_by_uid: dict[int, list] = {}
+    for r in all_drinks:
+        try:
+            t = datetime.fromisoformat(r["logged_at"])
+            if t.tzinfo is None:
+                t = t.replace(tzinfo=timezone.utc)
+            uid = r.get("user_id") or r.get("telegram_id")
+            if uid is None:
+                continue
+            drinks_by_uid.setdefault(uid, []).append({
+                "t": t.isoformat(),
+                "alc_g": r["alc_grams"],
+                "drink_key": r["drink_key"],
+            })
+        except Exception:
+            continue
     result = []
     for user in users:
-        session = get_active_session(user["telegram_id"])
-        if not session:
+        if user.get("discreet_mode"):
             continue
-        rows = get_drinks_by_session(session["id"])
-        points = []
-        for r in rows:
-            t = datetime.fromisoformat(r["logged_at"]).replace(tzinfo=timezone.utc)
-            points.append({"t": t.isoformat(), "alc_g": r["alc_grams"], "drink_key": r["drink_key"]})
+        uid = user.get("telegram_id") or user.get("user_id")
+        points = drinks_by_uid.get(uid, [])
+        # On inclut tous les users (même sans points) → frontend affiche "Aucun verre"
         result.append({
             "username": user["username"],
             "weight_kg": user["weight_kg"],

@@ -1922,7 +1922,7 @@
     else                       followBtn = `<button class="btn-follow not-following" onclick="toggleFollow(${tid},true)">➕ Suivre</button>`;
 
     // ─── Rendu du modal (rappelé quand les données arrivent) ───
-    const renderModal = (coins, socialInfo, sessionDrinks) => {
+    const renderModal = (coins, socialInfo, sessionDrinks, gameInfo) => {
       if (_profileGen !== gen) return;
 
       const nbFollowers  = socialInfo ? socialInfo.followers.length : '…';
@@ -2006,27 +2006,61 @@
           ${actions}`;
       }
 
+      // Bloc niveau + streak (gamification)
+      let gameBlock = '';
+      if (gameInfo && gameInfo.level) {
+        const lv = gameInfo.level;
+        const streakStr = (gameInfo.streak && gameInfo.streak.current > 0)
+          ? `<span style="margin-left:8px;color:#f97316;font-weight:700">🔥${gameInfo.streak.current}</span>`
+          : '';
+        gameBlock = `<div style="display:flex;align-items:center;justify-content:center;gap:6px;margin:4px 0 10px;font-size:0.85rem;color:var(--sub);font-weight:600">
+          <span style="font-size:1.1rem">${lv.emoji}</span>
+          <span>Niveau ${lv.level} — ${esc(lv.title)}</span>
+          ${streakStr}
+        </div>`;
+      }
+
+      // Bloc badges débloqués (6 derniers, miniatures)
+      let badgesBlock = '';
+      if (gameInfo && Array.isArray(gameInfo.badges) && gameInfo.badges.length) {
+        const top = gameInfo.badges.filter(b => b.unlocked).slice(0, 6);
+        if (top.length) {
+          badgesBlock = `
+            <div style="margin:14px 0">
+              <div style="font-size:0.7rem;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;text-align:center">🏅 ${gameInfo.badges_unlocked_count}/${gameInfo.badges.length} badges</div>
+              <div style="display:flex;justify-content:center;gap:6px;flex-wrap:wrap">
+                ${top.map(b => `<div title="${esc(b.name)} — ${esc(b.desc)}" style="padding:6px 8px;background:rgba(250,204,21,0.12);border:1px solid rgba(250,204,21,0.35);border-radius:10px;font-size:1.05rem">${b.emoji}</div>`).join('')}
+              </div>
+            </div>`;
+        }
+      }
+
       document.getElementById('modal4-title').innerHTML = nameHtml;
       document.getElementById('modal4-content').innerHTML = `
         <div style="text-align:center;margin-bottom:10px">
           ${avatarHtml}
           ${badgeHtml ? `<div style="margin-top:4px">${badgeHtml}</div>` : ''}
+          ${gameBlock}
         </div>
         ${body}
+        ${badgesBlock}
       `;
     };
 
-    renderModal(null, null, isActive ? null : []);
+    renderModal(null, null, isActive ? null : [], null);
     document.getElementById('modal-bg4').classList.add('open');
 
-    // Fetch en parallèle : coins + social (sauf si hideSocial) + (session si actif)
+    // Fetch en parallèle : coins + social (sauf si hideSocial) + session si actif
+    // + gamification (me + badges) si on a un tid
     const fetches = [
       fetch(`${API}/coins`).then(r => r.json()),
       (!hideSocial && tid) ? fetch(`${API}/following/${tid}`).then(r => r.json()) : Promise.resolve({ following: [] }),
       (!hideSocial && tid) ? fetch(`${API}/followers/${tid}`).then(r => r.json()) : Promise.resolve({ followers: [] }),
       isActive && tid ? fetch(`${API}/session/${tid}`).then(r => r.json()) : Promise.resolve({ drinks: [] }),
+      tid ? fetch(`${API}/me/${tid}`).then(r => r.json()) : Promise.resolve(null),
+      tid ? fetch(`${API}/badges/${tid}`).then(r => r.json()) : Promise.resolve([]),
     ];
-    const [coinsData, followingData, followersData, sessionData] = await Promise.allSettled(fetches);
+    const [coinsData, followingData, followersData, sessionData, meData, badgesData] = await Promise.allSettled(fetches);
 
     if (_profileGen !== gen) return;
 
@@ -2040,8 +2074,16 @@
     const sessionDrinks = sessionData.status === 'fulfilled'
       ? (sessionData.value.drinks || [])
       : [];
+    const me = (meData.status === 'fulfilled' && meData.value && meData.value.ok) ? meData.value : null;
+    const allBadges = (badgesData.status === 'fulfilled' && Array.isArray(badgesData.value)) ? badgesData.value : [];
+    const gameInfo = me ? {
+      level: me.level,
+      streak: me.streak,
+      badges: allBadges,
+      badges_unlocked_count: allBadges.filter(b => b.unlocked).length,
+    } : null;
 
-    renderModal(userCoins, socialInfo, sessionDrinks);
+    renderModal(userCoins, socialInfo, sessionDrinks, gameInfo);
   }
 
   function openSocialList(type, ids, title) {
