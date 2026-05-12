@@ -231,9 +231,11 @@ _DEFAULT_ALLOWED_ORIGINS = [
     "http://127.0.0.1:8000",
 ]
 _extra_origins = [o.strip() for o in os.environ.get("ALLOWED_ORIGINS", "").split(",") if o.strip()]
+# Autorise aussi tous les sous-domaines Vercel preview (par ex. drunk-weld-git-main-xxx.vercel.app)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_DEFAULT_ALLOWED_ORIGINS + _extra_origins,
+    allow_origin_regex=r"https://drunk-weld.*\.vercel\.app",
     allow_credentials=False,
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization"],

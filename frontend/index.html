@@ -248,6 +248,13 @@
     .admin-modal-label { font-size:0.72rem; font-weight:700; color:var(--sub); text-transform:uppercase; letter-spacing:.5px; margin-bottom:6px; }
     .admin-modal-row { display:flex; gap:8px; margin-bottom:8px; }
     .admin-modal-row .admin-modal-input { margin-bottom:0; }
+    .adm-stats-row { display:flex; gap:8px; margin:8px 0 12px; }
+    .adm-stat { flex:1; background:var(--bg); border:1px solid var(--border); border-radius:10px; padding:8px 4px; text-align:center; }
+    .adm-stat-val { font-size:1.15rem; font-weight:800; color:var(--text); }
+    .adm-stat-lbl { font-size:0.68rem; color:var(--sub); text-transform:uppercase; letter-spacing:.5px; margin-top:2px; }
+    .adm-sort-row { display:flex; gap:4px; margin-bottom:10px; overflow-x:auto; -webkit-overflow-scrolling:touch; }
+    .adm-sort-btn { flex-shrink:0; background:var(--border); border:none; color:var(--sub); border-radius:8px; padding:5px 10px; font-size:0.72rem; font-weight:700; cursor:pointer; font-family:inherit; }
+    .adm-sort-btn:hover, .adm-sort-btn:active { background:var(--text); color:var(--card); }
 
     /* ── Sub-nav ── */
     .sub-nav { display: flex; gap: 4px; background: var(--border); border-radius: 14px; padding: 4px; margin-bottom: 20px; }
@@ -2660,8 +2667,18 @@
           </div>
 
           <!-- Liste utilisateurs -->
-          <div class="admin-modal-label" style="margin-top:8px">👥 Utilisateurs</div>
-          <input class="admin-modal-input" id="adm-search" placeholder="🔍 Rechercher…" oninput="adminFilterUsers(this.value)" style="margin-bottom:10px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;margin-bottom:8px">
+            <div class="admin-modal-label" style="margin:0">👥 Utilisateurs</div>
+            <button class="admin-action-btn" style="padding:4px 10px;font-size:0.75rem" onclick="adminLoadUsers()">🔄 Actualiser</button>
+          </div>
+          <div id="adm-stats" class="adm-stats-row"></div>
+          <input class="admin-modal-input" id="adm-search" placeholder="🔍 Rechercher…" oninput="adminFilterUsers(this.value)" style="margin-bottom:8px">
+          <div class="adm-sort-row">
+            <button class="adm-sort-btn" onclick="adminSort('bac')">🍺 Bac</button>
+            <button class="adm-sort-btn" onclick="adminSort('coins')">🪙 Coins</button>
+            <button class="adm-sort-btn" onclick="adminSort('drinks')">🥤 Verres</button>
+            <button class="adm-sort-btn" onclick="adminSort('name')">🔤 Pseudo</button>
+          </div>
           <div id="adm-users-list"><div style="color:var(--sub);text-align:center;padding:20px">Chargement…</div></div>
         </div>
         ` : ''}
@@ -2722,41 +2739,91 @@
     return false;
   }
 
+  let _adminSort = 'bac';  // 'bac' | 'coins' | 'name' | 'drinks'
+
   async function adminLoadUsers() {
     const box = document.getElementById('adm-users-list');
+    const statsBox = document.getElementById('adm-stats');
     if (!box) return;
     const secret = _adminSecret();
     if (!secret) { box.innerHTML = '<div style="color:#ef4444">Code admin requis</div>'; return; }
+    box.innerHTML = '<div style="color:var(--sub);text-align:center;padding:24px">⏳ Chargement…</div>';
     try {
-      const data = await fetch(`${API}/admin/users?caller_id=${myTid}&admin_secret=${encodeURIComponent(secret)}`).then(r => r.json());
-      if (!data.ok) {
-        _adminHandleAuthError(data);
-        box.innerHTML = `<div style="color:#ef4444">${data.error}</div>`;
+      const r = await fetch(`${API}/admin/users?caller_id=${myTid}&admin_secret=${encodeURIComponent(secret)}`);
+      if (!r.ok) {
+        box.innerHTML = `<div style="color:#ef4444">Erreur HTTP ${r.status}</div>`;
         return;
       }
-      _adminUsers = data.users;
-      adminRenderUsers(_adminUsers);
-    } catch(e) { if (box) box.innerHTML = '<div style="color:#ef4444">Erreur réseau</div>'; }
+      const data = await r.json();
+      if (!data.ok) {
+        _adminHandleAuthError(data);
+        box.innerHTML = `<div style="color:#ef4444">${esc(data.error || 'Erreur')}</div>`;
+        return;
+      }
+      _adminUsers = data.users || [];
+      if (statsBox) {
+        const total = _adminUsers.length;
+        const actifs = _adminUsers.filter(u => u.bac > 0).length;
+        const bannis = _adminUsers.filter(u => u.is_banned).length;
+        statsBox.innerHTML = `
+          <div class="adm-stat"><div class="adm-stat-val">${total}</div><div class="adm-stat-lbl">Total</div></div>
+          <div class="adm-stat"><div class="adm-stat-val" style="color:#22c55e">${actifs}</div><div class="adm-stat-lbl">Actifs</div></div>
+          <div class="adm-stat"><div class="adm-stat-val" style="color:#ef4444">${bannis}</div><div class="adm-stat-lbl">Bannis</div></div>
+        `;
+      }
+      adminFilterUsers(document.getElementById('adm-search')?.value || '');
+    } catch(e) {
+      box.innerHTML = `<div style="color:#ef4444">❌ ${esc(e.message || 'Erreur réseau')}<br><span style="font-size:0.75rem;color:var(--sub)">Vérifie que tu es bien sur drunk-weld.vercel.app et que ADMIN_SECRET est défini sur Render.</span></div>`;
+    }
+  }
+
+  function adminSort(field) {
+    _adminSort = field;
+    adminFilterUsers(document.getElementById('adm-search')?.value || '');
+  }
+
+  function _adminSortFn(a, b) {
+    if (_adminSort === 'coins')   return (b.coins  || 0) - (a.coins  || 0);
+    if (_adminSort === 'drinks')  return (b.nb_drinks || 0) - (a.nb_drinks || 0);
+    if (_adminSort === 'name')    return (a.username || '').localeCompare(b.username || '');
+    // default: bac desc, puis username
+    const d = (b.bac || 0) - (a.bac || 0);
+    return d !== 0 ? d : (a.username || '').localeCompare(b.username || '');
   }
 
   function adminFilterUsers(q) {
-    const filtered = q ? _adminUsers.filter(u => u.username.toLowerCase().includes(q.toLowerCase())) : _adminUsers;
-    adminRenderUsers(filtered);
+    const filtered = q
+      ? _adminUsers.filter(u => u.username.toLowerCase().includes(q.toLowerCase()))
+      : _adminUsers;
+    adminRenderUsers([...filtered].sort(_adminSortFn));
   }
 
   function adminRenderUsers(list) {
     const box = document.getElementById('adm-users-list');
     if (!box) return;
-    if (!list.length) { box.innerHTML = '<div style="color:var(--sub);text-align:center;padding:12px">Aucun utilisateur</div>'; return; }
+    if (!list.length) {
+      box.innerHTML = '<div style="color:var(--sub);text-align:center;padding:20px;font-size:0.85rem">Aucun utilisateur trouvé</div>';
+      return;
+    }
     box.innerHTML = list.map(u => {
-      const badge = u.is_banned ? '🔴' : (u.bac > 0 ? '🟢' : '⚪');
-      const bannedTxt = u.is_banned ? ' <span style="color:#ef4444;font-size:0.7rem">(banni)</span>' : '';
+      const dot = u.is_banned ? '🔴' : (u.bac > 0 ? '🟢' : '⚪');
+      const badges = [];
+      if (u.is_admin) badges.push('<span style="color:#facc15;font-size:0.7rem;font-weight:700">⭐ ADMIN</span>');
+      if (u.is_premium && !u.is_admin) badges.push('<span style="color:#facc15;font-size:0.7rem;font-weight:700">👑</span>');
+      if (u.is_banned) badges.push('<span style="color:#ef4444;font-size:0.7rem;font-weight:700">🚫 BANNI</span>');
+      const badgesHtml = badges.length ? ` ${badges.join(' ')}` : '';
+      const sub = [
+        u.bac > 0 ? `<span style="color:#f97316;font-weight:700">${u.bac.toFixed(2)} g/L</span>` : '',
+        `${u.nb_drinks || 0}v`,
+        `${u.coins || 0}🪙`,
+        u.gender || '?',
+      ].filter(Boolean).join(' · ');
       return `<div class="admin-user-row">
         <div class="admin-user-info">
-          <div class="admin-user-name">${badge} ${esc(u.username)}${bannedTxt}</div>
-          <div class="admin-user-sub">${u.bac > 0 ? u.bac + ' g/L · ' : ''}${u.nb_drinks}v · ${u.coins}🪙 · ${u.gender}</div>
+          <div class="admin-user-name">${dot} ${esc(u.username)}${badgesHtml}</div>
+          <div class="admin-user-sub">${sub}</div>
         </div>
-        <button class="admin-action-btn primary" onclick="adminOpenUser(${u.telegram_id})">Actions</button>
+        <button class="admin-action-btn primary" onclick="adminOpenUser(${u.telegram_id})">⚙️</button>
       </div>`;
     }).join('');
   }
