@@ -1262,13 +1262,15 @@ async def shop_equip(request: Request):
 # ── Roue de la fortune ────────────────────────────────────────────────────────
 
 # (poids, montant_coins, label). Le total des poids n'a pas besoin de faire 1.
+# Le super jackpot a une probabilité ≈ 1/19M (comme le loto français).
 SPIN_WHEEL = [
-    (30,  10,   "10 🪙"),
-    (25,  25,   "25 🪙"),
-    (20,  50,   "50 🪙"),
-    (15,  100,  "100 🪙"),
-    (7,   250,  "250 🪙"),
-    (3,   1000, "JACKPOT 1000 🪙"),
+    (30.0,      10,      "10 🪙"),
+    (25.0,      25,      "25 🪙"),
+    (20.0,      50,      "50 🪙"),
+    (15.0,      100,     "100 🪙"),
+    (7.0,       250,     "250 🪙"),
+    (3.0,       1000,    "🎉 JACKPOT 1000 🪙"),
+    (5.24e-6,   1_000_000, "🌟 SUPER JACKPOT 1 000 000 🪙"),
 ]
 
 
@@ -1308,20 +1310,25 @@ async def post_spin(request: Request):
     import random
     total_w = sum(w[0] for w in SPIN_WHEEL)
     n = random.uniform(0, total_w)
-    cumul = 0
-    winner = SPIN_WHEEL[0]
-    for w in SPIN_WHEEL:
+    cumul = 0.0
+    winner_idx = 0
+    for i, w in enumerate(SPIN_WHEEL):
         cumul += w[0]
         if n <= cumul:
-            winner = w
+            winner_idx = i
             break
-    weight, coins, label = winner
+    weight, coins, label = SPIN_WHEEL[winner_idx]
     add_coins(telegram_id, coins, f"Roue de la fortune : {label}")
-    from data.database import _fetchone as _fo
     _execute("UPDATE users SET last_spin_at=? WHERE user_id=?",
              [datetime.now(timezone.utc).isoformat(), telegram_id])
     _check_badges_for_user(telegram_id)
-    return {"ok": True, "coins": coins, "label": label, "balance": get_coins(telegram_id)}
+    return {
+        "ok": True,
+        "coins": coins,
+        "label": label,
+        "balance": get_coins(telegram_id),
+        "index": winner_idx,
+    }
 
 
 # ── Défis hebdomadaires ───────────────────────────────────────────────────────

@@ -4215,6 +4215,8 @@
   }
 
   // ── Roue de la fortune ─────────────────────────────────────────────────────
+  let _spinWheel = [];
+
   async function openSpin() {
     if (!myTid) return;
     const overlay = document.getElementById('spin-overlay');
@@ -4232,12 +4234,13 @@
         </div>`;
         return;
       }
+      _spinWheel = r.wheel || [];
       box.innerHTML = `
         <div style="padding:14px 0">
           <div style="font-size:3rem;margin-bottom:10px">🎰</div>
           <div style="font-size:1.4rem;font-weight:800;margin-bottom:8px">Roue de la fortune</div>
           <div style="opacity:0.9;font-size:0.85rem;margin-bottom:20px;line-height:1.4">
-            Tente ta chance ! Tu peux gagner de 10 🪙 à 1000 🪙.<br>
+            Tente ta chance ! De 10 🪙 à <strong>1 000 000 🪙</strong> (super jackpot).<br>
             (1 tour gratuit par jour)
           </div>
           <button id="spin-go" onclick="doSpin()" class="btn-primary" style="background:white;color:#7c2d12;font-size:1.1rem;padding:14px">🎲 TOURNER LA ROUE !</button>
@@ -4254,34 +4257,77 @@
     }
   }
 
+  function _spinReelHtml() {
+    // Construit la "bande" verticale de la slot machine (chaque ligne = 64px)
+    // Répète les prix 20 fois pour donner l'illusion de défilement long.
+    const items = _spinWheel.length ? _spinWheel : [{label:'?',coins:0}];
+    const rows = [];
+    for (let k = 0; k < 20; k++) {
+      items.forEach(p => {
+        rows.push(`<div style="height:64px;display:flex;align-items:center;justify-content:center;font-size:1.05rem;font-weight:800;border-bottom:1px dashed rgba(255,255,255,0.15)">${esc(p.label)}</div>`);
+      });
+    }
+    return rows.join('');
+  }
+
   async function doSpin() {
     const btn = document.getElementById('spin-go');
     if (btn) { btn.disabled = true; btn.textContent = '⏳ Tirage…'; }
     const box = document.getElementById('spin-content');
-    box.innerHTML = `<div style="padding:50px 0;font-size:4rem;animation:spinroll 1s linear">🎰</div>`;
+
+    // Construit la slot machine
+    box.innerHTML = `
+      <div style="padding:6px 0">
+        <div style="position:relative;height:64px;overflow:hidden;border:3px solid #facc15;border-radius:14px;background:rgba(0,0,0,0.35);box-shadow:0 0 24px rgba(250,204,21,0.4) inset">
+          <div id="spin-reel" style="transition: none; transform: translateY(0)">${_spinReelHtml()}</div>
+          <!-- Indicateurs sur les côtés -->
+          <div style="position:absolute;left:6px;top:50%;transform:translateY(-50%);font-size:1.2rem;text-shadow:0 1px 2px #000">▶</div>
+          <div style="position:absolute;right:6px;top:50%;transform:translateY(-50%);font-size:1.2rem;text-shadow:0 1px 2px #000">◀</div>
+        </div>
+        <div id="spin-result" style="margin-top:18px;min-height:60px"></div>
+      </div>
+    `;
+
     try {
       const r = await fetch(`${API}/spin`, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({ telegram_id: myTid }),
       }).then(r => r.json());
-      await new Promise(r => setTimeout(r, 900));
+
       if (!r.ok) {
-        box.innerHTML = `<div style="padding:30px 0">
-          <div style="font-size:2.5rem">😬</div>
-          <div style="font-size:1.1rem;font-weight:700;margin-top:10px">${esc(r.error)}</div>
-        </div>`;
+        document.getElementById('spin-result').innerHTML = `<div style="padding:10px 0;font-size:1rem;font-weight:700">😬 ${esc(r.error)}</div>`;
         return;
       }
-      box.innerHTML = `<div style="padding:14px 0">
-        <div style="font-size:4rem;margin-bottom:12px">🎉</div>
-        <div style="font-size:0.8rem;letter-spacing:1.5px;opacity:0.85;text-transform:uppercase;font-weight:700">Tu gagnes</div>
-        <div style="font-size:2.4rem;font-weight:900;margin:8px 0">${esc(r.label)}</div>
-        <div style="opacity:0.9;margin-bottom:18px">Solde : ${r.balance} 🪙</div>
-        <button class="btn-primary" style="background:white;color:#7c2d12" onclick="closeSpin()">Cool, à demain !</button>
-      </div>`;
+
+      // Anime la slot machine : descend jusqu'à la ligne gagnante après 18 cycles complets
+      const reel = document.getElementById('spin-reel');
+      const N = _spinWheel.length || 1;
+      const ROW_H = 64;
+      const cycles = 18;
+      const finalIndex = (typeof r.index === 'number') ? r.index : 0;
+      const finalY = (cycles * N + finalIndex) * ROW_H;
+      // Force un reflow pour que la transition reparte de 0
+      void reel.offsetHeight;
+      reel.style.transition = 'transform 3.6s cubic-bezier(.16,.7,.2,1)';
+      reel.style.transform = `translateY(-${finalY}px)`;
+
+      // Attendre la fin de l'animation pour afficher le résultat
+      await new Promise(r => setTimeout(r, 3800));
+
+      const isSuper = (r.coins >= 1_000_000);
+      const isJackpot = (r.coins >= 1000);
+      document.getElementById('spin-result').innerHTML = `
+        <div style="padding:6px 0;text-align:center">
+          <div style="font-size:${isSuper?'3.5rem':isJackpot?'3rem':'2.5rem'};margin-bottom:6px">${isSuper?'🌟🎉🌟':isJackpot?'🎉':'✨'}</div>
+          <div style="font-size:0.7rem;letter-spacing:1.5px;opacity:0.85;text-transform:uppercase;font-weight:700">Tu gagnes</div>
+          <div style="font-size:${isSuper?'1.6rem':'1.8rem'};font-weight:900;margin:6px 0">${esc(r.label)}</div>
+          <div style="opacity:0.9;margin-bottom:14px;font-size:0.9rem">Solde : ${r.balance} 🪙</div>
+          <button class="btn-primary" style="background:white;color:#7c2d12" onclick="closeSpin()">Cool, à demain !</button>
+        </div>
+      `;
     } catch(e) {
-      box.innerHTML = `<div>❌ Erreur réseau</div>`;
+      document.getElementById('spin-result').innerHTML = `<div>❌ Erreur réseau</div>`;
     }
   }
 
