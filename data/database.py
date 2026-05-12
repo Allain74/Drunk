@@ -196,6 +196,36 @@ def init_db():
         )""")
     except Exception:
         pass
+    # Gamification : XP, badges, streaks
+    try:
+        _execute("ALTER TABLE users ADD COLUMN xp INTEGER DEFAULT 0")
+    except Exception:
+        pass
+    try:
+        _execute("ALTER TABLE users ADD COLUMN current_streak INTEGER DEFAULT 0")
+    except Exception:
+        pass
+    try:
+        _execute("ALTER TABLE users ADD COLUMN longest_streak INTEGER DEFAULT 0")
+    except Exception:
+        pass
+    try:
+        _execute("ALTER TABLE users ADD COLUMN last_drink_date TEXT")
+    except Exception:
+        pass
+    try:
+        _execute("ALTER TABLE users ADD COLUMN referred_by INTEGER")
+    except Exception:
+        pass
+    try:
+        _execute("""CREATE TABLE IF NOT EXISTS user_badges (
+            user_id     INTEGER NOT NULL,
+            badge_key   TEXT NOT NULL,
+            unlocked_at TEXT NOT NULL DEFAULT (datetime('now')),
+            PRIMARY KEY (user_id, badge_key)
+        )""")
+    except Exception:
+        pass
     _pipeline([
         ("""CREATE TABLE IF NOT EXISTS users (
             user_id     INTEGER PRIMARY KEY,
@@ -795,6 +825,114 @@ def delete_user(user_id: int):
         ("DELETE FROM push_subscriptions  WHERE user_id=?", [user_id]),
         ("DELETE FROM users               WHERE user_id=?", [user_id]),
     ])
+
+
+# ── Gamification : XP, badges, streaks ────────────────────────────────────────
+
+def get_xp(user_id: int) -> int:
+    row = _fetchone("SELECT xp FROM users WHERE user_id=?", [user_id])
+    return int(row["xp"] or 0) if row else 0
+
+
+def add_xp(user_id: int, amount: int) -> dict:
+    """Ajoute de l'XP. Renvoie {xp_before, xp_after, leveled_up: bool}."""
+    if amount <= 0 or not user_id:
+        return {"xp_before": 0, "xp_after": 0, "leveled_up": False}
+    from core.gamification import calc_level
+    before = get_xp(user_id)
+    _execute("UPDATE users SET xp = COALESCE(xp, 0) + ? WHERE user_id=?", [amount, user_id])
+    after = before + amount
+    leveled = calc_level(before)["level"] != calc_level(after)["level"]
+    return {"xp_before": before, "xp_after": after, "leveled_up": leveled}
+
+
+def unlock_badge(user_id: int, badge_key: str) -> bool:
+    """Renvoie True si nouvellement débloqué, False si déjà présent."""
+    if not user_id or not badge_key:
+        return False
+    existing = _fetchone(
+        "SELECT 1 FROM user_badges WHERE user_id=? AND badge_key=?",
+        [user_id, badge_key]
+    )
+    if existing:
+        return False
+    _execute(
+        "INSERT INTO user_badges (user_id, badge_key) VALUES (?, ?)",
+        [user_id, badge_key]
+    )
+    return True
+
+
+def get_user_badges(user_id: int) -> list[str]:
+    """Renvoie la liste des badge_key débloqués pour un user."""
+    rows = _fetchall(
+        "SELECT badge_key FROM user_badges WHERE user_id=? ORDER BY unlocked_at DESC",
+        [user_id]
+    )
+    return [r["badge_key"] for r in rows]
+
+
+def get_streak(user_id: int) -> dict:
+    row = _fetchone(
+        "SELECT current_streak, longest_streak, last_drink_date FROM users WHERE user_id=?",
+        [user_id]
+    )
+    if not row:
+        return {"current": 0, "longest": 0, "last": None}
+    return {
+        "current": int(row.get("current_streak") or 0),
+        "longest": int(row.get("longest_streak") or 0),
+        "last":    row.get("last_drink_date"),
+    }
+
+
+def bump_streak(user_id: int) -> dict:
+    """Met à jour le streak d'un user en fonction de l'ajout d'un verre.
+    Si dernier verre = aujourd'hui → ne change rien.
+    Si dernier verre = hier → +1.
+    Sinon → reset à 1.
+    Renvoie le nouveau state."""
+    from datetime import date as _date
+    s = get_streak(user_id)
+    today = _date.today().isoformat()
+    new_current = s["current"]
+    if s["last"] == today:
+        # Déjà compté aujourd'hui : pas de changement
+        return s
+    if s["last"]:
+        try:
+            last = _date.fromisoformat(s["last"])
+            delta = (_date.today() - last).days
+            if delta == 1:
+                new_current = s["current"] + 1
+            else:
+                new_current = 1  # reset
+        except Exception:
+            new_current = 1
+    else:
+        new_current = 1
+    new_longest = max(s["longest"], new_current)
+    _execute(
+        "UPDATE users SET current_streak=?, longest_streak=?, last_drink_date=? WHERE user_id=?",
+        [new_current, new_longest, today, user_id]
+    )
+    return {"current": new_current, "longest": new_longest, "last": today}
+
+
+def set_referrer(user_id: int, referrer_id: int):
+    """Stocke le parrain d'un nouveau user (uniquement si pas déjà défini)."""
+    _execute(
+        "UPDATE users SET referred_by=? WHERE user_id=? AND referred_by IS NULL",
+        [referrer_id, user_id]
+    )
+
+
+def count_referrals(user_id: int) -> int:
+    row = _fetchone(
+        "SELECT COUNT(*) as c FROM users WHERE referred_by=?",
+        [user_id]
+    )
+    return int(row["c"] or 0) if row else 0
 
 
 # ── Auth sessions (token bearer) ──────────────────────────────────────────────

@@ -38,6 +38,12 @@ from data.database import (
     clear_password, delete_n_drinks,
     set_premium, clear_premium, get_user_by_stripe_customer, set_stripe_customer_id,
     create_auth_session, get_uid_from_token, revoke_auth_token, revoke_all_user_sessions,
+    add_xp as db_add_xp, get_xp, unlock_badge, get_user_badges,
+    get_streak, bump_streak, set_referrer, count_referrals,
+)
+from core.gamification import (
+    calc_level, all_badges_meta, BADGES,
+    XP_PER_DRINK, XP_PER_BET_WIN, XP_PER_BJ_WIN, XP_REFERRAL,
 )
 from core.recap import build_weekly_recap, build_weekly_recap_for_user
 from core.widmark import total_bac, bac_label, sober_in_hours, alcohol_grams
@@ -349,6 +355,8 @@ def build_snapshot() -> list[dict]:
             "peak_24h":    round(peak_24h, 2),
             "gender":      user.get("gender", "homme"),
             "is_premium":  uid == admin_id or bool(user.get("is_premium")),
+            "level":       calc_level(int(user.get("xp") or 0)),
+            "streak":      int(user.get("current_streak") or 0),
             "is_banned":   uid in banned_ids,
         })
     result.sort(key=lambda x: x["bac"], reverse=True)
@@ -622,6 +630,128 @@ def _require_authed_uid(request: Request, claimed_id) -> tuple[int | None, dict 
     return int(claimed_id), None
 
 
+def _check_badges_for_user(user_id: int) -> list[str]:
+    """Check toutes les conditions de badges pour un user et débloque ceux
+    qui peuvent l'être. Renvoie les badge_keys nouvellement débloqués."""
+    if not user_id:
+        return []
+    from data.database import _fetchone as _fo, _fetchall as _fa
+    newly = []
+
+    # Récupère les stats nécessaires en bulk
+    user = get_user(user_id)
+    if not user:
+        return []
+    coins = int(user.get("coins") or 0)
+    max_bac = float(user.get("max_bac") or 0)
+    is_premium = bool(user.get("is_premium"))
+    has_avatar = bool(user.get("avatar"))
+
+    total_drinks = _fo("SELECT COUNT(*) c FROM drink_logs WHERE user_id=?", [user_id])
+    total_drinks = int(total_drinks["c"]) if total_drinks else 0
+
+    max_session_drinks = _fo(
+        """SELECT MAX(c) m FROM (
+             SELECT COUNT(*) c FROM drink_logs WHERE user_id=? GROUP BY session_id
+           )""", [user_id]
+    )
+    max_session_drinks = int((max_session_drinks or {}).get("m") or 0)
+
+    streak = get_streak(user_id)
+
+    # Paris gagnés / coinflips
+    bet_wins = _fo(
+        "SELECT COUNT(*) c FROM bets WHERE winner_id=? AND status='settled'",
+        [user_id]
+    )
+    bet_wins = int(bet_wins["c"]) if bet_wins else 0
+
+    coinflip_wins = _fo(
+        "SELECT COUNT(*) c FROM bets WHERE winner_id=? AND status='settled' AND bet_type='coinflip'",
+        [user_id]
+    )
+    coinflip_wins = int(coinflip_wins["c"]) if coinflip_wins else 0
+
+    # Blackjack wins
+    bj_wins_row = _fo(
+        "SELECT COUNT(*) c FROM blackjack_players WHERE user_id=? AND result IN ('win','blackjack')",
+        [user_id]
+    )
+    bj_wins = int(bj_wins_row["c"]) if bj_wins_row else 0
+
+    bj_naturel = _fo(
+        "SELECT 1 FROM blackjack_players WHERE user_id=? AND result='blackjack' LIMIT 1",
+        [user_id]
+    )
+
+    # Social
+    following_count = len(get_following(user_id))
+    followers_count = len(get_followers(user_id))
+    refs = count_referrals(user_id)
+
+    # Map badge_key → condition (bool)
+    conds = {
+        "first_drink":  total_drinks >= 1,
+        "first_friend": following_count >= 1,
+        "drink_10":     total_drinks >= 10,
+        "drink_50":     total_drinks >= 50,
+        "drink_100":    total_drinks >= 100,
+        "drink_500":    total_drinks >= 500,
+        "drink_1000":   total_drinks >= 1000,
+        "night_10":     max_session_drinks >= 10,
+        "night_15":     max_session_drinks >= 15,
+        "high_bac_1":   max_bac >= 1.0,
+        "high_bac_2":   max_bac >= 2.0,
+        "streak_3":     streak["current"] >= 3 or streak["longest"] >= 3,
+        "streak_7":     streak["current"] >= 7 or streak["longest"] >= 7,
+        "streak_14":    streak["current"] >= 14 or streak["longest"] >= 14,
+        "coins_500":    coins >= 500,
+        "coins_2000":   coins >= 2000,
+        "coins_10000":  coins >= 10000,
+        "bet_win_5":    bet_wins >= 5,
+        "bet_win_20":   bet_wins >= 20,
+        "coinflip_5":   coinflip_wins >= 5,
+        "bj_win_5":     bj_wins >= 5,
+        "bj_win_20":    bj_wins >= 20,
+        "bj_blackjack": bj_naturel is not None,
+        "friends_5":    following_count >= 5,
+        "friends_20":   followers_count >= 20,
+        "referral_1":   refs >= 1,
+        "referral_5":   refs >= 5,
+        "premium":      is_premium,
+        "set_avatar":   has_avatar,
+        # first_pari / first_bj : seront unlocked au moment de l'action (pas besoin de query)
+    }
+    for key, ok in conds.items():
+        if ok and unlock_badge(user_id, key):
+            newly.append(key)
+    return newly
+
+
+def _award_drink(user_id: int) -> dict:
+    """Hook après un ajout de verre : +XP, streak, badges."""
+    if not user_id:
+        return {}
+    db_add_xp(user_id, XP_PER_DRINK)
+    bump_streak(user_id)
+    new_badges = _check_badges_for_user(user_id)
+    return {"new_badges": new_badges}
+
+
+def _award_bet_win(user_id: int):
+    if not user_id:
+        return
+    db_add_xp(user_id, XP_PER_BET_WIN)
+    _check_badges_for_user(user_id)
+
+
+def _award_bj_win(user_id: int):
+    if not user_id:
+        return
+    db_add_xp(user_id, XP_PER_BJ_WIN)
+    _check_badges_for_user(user_id)
+
+
 def _check_admin(caller_id, secret: str | None = None) -> bool:
     """Vérifie qu'un appel est légitime : caller_id == ADMIN_ID ET secret partagé.
     Si ADMIN_SECRET n'est pas défini en env, on tolère sans secret (backwards compat
@@ -874,14 +1004,16 @@ def _invalidate_alltime_cache():
 
 @app.get("/me/{telegram_id}")
 def get_me(telegram_id: int):
-    """Renvoie les infos perso d'un user (poids, gender, premium).
-    Pas d'auth pour l'instant — vulnérable IDOR mineur (poids accessible si on
-    devine un telegram_id). Sera fixé par le système de session tokens."""
+    """Renvoie les infos perso d'un user (poids, gender, premium, XP, badges, streak)."""
     user = get_user(telegram_id)
     if not user:
         return {"ok": False}
     admin_id = int(os.environ.get("ADMIN_ID", "0"))
     uid = user.get("user_id") or user.get("telegram_id")
+    xp = int(user.get("xp") or 0)
+    lvl = calc_level(xp)
+    badges_unlocked = get_user_badges(uid)
+    streak = get_streak(uid)
     return {
         "ok": True,
         "telegram_id": uid,
@@ -891,7 +1023,23 @@ def get_me(telegram_id: int):
         "coins": user.get("coins", 0),
         "is_admin": uid == admin_id,
         "is_premium": uid == admin_id or bool(user.get("is_premium")),
+        "level": lvl,
+        "badges_unlocked": badges_unlocked,
+        "badges_count": len(badges_unlocked),
+        "badges_total": len(BADGES),
+        "streak": streak,
+        "referrals_count": count_referrals(uid),
     }
+
+
+@app.get("/badges/{telegram_id}")
+def get_badges(telegram_id: int):
+    """Liste tous les badges du système avec leur état (unlocked: bool)."""
+    unlocked = set(get_user_badges(telegram_id))
+    return [
+        {**b, "unlocked": b["key"] in unlocked}
+        for b in all_badges_meta()
+    ]
 
 
 @app.get("/locations/{telegram_id}")
@@ -999,6 +1147,7 @@ async def _bet_settlement_loop():
             # Les deux mises ont déjà été escrow à la création/accept.
             # Le winner récupère 2x amount (sa mise + celle du perdant).
             add_coins(winner_id, amount * 2, f"Pari gagné contre {loser['username']}")
+            _award_bet_win(winner_id)
 
             msg = (
                 f"🏁 *Résultat du pari !* {detail}\n\n"
@@ -1076,6 +1225,8 @@ def get_all_users_endpoint():
             "gender":      u.get("gender", "homme"),
             "is_admin":    uid == admin_id,
             "is_premium":  uid == admin_id or bool(u.get("is_premium")),
+            "level":       calc_level(int(u.get("xp") or 0)),
+            "streak":      int(u.get("current_streak") or 0),
         })
     return result
 
@@ -1095,6 +1246,8 @@ async def follow_endpoint(request: Request):
     if not follower_id or not following_id:
         return {"ok": False, "error": "Missing IDs"}
     follow_user(follower_id, following_id)
+    _check_badges_for_user(follower_id)
+    _check_badges_for_user(int(following_id))
     # Notif push à la personne suivie
     follower = get_user(int(follower_id))
     if follower:
@@ -1189,6 +1342,22 @@ async def register_endpoint(request: Request):
     admin_id = int(os.environ.get("ADMIN_ID", "0"))
     if admin_id and admin_id != web_id:
         follow_user(web_id, admin_id)
+
+    # Parrainage : si le body contient un referrer_id, on l'enregistre + XP/coins
+    referrer_id = body.get("referrer_id")
+    if referrer_id:
+        try:
+            referrer_id = int(referrer_id)
+            ref_user = get_user(referrer_id)
+            if ref_user and referrer_id != web_id:
+                set_referrer(web_id, referrer_id)
+                # Bonus pour parrain et filleul
+                add_coins(referrer_id, 200, f"Parrainage de {username}")
+                add_coins(web_id, 200, f"Bonus parrainage par {ref_user['username']}")
+                db_add_xp(referrer_id, XP_REFERRAL)
+                _check_badges_for_user(referrer_id)
+        except Exception:
+            pass
 
     token = create_auth_session(web_id)
     return {
@@ -1349,6 +1518,9 @@ async def log_drink_web(request: Request):
     _invalidate_alltime_cache()
     add_coins(telegram_id, 5, f"Verre bu ({drink.name})")
 
+    # Gamification : XP, streak, badges
+    award = _award_drink(telegram_id)
+
     # Mise à jour de la position si fournie
     if lat is not None and lon is not None:
         try:
@@ -1414,6 +1586,10 @@ async def log_drink_web(request: Request):
         "bac": round(bac, 3),
         "nb_drinks": len(drinks_data),
         "label": bac_label(bac),
+        "new_badges": [
+            {"key": k, **BADGES.get(k, {})} for k in (award.get("new_badges") or [])
+        ],
+        "xp": get_xp(telegram_id),
     }
 
 
@@ -1594,6 +1770,7 @@ async def bj_create_web(request: Request):
     token = secrets.token_urlsafe(8)
     session_id = create_blackjack_session(telegram_id, token)
     add_blackjack_player(session_id, telegram_id, bet)
+    unlock_badge(telegram_id, "first_bj")
     return {"ok": True, "token": token}
 
 
@@ -1754,6 +1931,7 @@ async def bj_start_web(token: str, request: Request):
             add_coins(p["telegram_id"], p["bet"] + winnings, "Blackjack naturel !")
             update_blackjack_player(sess["id"], p["telegram_id"],
                 status="done", result="blackjack")
+            _award_bj_win(p["telegram_id"])
 
     # Si tous done immédiatement (tous blackjack) → résoudre et terminer
     players = get_blackjack_players(sess["id"])
@@ -1878,6 +2056,7 @@ async def create_bet_web(request: Request):
         return {"ok": False, "error": f"Solde insuffisant ({get_coins(challenger_id)} 🪙)"}
 
     bet_id = create_bet(challenger_id, opponent["telegram_id"], bet_type, amount, end_time or None)
+    unlock_badge(challenger_id, "first_pari")
 
     # Notif push à l'adversaire
     type_labels = {"verres": "plus de verres", "ivre": "TAC le plus haut", "coinflip": "pile ou face"}
@@ -1919,6 +2098,7 @@ async def accept_bet_web(request: Request):
         accept_bet(bet_id)
         settle_bet(bet_id, winner_id)
         add_coins(winner_id, bet["amount"] * 2, "Coinflip gagné")
+        _award_bet_win(winner_id)
         winner = get_user(winner_id)
         return {"ok": True, "coinflip": True, "winner": winner["username"] if winner else "?"}
 
@@ -2008,6 +2188,7 @@ async def upload_avatar(request: Request):
     if not any(avatar.startswith(p) for p in _ALLOWED_AVATAR_PREFIXES):
         return {"ok": False, "error": "Format invalide (png/jpeg/webp uniquement)"}
     set_avatar(int(tid), avatar)
+    _check_badges_for_user(int(tid))
     return {"ok": True}
 
 
@@ -2087,6 +2268,7 @@ async def _resolve_hand(sess_id: int, token: str):
             if dealer_val > 21 or p_val > dealer_val:
                 add_coins(p["telegram_id"], bet * 2, "Blackjack gagné")
                 update_blackjack_player(sess_id, p["telegram_id"], result="win")
+                _award_bj_win(p["telegram_id"])
             elif p_val == dealer_val:
                 add_coins(p["telegram_id"], bet, "Blackjack égalité")
                 update_blackjack_player(sess_id, p["telegram_id"], result="push")
@@ -2277,6 +2459,7 @@ async def blackjack_rematch(token: str, request: Request):
             add_coins(p["telegram_id"], p["bet"] + winnings, "Blackjack naturel !")
             update_blackjack_player(session["id"], p["telegram_id"],
                 status="done", result="blackjack")
+            _award_bj_win(p["telegram_id"])
 
     # Si tous ont un blackjack, résoudre immédiatement
     players = get_blackjack_players(session["id"])
@@ -2391,6 +2574,7 @@ async def stripe_webhook(request: Request):
                     sub["current_period_end"], tz=timezone.utc
                 ).isoformat()
                 set_premium(int(user_id_str), customer_id, subscription_id, premium_until)
+                _check_badges_for_user(int(user_id_str))
             except Exception:
                 pass
     elif t in ("customer.subscription.updated", "customer.subscription.created"):
