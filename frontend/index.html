@@ -2567,41 +2567,9 @@
     }</div>`;
   }
 
+  let _refCount = 0;
   function _renderRefSection(me) {
-    const linkEl = document.getElementById('profil-ref-link');
-    const countEl = document.getElementById('profil-ref-count');
-    if (linkEl) {
-      const base = location.origin + location.pathname.replace(/\/+$/, '');
-      linkEl.value = `${base}/?ref=${me.telegram_id}`;
-    }
-    if (countEl) {
-      const n = me.referrals_count || 0;
-      countEl.textContent = n > 0 ? `🎉 ${n} ami${n>1?'s':''} parrainé${n>1?'s':''}` : '';
-    }
-  }
-
-  function profilCopyRefLink() {
-    const inp = document.getElementById('profil-ref-link');
-    if (!inp) return;
-    try {
-      navigator.clipboard.writeText(inp.value);
-      showToast('📋 Lien copié !');
-    } catch(e) {
-      inp.select();
-      document.execCommand('copy');
-      showToast('📋 Lien copié !');
-    }
-  }
-
-  async function profilShareRefLink() {
-    const inp = document.getElementById('profil-ref-link');
-    if (!inp || !inp.value) return;
-    const text = `🍺 Rejoins-moi sur Drunk ! Avec mon lien on gagne tous les deux 200 🪙 :\n${inp.value}`;
-    if (navigator.share) {
-      try { await navigator.share({ title: 'Drunk 🍺', text, url: inp.value }); } catch(e) {}
-    } else {
-      profilCopyRefLink();
-    }
+    _refCount = me.referrals_count || 0;
   }
 
   async function loadProfil() {
@@ -2729,20 +2697,6 @@
           <div id="profil-badges-content">
             <div style="color:var(--sub);font-size:0.85rem;text-align:center;padding:8px 0">Chargement…</div>
           </div>
-        </div>
-
-        <!-- Parrainage -->
-        <div class="p-card">
-          <div class="p-card-label">🎁 Invite des amis</div>
-          <p style="font-size:0.85rem;line-height:1.5;color:var(--sub);margin:4px 0 12px">
-            Partage ton lien : <strong>200 🪙</strong> pour toi ET ton pote dès qu'il s'inscrit.
-          </p>
-          <div style="display:flex;gap:8px">
-            <input id="profil-ref-link" readonly value="" style="flex:1;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.8rem;font-family:monospace;box-sizing:border-box"/>
-            <button class="admin-action-btn primary" onclick="profilCopyRefLink()">📋</button>
-          </div>
-          <button class="btn-primary" style="margin-top:10px" onclick="profilShareRefLink()">📲 Partager mon lien</button>
-          <div style="font-size:0.72rem;color:var(--sub);margin-top:6px;text-align:center" id="profil-ref-count"></div>
         </div>
 
         <!-- Infos -->
@@ -3687,16 +3641,27 @@
 
   // Partage l'app via la feuille de partage système
   async function shareApp() {
-    const url  = location.origin;
-    const text = `🍺 Rejoins-moi sur Drunk, l'app pour tracker ton taux d'alcool en soirée !\n\n📲 Pour l'installer sur iPhone :\n1. Ouvre ce lien dans Safari\n2. Appuie sur Partager ↑\n3. Choisis "Sur l'écran d'accueil"\n\n👉 ${url}`;
+    const base = location.origin + location.pathname.replace(/\/+$/, '');
+    const url  = myTid ? `${base}/?ref=${myTid}` : base;
+    const refLine = myTid ? `\n🎁 On gagne 200 🪙 chacun quand tu rejoins via mon lien !\n` : '';
+    const text = `🍺 Rejoins-moi sur Drunk, l'app pour tracker ton taux d'alcool en soirée !${refLine}\n📲 Pour l'installer sur iPhone :\n1. Ouvre le lien dans Safari\n2. Appuie sur Partager ↑\n3. Choisis "Sur l'écran d'accueil"\n\n👉 ${url}`;
     if (navigator.share) {
-      try { await navigator.share({ title: 'Drunk 🍺', text, url }); } catch(e) {}
-    } else {
-      try {
-        await navigator.clipboard.writeText(text);
-        showToast('📋 Message copié dans le presse-papiers !');
-      } catch(e) { showToast('👉 ' + url); }
+      try { await navigator.share({ title: 'Drunk 🍺', text, url }); return; } catch(e) {}
     }
+    try {
+      await navigator.clipboard.writeText(text);
+      showToast('📋 Message copié dans le presse-papiers !');
+    } catch(e) { showToast('👉 ' + url); }
+  }
+
+  async function copyRefLink() {
+    if (!myTid) return;
+    const base = location.origin + location.pathname.replace(/\/+$/, '');
+    const url = `${base}/?ref=${myTid}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      showToast('📋 Lien copié !');
+    } catch(e) { showToast('👉 ' + url); }
   }
 
   function aboSwitchSub(sub) {
@@ -3743,24 +3708,53 @@
     // Rendu immédiat avec cache ; re-render si avatars se rafraîchissent
     const _avTs = _avatarCacheTs;
     loadAvatars().then(() => { if (_avatarCacheTs !== _avTs && document.getElementById('abo-content')) loadAbonnements(); });
+    // Fetch /me en arrière-plan pour mettre à jour le compteur de parrainages
+    if (myTid) {
+      fetch(`${API}/me/${myTid}`).then(r => r.json()).then(d => {
+        if (d && d.ok) {
+          const newCount = d.referrals_count || 0;
+          if (newCount !== _refCount) {
+            _refCount = newCount;
+            loadAbonnements();
+          }
+        }
+      }).catch(() => {});
+    }
     const followingCount = followingSet.size;
     const { label: squadLabel, sub: squadSub } = _aboSquadStatus(followingCount);
 
-    // Bannière toujours visible (même déconnecté)
+    // Bannière toujours visible (même déconnecté). Si connecté, on ajoute la
+    // promo parrainage (+200 🪙) + le lien copiable.
+    const refCountTxt = (myTid && _refCount > 0)
+      ? `<span style="color:#facc15;font-size:0.72rem;font-weight:700">🎉 ${_refCount} ami${_refCount>1?'s':''} parrainé${_refCount>1?'s':''}</span>`
+      : '';
     const inviteBanner = `
       <div class="amis-invite-wrap">
-        <div class="amis-invite-card">
-          <div class="amis-squad-icon">👥</div>
-          <div class="amis-squad-info">
-            <div class="amis-squad-label">${squadLabel}</div>
-            <div class="amis-squad-sub">${squadSub}</div>
+        <div class="amis-invite-card" style="flex-direction:column;align-items:stretch;gap:12px">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+            <div style="display:flex;align-items:center;gap:12px;min-width:0">
+              <div class="amis-squad-icon">👥</div>
+              <div class="amis-squad-info" style="min-width:0">
+                <div class="amis-squad-label">${squadLabel}</div>
+                <div class="amis-squad-sub">${squadSub}</div>
+              </div>
+            </div>
+            ${refCountTxt}
           </div>
-          <button class="amis-invite-btn" onclick="shareApp()">
-            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/>
-            </svg>
-            Inviter
-          </button>
+          ${myTid ? `
+            <div style="font-size:0.78rem;color:var(--sub);line-height:1.45;padding:8px 10px;background:linear-gradient(135deg,rgba(250,204,21,0.1),rgba(168,85,247,0.1));border-radius:10px;border:1px solid rgba(250,204,21,0.25)">
+              🎁 <strong>+200 🪙 chacun</strong> quand un ami s'inscrit via ton lien.
+            </div>
+          ` : ''}
+          <div style="display:flex;gap:6px">
+            <button class="amis-invite-btn" style="flex:1;justify-content:center" onclick="shareApp()">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/>
+              </svg>
+              ${myTid ? 'Partager mon lien' : "Partager l'app"}
+            </button>
+            ${myTid ? `<button class="amis-invite-btn" onclick="copyRefLink()" style="flex:0 0 auto" title="Copier mon lien">📋</button>` : ''}
+          </div>
         </div>
       </div>`;
 
