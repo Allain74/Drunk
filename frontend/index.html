@@ -1071,7 +1071,7 @@
     </div>
   </div>
   <div style="margin-top:4px">
-    <button class="db-action-btn" style="width:100%" onclick="undoDrink()">↩️ Enlever le dernier verre</button>
+    <button class="db-action-btn" style="width:100%;padding:14px;font-size:1rem;font-weight:700;background:#ef444415;color:#ef4444;border-color:#ef444440" onclick="undoDrink()">↩️ Enlever le dernier verre</button>
   </div>
 
   <!-- Jeux -->
@@ -2844,7 +2844,10 @@
             <div class="p-avatar-edit">📷</div>
           </div>
           <div class="p-username">@${esc(myName)}${isPremium ? ' <span style="font-size:0.85em;vertical-align:middle">👑</span>' : ''}</div>
-          <div style="font-size:0.72rem;color:var(--sub);margin-top:4px">${isPremium ? 'Membre Premium' : 'Appuie sur la photo pour la changer'}</div>
+          <div style="font-size:0.72rem;color:var(--sub);margin-top:4px">${isPremium ? 'Membre Premium · Photo modifiable' : 'Appuie sur la photo pour la changer'}</div>
+          <button class="p-action-btn" style="margin-top:12px;background:var(--bg);border:1px solid var(--border);font-size:0.85rem" onclick="openProfile('${esc(myName)}',true)">
+            👁 Voir mon profil public
+          </button>
         </div>
 
         <!-- Sub-nav -->
@@ -2986,45 +2989,45 @@
             <button class="p-action-btn" onclick="logout();showTab('profil')">🚪 Se déconnecter</button>
             <button class="p-action-btn danger" onclick="openDeleteModal()">🗑️ Supprimer mon compte</button>
           </div>
+
+          ${myTid === adminId ? `
+          <!-- ─── Section Admin (en bas du sub-tab Paramètres) ─── -->
+          <div class="p-card" id="admin-panel" style="border:1px solid rgba(249,115,22,0.35);background:rgba(249,115,22,0.04)">
+            <div class="p-card-label" style="color:#f97316">🛠 Administration</div>
+
+            <!-- Broadcast -->
+            <div style="margin-bottom:16px">
+              <div class="admin-modal-label">📢 Notif push à tous</div>
+              <input class="admin-modal-input" id="adm-bc-title" placeholder="Titre…">
+              <input class="admin-modal-input" id="adm-bc-msg"   placeholder="Message…">
+              <button class="btn-primary" style="margin-top:4px" onclick="adminBroadcast()">Envoyer à tous</button>
+              <div style="font-size:0.7rem;color:var(--sub);margin-top:4px" id="adm-bc-status"></div>
+            </div>
+
+            <!-- Actions globales -->
+            <div style="margin-bottom:16px;border-top:1px solid var(--border);padding-top:12px">
+              <div class="admin-modal-label">🃏 Blackjack</div>
+              <button class="admin-action-btn danger" style="width:100%;padding:10px" onclick="adminCloseAllBJ()">🗑 Clôturer toutes les parties ouvertes</button>
+              <div style="font-size:0.7rem;color:var(--sub);margin-top:4px" id="adm-bj-status"></div>
+            </div>
+
+            <!-- Liste utilisateurs -->
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;margin-bottom:8px">
+              <div class="admin-modal-label" style="margin:0">👥 Utilisateurs</div>
+              <button class="admin-action-btn" style="padding:4px 10px;font-size:0.75rem" onclick="adminLoadUsers()">🔄 Actualiser</button>
+            </div>
+            <div id="adm-stats" class="adm-stats-row"></div>
+            <input class="admin-modal-input" id="adm-search" placeholder="🔍 Rechercher…" oninput="adminFilterUsers(this.value)" style="margin-bottom:8px">
+            <div class="adm-sort-row">
+              <button class="adm-sort-btn" onclick="adminSort('bac')">🍺 Bac</button>
+              <button class="adm-sort-btn" onclick="adminSort('coins')">🪙 Coins</button>
+              <button class="adm-sort-btn" onclick="adminSort('drinks')">🥤 Verres</button>
+              <button class="adm-sort-btn" onclick="adminSort('name')">🔤 Pseudo</button>
+            </div>
+            <div id="adm-users-list"><div style="color:var(--sub);text-align:center;padding:20px">Chargement…</div></div>
+          </div>
+          ` : ''}
         </div>
-
-        ${myTid === adminId ? `
-        <!-- ─── Section Admin ─────────────────────────────────── -->
-        <div class="p-card" id="admin-panel">
-          <div class="p-card-label" style="color:#f97316">🛠 Administration</div>
-
-          <!-- Broadcast -->
-          <div style="margin-bottom:16px">
-            <div class="admin-modal-label">📢 Notif push à tous</div>
-            <input class="admin-modal-input" id="adm-bc-title" placeholder="Titre…">
-            <input class="admin-modal-input" id="adm-bc-msg"   placeholder="Message…">
-            <button class="btn-primary" style="margin-top:4px" onclick="adminBroadcast()">Envoyer à tous</button>
-            <div style="font-size:0.7rem;color:var(--sub);margin-top:4px" id="adm-bc-status"></div>
-          </div>
-
-          <!-- Actions globales -->
-          <div style="margin-bottom:16px;border-top:1px solid var(--border);padding-top:12px">
-            <div class="admin-modal-label">🃏 Blackjack</div>
-            <button class="admin-action-btn danger" style="width:100%;padding:10px" onclick="adminCloseAllBJ()">🗑 Clôturer toutes les parties ouvertes</button>
-            <div style="font-size:0.7rem;color:var(--sub);margin-top:4px" id="adm-bj-status"></div>
-          </div>
-
-          <!-- Liste utilisateurs -->
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;margin-bottom:8px">
-            <div class="admin-modal-label" style="margin:0">👥 Utilisateurs</div>
-            <button class="admin-action-btn" style="padding:4px 10px;font-size:0.75rem" onclick="adminLoadUsers()">🔄 Actualiser</button>
-          </div>
-          <div id="adm-stats" class="adm-stats-row"></div>
-          <input class="admin-modal-input" id="adm-search" placeholder="🔍 Rechercher…" oninput="adminFilterUsers(this.value)" style="margin-bottom:8px">
-          <div class="adm-sort-row">
-            <button class="adm-sort-btn" onclick="adminSort('bac')">🍺 Bac</button>
-            <button class="adm-sort-btn" onclick="adminSort('coins')">🪙 Coins</button>
-            <button class="adm-sort-btn" onclick="adminSort('drinks')">🥤 Verres</button>
-            <button class="adm-sort-btn" onclick="adminSort('name')">🔤 Pseudo</button>
-          </div>
-          <div id="adm-users-list"><div style="color:var(--sub);text-align:center;padding:20px">Chargement…</div></div>
-        </div>
-        ` : ''}
 
       </div>`;
 
@@ -3837,8 +3840,20 @@
   async function shareApp() {
     const base = location.origin + location.pathname.replace(/\/+$/, '');
     const url  = myTid ? `${base}/?ref=${myTid}` : base;
-    const refLine = myTid ? `\n🎁 On gagne 200 🪙 chacun quand tu rejoins via mon lien !\n` : '';
-    const text = `🍺 Rejoins-moi sur Drunk, l'app pour tracker ton taux d'alcool en soirée !${refLine}\n📲 Pour l'installer sur iPhone :\n1. Ouvre le lien dans Safari\n2. Appuie sur Partager ↑\n3. Choisis "Sur l'écran d'accueil"\n\n👉 ${url}`;
+    const refLine = myTid ? `🎁 On gagne 200 🪙 chacun quand tu rejoins via mon lien !\n\n` : '';
+    const text =
+      `🍺 Rejoins-moi sur Drunk, l'app qui track ton taux d'alcool en soirée !\n\n` +
+      refLine +
+      `👉 ${url}\n\n` +
+      `📱 INSTALLATION (pour avoir l'app comme une vraie) :\n\n` +
+      `🍎 iPhone (Safari) :\n` +
+      `  1. Ouvre le lien dans Safari\n` +
+      `  2. Tape l'icône Partager ↑ en bas\n` +
+      `  3. Choisis "Sur l'écran d'accueil"\n\n` +
+      `🤖 Android (Chrome) :\n` +
+      `  1. Ouvre le lien dans Chrome\n` +
+      `  2. Tape le menu ⋮ en haut à droite\n` +
+      `  3. Choisis "Ajouter à l'écran d'accueil"`;
     if (navigator.share) {
       try { await navigator.share({ title: 'Drunk 🍺', text, url }); return; } catch(e) {}
     }
