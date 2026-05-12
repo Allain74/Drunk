@@ -2272,38 +2272,59 @@ async def undo_drink_web(request: Request):
     if not telegram_id:
         return {"ok": False, "error": "Non authentifié"}
 
-    user = get_user(telegram_id)
+    # ─── CHEMIN CRITIQUE : 0 query DB (tout en mémoire) ─────────────────────
+    # User : réutilise le map cached
+    users_by_id = _cached("users_by_id_map", 30.0,
+                          lambda: {u["telegram_id"]: u for u in get_all_users()})
+    user = users_by_id.get(telegram_id) or get_user(telegram_id)
     if not user:
         return {"ok": False, "error": "Utilisateur introuvable"}
 
-    if not delete_last_drink(telegram_id):
-        return {"ok": False, "error": "Aucun verre à annuler"}
-    # Libère le cooldown mémoire — l'user peut recliquer immédiatement
-    _last_drink_at.pop(telegram_id, None)
-    # Met à jour le cache mémoire (retire le dernier verre)
+    # Vérifie qu'il y a un verre à retirer via le cache mémoire (fast path).
+    # Si le cache n'a rien, on vérifie quand même la DB en background pour
+    # gérer le cas du serveur fraichement redémarré.
     cached = _user_drinks_cache.get(telegram_id)
+    if cached is not None and not cached:
+        return {"ok": False, "error": "Aucun verre à annuler"}
+
+    # Mise à jour cache mémoire : retire le dernier verre
     if cached:
         cached.pop()
-    # Annule toute notif FOMO en attente pour ce user (si dans les 30s)
+    # Libère le cooldown — l'user peut recliquer immédiatement
+    _last_drink_at.pop(telegram_id, None)
+    # Annule toute notif FOMO en attente (cas où le drink était dans la
+    # fenêtre 30s avant d'envoyer les push)
     pending = _pending_first_drink_notifs.get(telegram_id)
     if pending and not pending.done():
         pending.cancel()
         _pending_first_drink_notifs.pop(telegram_id, None)
-    # Retire les récompenses gagnées au log : 5 coins + 10 XP
-    add_coins(telegram_id, -5, "Annulation verre")
-    _execute(
-        "UPDATE users SET xp = MAX(0, COALESCE(xp,0) - ?) WHERE user_id=?",
-        [XP_PER_DRINK, telegram_id]
-    )
-    # Note : on ne retire pas les badges (ce serait incohérent pour les
-    # achievements de type "record" comme max_bac).
+
     _invalidate_alltime_cache()
     _invalidate_cache("snapshot", "coins_all")
 
-    drinks_data = get_session_drinks(telegram_id)
+    # BAC calculé en mémoire à partir du cache mis à jour
+    drinks_data = cached if cached is not None else []
     bac = total_bac(drinks_data, user["weight_kg"], user["gender"])
 
-    await _broadcast(build_snapshot())
+    # ─── BACKGROUND : DELETE DB + retour coins/XP + broadcast ───────────────
+    async def _post_undo_work():
+        try:
+            if not delete_last_drink(telegram_id):
+                # Rare : pas de verre côté DB. Le cache va se ré-aligner au
+                # prochain log-drink (lazy reload).
+                return
+            add_coins(telegram_id, -5, "Annulation verre")
+            _execute(
+                "UPDATE users SET xp = MAX(0, COALESCE(xp,0) - ?) WHERE user_id=?",
+                [XP_PER_DRINK, telegram_id]
+            )
+            await _broadcast(build_snapshot())
+        except Exception as e:
+            print(f"[post_undo_work] erreur (non-critique) : {e}")
+
+    asyncio.create_task(_post_undo_work())
+
+    # Réponse instantanée
     return {
         "ok": True,
         "bac": round(bac, 3),
@@ -2322,16 +2343,21 @@ async def reset_session_web(request: Request):
     if not telegram_id:
         return {"ok": False, "error": "Non authentifié"}
 
-    if not get_user(telegram_id):
-        return {"ok": False, "error": "Utilisateur introuvable"}
-
-    end_session(telegram_id)
-    start_session(telegram_id)
-    # Vide le cache mémoire — nouvelle session = 0 verre
+    # Vide le cache mémoire immédiatement — réponse instantanée
     _user_drinks_cache.pop(telegram_id, None)
     _last_drink_at.pop(telegram_id, None)
+    _invalidate_cache("snapshot")
 
-    await _broadcast(build_snapshot())
+    # Tout le DB work en background
+    async def _post_reset_work():
+        try:
+            end_session(telegram_id)
+            start_session(telegram_id)
+            await _broadcast(build_snapshot())
+        except Exception as e:
+            print(f"[post_reset_work] erreur : {e}")
+
+    asyncio.create_task(_post_reset_work())
     return {"ok": True}
 
 
