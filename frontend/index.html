@@ -4681,10 +4681,30 @@
     );
   }
 
+  // Cooldown 30s entre verres (anti double-clic + anti-spam)
+  const DRINK_COOLDOWN_MS = 30_000;
+  let _lastDrinkAt = 0;
+
+  function _drinkButtonsDisabled(disabled) {
+    document.querySelectorAll('.picker-btn').forEach(b => {
+      b.disabled = disabled;
+      b.style.opacity = disabled ? '0.4' : '';
+    });
+  }
+
   async function quickDrink(drinkKey) {
     if (!myTid) { showTab('profil'); return; }
-    const btn = event && event.currentTarget;
-    if (btn) { btn.style.opacity = '0.5'; btn.disabled = true; }
+    // Garde locale : bloque le double-clic accidentel
+    const now = Date.now();
+    const elapsed = now - _lastDrinkAt;
+    if (elapsed < DRINK_COOLDOWN_MS) {
+      const remaining = Math.ceil((DRINK_COOLDOWN_MS - elapsed) / 1000);
+      showToast(`⏳ Attends ${remaining}s avant le prochain verre`);
+      return;
+    }
+    _lastDrinkAt = now;
+    _drinkButtonsDisabled(true);
+    setTimeout(() => _drinkButtonsDisabled(false), DRINK_COOLDOWN_MS);
 
     // Capture la position en parallèle (sans bloquer l'ajout du verre)
     _refreshPosition();
@@ -4697,7 +4717,13 @@
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(payload),
       }).then(r => r.json());
-      if (!data.ok) { showToast('❌ ' + data.error); return; }
+      if (!data.ok) {
+        // Si le backend refuse, on libère immédiatement les boutons
+        _lastDrinkAt = 0;
+        _drinkButtonsDisabled(false);
+        showToast('❌ ' + data.error);
+        return;
+      }
       showToast(`✅ Verre ajouté — ${data.bac.toFixed(2)} g/L`);
       // Toasts pour les badges nouvellement débloqués
       if (data.new_badges && data.new_badges.length) {
@@ -4708,9 +4734,9 @@
       // Rafraîchit la section "Tes favoris"
       loadFavorites();
     } catch(e) {
+      _lastDrinkAt = 0;
+      _drinkButtonsDisabled(false);
       showToast('❌ Erreur réseau');
-    } finally {
-      if (btn) { btn.style.opacity = ''; btn.disabled = false; }
     }
   }
 
@@ -4721,7 +4747,14 @@
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({ telegram_id: myTid }),
     }).then(r => r.json()).catch(() => ({ok: false}));
-    showToast(data.ok ? `↩️ Annulé — ${data.bac.toFixed(2)} g/L` : '❌ ' + (data.error || 'Erreur'));
+    if (data.ok) {
+      showToast(`↩️ Verre annulé — ${data.bac.toFixed(2)} g/L · -5 🪙 -10 XP`);
+      // Permet de recliquer immédiatement (on a "défait" l'action)
+      _lastDrinkAt = 0;
+      _drinkButtonsDisabled(false);
+    } else {
+      showToast('❌ ' + (data.error || 'Erreur'));
+    }
   }
 
   async function resetSession() {

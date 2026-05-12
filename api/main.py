@@ -2010,6 +2010,24 @@ async def log_drink_web(request: Request):
     if drink_key not in DRINKS:
         return {"ok": False, "error": "Boisson inconnue"}
 
+    # Cooldown 30s : empêche les double-clics et le spam
+    last = _fetchone(
+        "SELECT MAX(logged_at) m FROM drink_logs WHERE user_id=?",
+        [telegram_id]
+    )
+    last_at = (last or {}).get("m")
+    if last_at:
+        try:
+            last_dt = datetime.fromisoformat(last_at)
+            if last_dt.tzinfo is None:
+                last_dt = last_dt.replace(tzinfo=timezone.utc)
+            delta = (datetime.now(timezone.utc) - last_dt).total_seconds()
+            if delta < 30:
+                remaining = int(30 - delta) + 1
+                return {"ok": False, "error": f"Attends encore {remaining}s avant le prochain verre"}
+        except Exception:
+            pass
+
     drink = DRINKS[drink_key]
     _ensure_session(telegram_id)
 
@@ -2112,6 +2130,14 @@ async def undo_drink_web(request: Request):
 
     if not delete_last_drink(telegram_id):
         return {"ok": False, "error": "Aucun verre à annuler"}
+    # Retire les récompenses gagnées au log : 5 coins + 10 XP
+    add_coins(telegram_id, -5, "Annulation verre")
+    _execute(
+        "UPDATE users SET xp = MAX(0, COALESCE(xp,0) - ?) WHERE user_id=?",
+        [XP_PER_DRINK, telegram_id]
+    )
+    # Note : on ne retire pas les badges (ce serait incohérent pour les
+    # achievements de type "record" comme max_bac).
     _invalidate_alltime_cache()
 
     drinks_data = get_session_drinks(telegram_id)
