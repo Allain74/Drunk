@@ -1653,12 +1653,13 @@
     if (!myTid) return data;
     return data.filter(u => {
       // On voit toujours son propre verre (par username), même si allUsers
-      // n'est pas encore chargé ou si on est en mode discret.
+      // n'est pas encore chargé.
       const isSelf = myName && u.username && u.username.toLowerCase() === myName.toLowerCase();
       if (isSelf) return true;
       const tid = getTidByName(u.username);
-      if (!tid) return false; // utilisateur inconnu → masqué
-      if (u.discreet) return false; // mode discret : caché aux autres
+      if (!tid) return false;
+      // Mode discret n'exclut PAS de Live (uniquement de la carte, géré
+      // côté backend dans /locations).
       return tid === myTid || followingSet.has(tid) || isAdmin(tid);
     });
   }
@@ -3023,7 +3024,7 @@
             <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:10px;margin-bottom:8px">
               <div>
                 <div style="font-size:0.9rem;font-weight:600">🥷 Mode discret</div>
-                <div style="font-size:0.72rem;color:var(--sub);margin-top:2px">Cache ton taux et ta position</div>
+                <div style="font-size:0.72rem;color:var(--sub);margin-top:2px">Cache ta position sur la carte uniquement</div>
               </div>
               <label style="position:relative;display:inline-block;width:44px;height:24px">
                 <input type="checkbox" id="profil-discreet-toggle" onchange="toggleDiscreet(this.checked)" style="opacity:0;width:0;height:0">
@@ -4501,7 +4502,7 @@
         body: JSON.stringify({ telegram_id: myTid, on }),
       }).then(r => r.json());
       if (!r.ok) { showToast('❌ ' + (r.error || 'Erreur')); return; }
-      showToast(on ? '🥷 Mode discret activé' : '👀 Tu es de nouveau visible');
+      showToast(on ? '🥷 Ta position est cachée sur la carte' : '📍 Ta position est de nouveau visible');
     } catch(e) { showToast('❌ Erreur réseau'); }
   }
 

@@ -1532,6 +1532,10 @@ def get_locations(telegram_id: int):
         uid = u.get("user_id") or u.get("telegram_id")
         if uid not in visible_ids:
             continue
+        # Mode discret : cache la position sur la carte (mais le user reste
+        # visible sur Live). Le user lui-même n'est pas concerné.
+        if u.get("discreet_mode") and uid != telegram_id:
+            continue
         if not u.get("latitude") or not u.get("longitude"):
             continue
         drinks = drinks_by_user.get(uid, [])
