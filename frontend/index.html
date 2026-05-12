@@ -1541,6 +1541,10 @@
       localStorage.setItem('auth_token', data.auth_token);
     }
     localStorage.setItem('authV', '2');
+    // Lance le préchargement en arrière-plan dès qu'on a un user authentifié
+    if (typeof _preloadAll === 'function') {
+      setTimeout(_preloadAll, 100);
+    }
   }
 
   // ── Parrainage : capture ?ref=<tid> au load et le persiste ─────────────────
@@ -4212,31 +4216,43 @@
   }
 
   // ── Records perso ──────────────────────────────────────────────────────────
-  async function _loadRecords() {
+  function _renderRecords(r) {
     const box = document.getElementById('profil-records');
-    if (!box || !myTid) return;
+    if (!box) return;
+    if (!r || !r.ok) { box.innerHTML = '<div style="color:var(--sub);font-size:0.85rem">—</div>'; return; }
+    const items = [
+      { label: 'Pic d\'alcool',      val: r.max_bac > 0 ? r.max_bac.toFixed(2) + ' g/L' : '—', color: '#f97316' },
+      { label: 'Plus grosse soirée', val: r.max_session_drinks > 0 ? r.max_session_drinks + ' v' : '—', color: '#a855f7' },
+      { label: 'Plus gros pari',     val: r.biggest_bet_won > 0 ? r.biggest_bet_won + ' 🪙' : '—', color: '#22c55e' },
+      { label: 'Plus grosse mise BJ', val: r.biggest_bj_win > 0 ? r.biggest_bj_win + ' 🪙' : '—', color: '#06b6d4' },
+    ];
+    const itemsHtml = items.map(it => `
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px;text-align:center">
+        <div style="font-size:1.05rem;font-weight:800;color:${it.color}">${esc(it.val)}</div>
+        <div style="font-size:0.7rem;color:var(--sub);text-transform:uppercase;letter-spacing:0.5px;margin-top:3px">${it.label}</div>
+      </div>
+    `).join('');
+    const anniv = r.days_since_first
+      ? `<div style="text-align:center;margin-top:12px;font-size:0.78rem;color:var(--sub)">🎂 Sur Drunk depuis <strong>${r.days_since_first} jour${r.days_since_first>1?'s':''}</strong> — ${r.total_drinks} verres au total</div>`
+      : '';
+    box.innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">${itemsHtml}</div>
+      ${anniv}`;
+  }
+
+  async function _loadRecords() {
+    if (!myTid) return;
+    if (_recordsCache) _renderRecords(_recordsCache);
     try {
       const r = await fetch(`${API}/records/${myTid}`).then(r => r.json());
-      if (!r.ok) { box.innerHTML = '<div style="color:var(--sub);font-size:0.85rem">—</div>'; return; }
-      const items = [
-        { label: 'Pic d\'alcool',      val: r.max_bac > 0 ? r.max_bac.toFixed(2) + ' g/L' : '—', color: '#f97316' },
-        { label: 'Plus grosse soirée', val: r.max_session_drinks > 0 ? r.max_session_drinks + ' v' : '—', color: '#a855f7' },
-        { label: 'Plus gros pari',     val: r.biggest_bet_won > 0 ? r.biggest_bet_won + ' 🪙' : '—', color: '#22c55e' },
-        { label: 'Plus grosse mise BJ', val: r.biggest_bj_win > 0 ? r.biggest_bj_win + ' 🪙' : '—', color: '#06b6d4' },
-      ];
-      const itemsHtml = items.map(it => `
-        <div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px;text-align:center">
-          <div style="font-size:1.05rem;font-weight:800;color:${it.color}">${esc(it.val)}</div>
-          <div style="font-size:0.7rem;color:var(--sub);text-transform:uppercase;letter-spacing:0.5px;margin-top:3px">${it.label}</div>
-        </div>
-      `).join('');
-      const anniv = r.days_since_first
-        ? `<div style="text-align:center;margin-top:12px;font-size:0.78rem;color:var(--sub)">🎂 Sur Drunk depuis <strong>${r.days_since_first} jour${r.days_since_first>1?'s':''}</strong> — ${r.total_drinks} verres au total</div>`
-        : '';
-      box.innerHTML = `
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">${itemsHtml}</div>
-        ${anniv}`;
-    } catch(e) { box.innerHTML = '<div style="color:#ef4444;font-size:0.85rem">Erreur</div>'; }
+      _recordsCache = r;
+      _renderRecords(r);
+    } catch(e) {
+      if (!_recordsCache) {
+        const box = document.getElementById('profil-records');
+        if (box) box.innerHTML = '<div style="color:#ef4444;font-size:0.85rem">Erreur</div>';
+      }
+    }
   }
 
   // ── Roue de la fortune ─────────────────────────────────────────────────────
@@ -4359,12 +4375,25 @@
   // ── Défis hebdo ────────────────────────────────────────────────────────────
   async function _loadChallenges() {
     if (!myTid) return;
-    const box = document.getElementById('profil-challenges');
-    if (!box) return;
+    // Rend immédiatement avec le cache si disponible
+    if (_challengesCache) _renderChallenges(_challengesCache);
     try {
       const data = await fetch(`${API}/challenges/${myTid}`).then(r => r.json());
-      if (!data.ok) { box.innerHTML = '<div style="color:var(--sub);font-size:0.8rem">—</div>'; return; }
-      box.innerHTML = data.challenges.map(c => {
+      _challengesCache = data;
+      _renderChallenges(data);
+    } catch(e) {
+      if (!_challengesCache) {
+        const box = document.getElementById('profil-challenges');
+        if (box) box.innerHTML = '<div style="color:#ef4444;font-size:0.8rem">Erreur</div>';
+      }
+    }
+  }
+
+  function _renderChallenges(data) {
+    const box = document.getElementById('profil-challenges');
+    if (!box) return;
+    if (!data || !data.ok) { box.innerHTML = '<div style="color:var(--sub);font-size:0.8rem">—</div>'; return; }
+    box.innerHTML = data.challenges.map(c => {
         const pct = Math.round((c.progress / c.target) * 100);
         let action = '';
         if (c.claimed) action = '<span style="color:#22c55e;font-weight:700;font-size:0.78rem">✅ Réclamé</span>';
@@ -4382,8 +4411,7 @@
             <span style="font-size:0.72rem;color:var(--sub);font-weight:700;min-width:40px;text-align:right">${c.progress}/${c.target}</span>
           </div>
         </div>`;
-      }).join('');
-    } catch(e) { box.innerHTML = '<div style="color:#ef4444;font-size:0.8rem">Erreur</div>'; }
+    }).join('');
   }
 
   async function claimChallenge(key) {
@@ -4559,6 +4587,60 @@
     document.getElementById('onboarding-overlay').style.display = 'none';
   }
 
+  // ── Préchargement en arrière-plan ──────────────────────────────────────────
+  // On lance TOUS les fetchs qui alimentent les différents onglets en parallèle
+  // dès le boot, après login. Quand l'utilisateur clique sur un onglet, les
+  // données sont déjà en mémoire → rendu instantané.
+  let _meCache = null;
+  let _badgesCache = null;
+  let _recordsCache = null;
+  let _challengesCache = null;
+  let _suggestionsCache = null;
+
+  function _preloadAll() {
+    if (!myTid) return;
+    // Tous en parallèle. .catch silencieux pour ne pas spammer si Render
+    // est en cold start.
+    fetch(`${API}/alltime`).then(r => r.json()).then(d => {
+      _palmares = d || []; _cacheSet('palmares', _palmares);
+      if (document.getElementById('palmares-list')) _renderPalmares();
+    }).catch(() => {});
+    fetch(`${API}/coins`).then(r => r.json()).then(d => {
+      _thune = d || []; _cacheSet('thune', _thune);
+      if (document.getElementById('thune-list')) _renderThune();
+    }).catch(() => {});
+    fetch(`${API}/blackjack/stats/all`).then(r => r.json()).then(d => {
+      _bjStats = d || []; _cacheSet('bjstats', _bjStats);
+      if (document.getElementById('bj-stats-list')) _renderBjStats();
+    }).catch(() => {});
+    fetch(`${API}/bets/stats/all`).then(r => r.json()).then(d => {
+      _parisStats = d || []; _cacheSet('parisstats', _parisStats);
+      if (document.getElementById('paris-stats-list')) _renderParisStats();
+    }).catch(() => {});
+    fetch(`${API}/me/${myTid}`).then(r => r.json()).then(d => {
+      if (d && d.ok) {
+        _meCache = d;
+        _refCount = d.referrals_count || 0;
+        if (document.getElementById('profil-level-content')) _renderLevelCard(d);
+      }
+    }).catch(() => {});
+    fetch(`${API}/badges/${myTid}`).then(r => r.json()).then(d => {
+      _badgesCache = Array.isArray(d) ? d : [];
+      if (document.getElementById('profil-badges-content')) _renderBadges(_badgesCache);
+    }).catch(() => {});
+    fetch(`${API}/records/${myTid}`).then(r => r.json()).then(d => {
+      _recordsCache = d || {};
+      if (document.getElementById('profil-records')) _loadRecords();
+    }).catch(() => {});
+    fetch(`${API}/challenges/${myTid}`).then(r => r.json()).then(d => {
+      _challengesCache = d || {};
+      if (document.getElementById('profil-challenges')) _loadChallenges();
+    }).catch(() => {});
+    fetch(`${API}/suggestions/${myTid}?limit=5`).then(r => r.json()).then(d => {
+      _suggestionsCache = Array.isArray(d) ? d : [];
+    }).catch(() => {});
+  }
+
   async function init() {
     updateIdentityBtn();
     // Affichage immédiat avec le cache (sans attendre les fetch)
@@ -4569,7 +4651,7 @@
       if (lastData.length) render(lastData);
     });
     if (myTid) {
-      loadFollowing();
+      loadFollowing().then(() => _preloadAll());  // lance le précharge après following
       loadFollowers();
       autoSubscribePush();
     }
