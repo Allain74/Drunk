@@ -1430,6 +1430,37 @@
     : "https://drunk-l34t.onrender.com";
   const WS_URL = API.replace("http", "ws").replace("https", "wss") + "/ws";
 
+  // ── Auth : injection automatique du token bearer dans tous les fetch API ────
+  const _origFetch = window.fetch.bind(window);
+  window.fetch = function(input, init) {
+    const url = typeof input === 'string' ? input : (input && input.url) || '';
+    if (url.startsWith(API)) {
+      init = init || {};
+      const token = localStorage.getItem('auth_token');
+      if (token) {
+        const headers = new Headers(init.headers || {});
+        if (!headers.has('Authorization')) {
+          headers.set('Authorization', 'Bearer ' + token);
+        }
+        init.headers = headers;
+      }
+    }
+    return _origFetch(input, init);
+  };
+
+  function _saveAuth(data) {
+    if (data.telegram_id) {
+      localStorage.setItem('myTid', String(data.telegram_id));
+    }
+    if (data.username) {
+      localStorage.setItem('myName', data.username);
+    }
+    if (data.auth_token) {
+      localStorage.setItem('auth_token', data.auth_token);
+    }
+    localStorage.setItem('authV', '2');
+  }
+
   const COLORS  = ['#22c55e','#84cc16','#eab308','#f97316','#ef4444','#a855f7'];
   const EMOJIS  = ['😶','🙂','😄','😵','🤢','💀'];
   const LABELS  = ['Sobre','Léger','Alcoolisé','⚠️ Limite','Ivre','Danger'];
@@ -1448,6 +1479,7 @@
   if (localStorage.getItem('authV') !== '2') {
     localStorage.removeItem('myTid');
     localStorage.removeItem('myName');
+    localStorage.removeItem('auth_token');
     localStorage.setItem('authV', '2');
   }
   let myTid = parseInt(localStorage.getItem('myTid') || '0') || 0;
@@ -2068,9 +2100,7 @@
       }
       myTid = data.telegram_id;
       myName = data.username;
-      localStorage.setItem('myTid', String(myTid));
-      localStorage.setItem('myName', myName);
-      localStorage.setItem('authV', '2');
+      _saveAuth(data);
       await loadFollowing();
       loadFollowers();
       updateIdentityBtn();
@@ -2090,6 +2120,7 @@
     myName = '';
     localStorage.removeItem('myTid');
     localStorage.removeItem('myName');
+    localStorage.removeItem('auth_token');
     localStorage.setItem('authV', '2');
     followingSet = new Set();
     followersSet = new Set();
@@ -2986,7 +3017,7 @@
       }).then(r => r.json());
       if (!data.ok) { err.textContent = data.error || 'Pseudo ou mot de passe incorrect.'; err.style.display = 'block'; return; }
       myTid = data.telegram_id; myName = data.username;
-      localStorage.setItem('myTid', String(myTid)); localStorage.setItem('myName', myName); localStorage.setItem('authV', '2');
+      _saveAuth(data);
       await loadFollowing(); loadFollowers(); updateIdentityBtn(); render(lastData);
       loadProfil();
       autoSubscribePush();
@@ -3009,7 +3040,7 @@
       }).then(r => r.json());
       if (!data.ok) { err.textContent = data.error; err.style.display = 'block'; return; }
       myTid = data.telegram_id; myName = data.username;
-      localStorage.setItem('myTid', String(myTid)); localStorage.setItem('myName', myName); localStorage.setItem('authV', '2');
+      _saveAuth(data);
       await loadFollowing(); loadFollowers(); updateIdentityBtn(); render(lastData);
       showToast('✅ Compte créé ! Bienvenue 🍺');
       loadProfil();
@@ -3601,9 +3632,7 @@
 
       myTid  = data.telegram_id;
       myName = data.username;
-      localStorage.setItem('myTid',  String(myTid));
-      localStorage.setItem('myName', myName);
-      localStorage.setItem('authV',  '2');
+      _saveAuth(data);
       await loadUsers();
       await loadFollowing();
       loadFollowers();
@@ -3708,6 +3737,7 @@
       myTid = 0; myName = '';
       localStorage.removeItem('myTid');
       localStorage.removeItem('myName');
+      localStorage.removeItem('auth_token');
       followingSet = new Set();
       closeDeleteModal();
       showToast('✅ Compte supprimé.');

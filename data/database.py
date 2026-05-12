@@ -187,6 +187,15 @@ def init_db():
         _execute("ALTER TABLE users ADD COLUMN premium_until TEXT")
     except Exception:
         pass
+    try:
+        _execute("""CREATE TABLE IF NOT EXISTS auth_sessions (
+            token       TEXT PRIMARY KEY,
+            user_id     INTEGER NOT NULL,
+            created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+            expires_at  TEXT NOT NULL
+        )""")
+    except Exception:
+        pass
     _pipeline([
         ("""CREATE TABLE IF NOT EXISTS users (
             user_id     INTEGER PRIMARY KEY,
@@ -786,6 +795,57 @@ def delete_user(user_id: int):
         ("DELETE FROM push_subscriptions  WHERE user_id=?", [user_id]),
         ("DELETE FROM users               WHERE user_id=?", [user_id]),
     ])
+
+
+# ── Auth sessions (token bearer) ──────────────────────────────────────────────
+
+import secrets as _secrets
+from datetime import timedelta as _timedelta
+
+AUTH_TOKEN_TTL_DAYS = 90
+
+
+def create_auth_session(user_id: int) -> str:
+    """Génère un token bearer aléatoire et l'enregistre. Retourne le token."""
+    token = _secrets.token_urlsafe(32)
+    now = datetime.now(timezone.utc)
+    expires = now + _timedelta(days=AUTH_TOKEN_TTL_DAYS)
+    _execute(
+        "INSERT INTO auth_sessions (token, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)",
+        [token, user_id, now.isoformat(), expires.isoformat()]
+    )
+    return token
+
+
+def get_uid_from_token(token: str) -> int | None:
+    """Renvoie le user_id associé à un token bearer, ou None si invalide/expiré."""
+    if not token or len(token) > 256:
+        return None
+    row = _fetchone(
+        "SELECT user_id, expires_at FROM auth_sessions WHERE token=?",
+        [token]
+    )
+    if not row:
+        return None
+    try:
+        exp = datetime.fromisoformat(row["expires_at"])
+        if exp.tzinfo is None:
+            exp = exp.replace(tzinfo=timezone.utc)
+        if exp < datetime.now(timezone.utc):
+            _execute("DELETE FROM auth_sessions WHERE token=?", [token])
+            return None
+    except Exception:
+        return None
+    return int(row["user_id"])
+
+
+def revoke_auth_token(token: str):
+    _execute("DELETE FROM auth_sessions WHERE token=?", [token])
+
+
+def revoke_all_user_sessions(user_id: int):
+    """Révoque tous les tokens d'un utilisateur (logout total / suppression)."""
+    _execute("DELETE FROM auth_sessions WHERE user_id=?", [user_id])
 
 
 # ── Abonnement Premium ────────────────────────────────────────────────────────

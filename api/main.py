@@ -37,6 +37,7 @@ from data.database import (
     get_all_follows,
     clear_password, delete_n_drinks,
     set_premium, clear_premium, get_user_by_stripe_customer, set_stripe_customer_id,
+    create_auth_session, get_uid_from_token, revoke_auth_token, revoke_all_user_sessions,
 )
 from core.recap import build_weekly_recap, build_weekly_recap_for_user
 from core.widmark import total_bac, bac_label, sober_in_hours, alcohol_grams
@@ -573,6 +574,52 @@ async def admin_set_coins(request: Request):
 
 # ── Admin helpers ──────────────────────────────────────────────────────────────
 
+def _authed_uid(request: Request) -> int | None:
+    """Extrait l'user_id du header Authorization: Bearer <token>.
+    Renvoie None si pas de token, token invalide ou expiré."""
+    auth = request.headers.get("authorization", "")
+    if not auth.lower().startswith("bearer "):
+        return None
+    return get_uid_from_token(auth[7:].strip())
+
+
+def _resolve_user(request: Request, body: dict, key: str = "telegram_id") -> int | None:
+    """Renvoie l'user_id à utiliser pour la requête.
+    Priorité au token bearer si fourni (sécurisé), sinon fallback sur body[key]
+    pour la backwards-compat avec les anciens clients sans token."""
+    uid = _authed_uid(request)
+    if uid is not None:
+        return uid
+    val = body.get(key)
+    try:
+        return int(val) if val else None
+    except (ValueError, TypeError):
+        return None
+
+
+def _require_authed_uid(request: Request, claimed_id) -> tuple[int | None, dict | None]:
+    """Helper pour endpoints sensibles. Mode strict si token fourni :
+      - token valide → renvoie (authed_uid, None) ; refuse si claimed_id ne matche pas
+      - token invalide → ({}, erreur 401)
+      - pas de token → renvoie (claimed_id, None) en mode legacy backwards-compat
+    Le tuple None côté erreur signifie : tout va bien, utilise le 1er élément.
+    Sinon le 2e élément est le dict d'erreur à renvoyer."""
+    auth = request.headers.get("authorization", "")
+    if auth.lower().startswith("bearer "):
+        uid = get_uid_from_token(auth[7:].strip())
+        if uid is None:
+            return None, {"ok": False, "error": "Session expirée, reconnecte-toi.", "_status": 401}
+        if claimed_id is not None and int(claimed_id) != uid:
+            admin_id = int(os.environ.get("ADMIN_ID", "0"))
+            if uid != admin_id:
+                return None, {"ok": False, "error": "Non autorisé"}
+        return uid, None
+    # Legacy : pas de token → on accepte le claimed_id du body (transition)
+    if claimed_id is None:
+        return None, {"ok": False, "error": "Non authentifié"}
+    return int(claimed_id), None
+
+
 def _check_admin(caller_id, secret: str | None = None) -> bool:
     """Vérifie qu'un appel est légitime : caller_id == ADMIN_ID ET secret partagé.
     Si ADMIN_SECRET n'est pas défini en env, on tolère sans secret (backwards compat
@@ -1041,7 +1088,7 @@ def get_followers_endpoint(telegram_id: int):
 @app.post("/follow")
 async def follow_endpoint(request: Request):
     body = await request.json()
-    follower_id  = body.get("follower_id")
+    follower_id  = _resolve_user(request, body, "follower_id")
     following_id = body.get("following_id")
     if not follower_id or not following_id:
         return {"ok": False, "error": "Missing IDs"}
@@ -1062,7 +1109,7 @@ async def follow_endpoint(request: Request):
 @app.post("/unfollow")
 async def unfollow_endpoint(request: Request):
     body = await request.json()
-    follower_id  = body.get("follower_id")
+    follower_id  = _resolve_user(request, body, "follower_id")
     following_id = body.get("following_id")
     if not follower_id or not following_id:
         return {"ok": False, "error": "Missing IDs"}
@@ -1083,13 +1130,16 @@ async def login_endpoint(request: Request):
     if is_banned(user["telegram_id"]):
         return {"ok": False, "error": "Compte banni 🚫"}
     admin_id = int(os.environ.get("ADMIN_ID", "0"))
-    is_adm = user["telegram_id"] == admin_id
+    uid = user.get("telegram_id") or user.get("user_id")
+    is_adm = uid == admin_id
+    token = create_auth_session(uid)
     return {
         "ok": True,
-        "telegram_id": user["telegram_id"],
+        "telegram_id": uid,
         "username": user["username"],
         "is_admin": is_adm,
         "is_premium": is_adm or bool(user.get("is_premium")),
+        "auth_token": token,
     }
 
 
@@ -1138,11 +1188,13 @@ async def register_endpoint(request: Request):
     if admin_id and admin_id != web_id:
         follow_user(web_id, admin_id)
 
+    token = create_auth_session(web_id)
     return {
         "ok": True,
         "telegram_id": web_id,
         "username": username,
         "is_admin": web_id == admin_id,
+        "auth_token": token,
     }
 
 
@@ -1151,7 +1203,7 @@ async def register_endpoint(request: Request):
 @app.post("/update-profile")
 async def update_profile_endpoint(request: Request):
     body          = await request.json()
-    telegram_id   = body.get("telegram_id")
+    telegram_id   = _resolve_user(request, body)
     current_pwd   = body.get("current_password", "").strip()
     new_gender    = body.get("gender")
     new_weight    = body.get("weight")
@@ -1206,7 +1258,7 @@ async def update_profile_endpoint(request: Request):
 @app.post("/delete-account")
 async def delete_account_endpoint(request: Request):
     body        = await request.json()
-    telegram_id = body.get("telegram_id")
+    telegram_id = _resolve_user(request, body)
     password    = body.get("password", "").strip()
 
     if not telegram_id:
@@ -1233,7 +1285,7 @@ def push_vapid_key():
 @app.post("/push/subscribe")
 async def push_subscribe(request: Request):
     body        = await request.json()
-    telegram_id = body.get("telegram_id")
+    telegram_id = _resolve_user(request, body)
     # Le frontend envoie endpoint/p256dh/auth à plat
     endpoint = body.get("endpoint")
     p256dh   = body.get("p256dh")
@@ -1257,7 +1309,7 @@ async def push_unsubscribe(request: Request):
 async def push_test(request: Request):
     """Envoie une notif de test à soi-même."""
     body        = await request.json()
-    telegram_id = body.get("telegram_id")
+    telegram_id = _resolve_user(request, body)
     if not telegram_id:
         return {"ok": False, "error": "Non authentifié"}
     import asyncio
@@ -1270,7 +1322,7 @@ async def push_test(request: Request):
 @app.post("/log-drink")
 async def log_drink_web(request: Request):
     body        = await request.json()
-    telegram_id = body.get("telegram_id")
+    telegram_id = _resolve_user(request, body)
     drink_key   = body.get("drink_key")
     lat         = body.get("lat")
     lon         = body.get("lon")
@@ -1368,7 +1420,7 @@ async def log_drink_web(request: Request):
 @app.post("/undo-drink")
 async def undo_drink_web(request: Request):
     body        = await request.json()
-    telegram_id = body.get("telegram_id")
+    telegram_id = _resolve_user(request, body)
 
     if not telegram_id:
         return {"ok": False, "error": "Non authentifié"}
@@ -1398,7 +1450,7 @@ async def undo_drink_web(request: Request):
 @app.post("/reset-session")
 async def reset_session_web(request: Request):
     body        = await request.json()
-    telegram_id = body.get("telegram_id")
+    telegram_id = _resolve_user(request, body)
 
     if not telegram_id:
         return {"ok": False, "error": "Non authentifié"}
@@ -1514,7 +1566,7 @@ async def list_bj_sessions():
 async def bj_create_web(request: Request):
     """Crée une nouvelle session blackjack depuis le web."""
     body = await request.json()
-    telegram_id = body.get("telegram_id")
+    telegram_id = _resolve_user(request, body)
     bet = int(body.get("bet", 50))
     if not telegram_id:
         return {"ok": False, "error": "Non connecté"}
@@ -1547,7 +1599,7 @@ async def bj_create_web(request: Request):
 async def bj_join_web(token: str, request: Request):
     """Rejoint une session blackjack depuis le web."""
     body = await request.json()
-    telegram_id = body.get("telegram_id")
+    telegram_id = _resolve_user(request, body)
     bet = int(body.get("bet", 50))
     if not telegram_id:
         return {"ok": False, "error": "Non connecté"}
@@ -1600,7 +1652,7 @@ async def bj_join_web(token: str, request: Request):
 async def bj_leave(token: str, request: Request):
     """Quitte une table blackjack. Rembourse la mise si la partie n'a pas commencé."""
     body = await request.json()
-    telegram_id = body.get("telegram_id")
+    telegram_id = _resolve_user(request, body)
     if not telegram_id:
         return {"ok": False, "error": "Non connecté"}
     sess = get_blackjack_session(token)
@@ -1665,7 +1717,7 @@ async def bj_leave(token: str, request: Request):
 async def bj_start_web(token: str, request: Request):
     """Lance la partie (deal les cartes) depuis le web."""
     body = await request.json()
-    caller_id = body.get("telegram_id")
+    caller_id = _resolve_user(request, body)
     sess = get_blackjack_session(token)
     if not sess:
         return {"ok": False, "error": "Session introuvable"}
@@ -1714,7 +1766,7 @@ async def bj_start_web(token: str, request: Request):
 async def bj_action_web(token: str, request: Request):
     """Hit ou stand depuis le web (fallback HTTP si WebSocket non dispo)."""
     body = await request.json()
-    player_id = body.get("telegram_id")
+    player_id = _resolve_user(request, body)
     action    = body.get("action")
 
     if action not in ("hit", "stand"):
@@ -1791,7 +1843,7 @@ async def get_bets_user(telegram_id: int):
 async def create_bet_web(request: Request):
     """Crée un pari depuis le web."""
     body          = await request.json()
-    challenger_id = body.get("challenger_id")
+    challenger_id = _resolve_user(request, body, "challenger_id")
     opponent_name = body.get("opponent_name", "").strip()
     bet_type      = body.get("bet_type")      # verres | ivre | coinflip
     amount        = int(body.get("amount", 0))
@@ -1842,7 +1894,7 @@ async def create_bet_web(request: Request):
 @app.post("/bets/accept")
 async def accept_bet_web(request: Request):
     body       = await request.json()
-    telegram_id = body.get("telegram_id")
+    telegram_id = _resolve_user(request, body)
     bet_id     = body.get("bet_id")
     if not telegram_id or not bet_id:
         return {"ok": False, "error": "Données manquantes"}
@@ -1875,7 +1927,7 @@ async def accept_bet_web(request: Request):
 @app.post("/bets/refuse")
 async def refuse_bet_web(request: Request):
     body        = await request.json()
-    telegram_id = body.get("telegram_id")
+    telegram_id = _resolve_user(request, body)
     bet_id      = body.get("bet_id")
     if not telegram_id or not bet_id:
         return {"ok": False, "error": "Données manquantes"}
@@ -1932,7 +1984,7 @@ def get_avatars():
 async def upload_avatar(request: Request):
     """Sauvegarde l'avatar (data URL base64) d'un utilisateur."""
     body = await request.json()
-    tid    = body.get("telegram_id")
+    tid    = _resolve_user(request, body)
     avatar = body.get("avatar", "")
     if not tid or not avatar:
         return {"ok": False, "error": "Données manquantes"}
@@ -2159,7 +2211,7 @@ async def blackjack_ws(ws: WebSocket, token: str):
 async def blackjack_rematch(token: str, request: Request):
     """Relance une partie sur la MÊME session (même token). Tout joueur non-parti peut initier."""
     body = await request.json()
-    caller_id = int(body.get("telegram_id", 0))
+    caller_id = _resolve_user(request, body) or 0
 
     session = get_blackjack_session(token)
     if not session:
@@ -2244,7 +2296,7 @@ async def premium_checkout(request: Request):
     if not stripe.api_key or not STRIPE_PRICE_ID:
         return {"ok": False, "error": "Paiement temporairement indisponible"}
     body = await request.json()
-    telegram_id = body.get("telegram_id")
+    telegram_id = _resolve_user(request, body)
     if not telegram_id:
         return {"ok": False, "error": "Identifiant manquant"}
     user = get_user(int(telegram_id))
@@ -2279,7 +2331,7 @@ async def premium_portal(request: Request):
     if not stripe.api_key:
         return {"ok": False, "error": "Paiement temporairement indisponible"}
     body = await request.json()
-    telegram_id = body.get("telegram_id")
+    telegram_id = _resolve_user(request, body)
     if not telegram_id:
         return {"ok": False, "error": "Identifiant manquant"}
     user = get_user(int(telegram_id))
