@@ -3606,8 +3606,11 @@
     if (myTid) {
       const me = data.find(u => Number(u.telegram_id) === Number(myTid));
       if (me && me.is_banned) {
-        showToast('🚫 Ton compte a été banni.');
+        // Persiste un flag pour afficher le message au prochain login
+        localStorage.setItem('was_banned', '1');
         logout();
+        // showToast après le logout (sinon écrasé par le re-render)
+        setTimeout(() => showToast('🚫 Ton compte a été banni par un administrateur.'), 100);
         return;
       }
     }

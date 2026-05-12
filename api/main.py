@@ -799,9 +799,11 @@ def admin_get_users(caller_id: int = 0, admin_secret: str = ""):
 
 
 def _get_banned_list():
-    # La colonne s'appelle user_id en DB (renommée par migration). L'alias
-    # bidirectionnel du _pipeline renvoie aussi telegram_id côté Python.
-    return _fetchall("SELECT user_id FROM banned_users")
+    # Utilise la même détection de colonne (user_id vs telegram_id) que les
+    # helpers ban_user/unban_user pour être robuste à l'état réel de la DB.
+    from data.database import _banned_col
+    col = _banned_col()
+    return _fetchall(f"SELECT {col} FROM banned_users")
 
 
 @app.post("/admin/ban")
@@ -814,6 +816,9 @@ async def admin_ban(request: Request):
         return {"ok": False, "error": "target_id requis"}
     tid = int(target_id)
     ban_user(tid)
+    # Révoque tous les auth_token du user banni : il sera déconnecté au prochain
+    # appel API et ne pourra pas se reconnecter (login vérifie aussi is_banned).
+    revoke_all_user_sessions(tid)
     # Virer de toute session BJ active
     bj_sess = get_blackjack_session_by_player(tid)
     if bj_sess:
@@ -824,6 +829,7 @@ async def admin_ban(request: Request):
             update_blackjack_session(bj_sess["id"], status="finished")
         await _bj_broadcast(token)
     # Diffuse le snapshot mis à jour (tous les clients voient is_banned=True)
+    # → render() côté frontend détecte is_banned et déconnecte le user.
     await _broadcast(build_snapshot())
     return {"ok": True}
 
@@ -834,7 +840,10 @@ async def admin_unban(request: Request):
     if not _check_admin(body.get("caller_id"), body.get("admin_secret")):
         return {"ok": False, "error": "Non autorisé"}
     target_id = body.get("target_id")
+    if not target_id:
+        return {"ok": False, "error": "target_id requis"}
     unban_user(int(target_id))
+    await _broadcast(build_snapshot())
     return {"ok": True}
 
 
@@ -1760,8 +1769,9 @@ async def login_endpoint(request: Request):
     user = verify_password(username, password)
     if not user:
         return {"ok": False, "error": "Pseudo ou mot de passe incorrect"}
-    if is_banned(user["telegram_id"]):
-        return {"ok": False, "error": "Compte banni 🚫"}
+    uid_check = user.get("telegram_id") or user.get("user_id")
+    if is_banned(uid_check):
+        return {"ok": False, "error": "🚫 Ton compte a été banni par un administrateur."}
     admin_id = int(os.environ.get("ADMIN_ID", "0"))
     uid = user.get("telegram_id") or user.get("user_id")
     is_adm = uid == admin_id

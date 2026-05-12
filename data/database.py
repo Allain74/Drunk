@@ -360,14 +360,40 @@ def get_user(user_id: int) -> dict | None:
     return _fetchone("SELECT * FROM users WHERE user_id=?", [user_id])
 
 
+def _banned_col() -> str:
+    """Détecte si la colonne s'appelle user_id (migration faite) ou
+    telegram_id (héritée). Cache le résultat pour éviter les PRAGMA répétés."""
+    global _BANNED_COL_CACHE
+    try:
+        col = _BANNED_COL_CACHE
+        if col:
+            return col
+    except NameError:
+        pass
+    try:
+        cols = [r["name"] for r in _fetchall("PRAGMA table_info(banned_users)", [])]
+        if "user_id" in cols:
+            _BANNED_COL_CACHE = "user_id"
+        elif "telegram_id" in cols:
+            _BANNED_COL_CACHE = "telegram_id"
+        else:
+            _BANNED_COL_CACHE = "user_id"  # fallback (table sera créée avec user_id)
+    except Exception:
+        _BANNED_COL_CACHE = "user_id"
+    return _BANNED_COL_CACHE
+
+
 def is_banned(user_id: int) -> bool:
-    return _fetchone("SELECT 1 FROM banned_users WHERE user_id=?", [user_id]) is not None
+    col = _banned_col()
+    return _fetchone(f"SELECT 1 FROM banned_users WHERE {col}=?", [user_id]) is not None
 
 def ban_user(user_id: int):
-    _execute("INSERT OR IGNORE INTO banned_users (user_id) VALUES (?)", [user_id])
+    col = _banned_col()
+    _execute(f"INSERT OR IGNORE INTO banned_users ({col}) VALUES (?)", [user_id])
 
 def unban_user(user_id: int):
-    _execute("DELETE FROM banned_users WHERE user_id=?", [user_id])
+    col = _banned_col()
+    _execute(f"DELETE FROM banned_users WHERE {col}=?", [user_id])
 
 def rename_user(user_id: int, new_name: str):
     _execute("UPDATE users SET username=? WHERE user_id=?", [new_name, user_id])
