@@ -333,9 +333,9 @@ def build_snapshot() -> list[dict]:
     admin_id = int(os.environ.get("ADMIN_ID", "0"))
     result = []
     for uid, user in users.items():
-        # Mode discret : on saute complètement les users qui ne veulent pas être vus
-        if user.get("discreet_mode"):
-            continue
+        # Note : on n'exclut PAS les users discrets ici, on marque juste avec
+        # discreet_mode=true. Le frontend filtre côté client (en gardant l'user
+        # lui-même visible pour qu'il se voie sur Live).
         drinks = drinks_by_user.get(uid, [])
         bac = total_bac(drinks, user["weight_kg"], user["gender"], now)
         # Peak BAC during current session (last 24h)
@@ -362,6 +362,7 @@ def build_snapshot() -> list[dict]:
             "level":       calc_level(int(user.get("xp") or 0)),
             "streak":      int(user.get("current_streak") or 0),
             "active_skin": user.get("active_skin") or "default",
+            "discreet":    bool(user.get("discreet_mode")),
             "is_banned":   uid in banned_ids,
         })
     result.sort(key=lambda x: x["bac"], reverse=True)
