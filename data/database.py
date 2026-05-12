@@ -495,21 +495,38 @@ def get_session_drinks(user_id: int) -> list[tuple[float, datetime]]:
     ]
 
 
+SESSION_TIMEOUT_SEC = 6 * 3600  # 6h sans verre → soirée terminée
+
+
 def get_all_active_drinks() -> dict[int, list[tuple[float, datetime]]]:
-    # Cutoff 48h — évite qu'une longue soirée ou une session fermée trop tôt fasse tomber le TAC à 0
-    cutoff = datetime.now(timezone.utc).timestamp() - 172800
+    """Retourne les verres des soirées EN COURS uniquement.
+    Une soirée est considérée terminée si le dernier verre date de plus de 6h
+    (cohérent avec _ensure_session côté API qui ferme la session au prochain
+    log si > 6h). On garde une fenêtre de 48h pour le calcul du BAC, qui
+    s'élimine naturellement dans total_bac()."""
+    cutoff_bac = datetime.now(timezone.utc).timestamp() - 172800  # 48h
     rows = _fetchall("""
         SELECT dl.user_id, dl.alc_grams, dl.logged_at
         FROM drink_logs dl JOIN sessions s ON dl.session_id=s.id
         WHERE s.active=1
            OR (s.active=0 AND s.started_at >= datetime('now', '-48 hours'))
-        ORDER BY dl.logged_at
+        ORDER BY dl.user_id, dl.logged_at
     """)
-    result: dict[int, list] = {}
+    by_user: dict[int, list] = {}
     for r in rows:
         t = datetime.fromisoformat(r["logged_at"]).replace(tzinfo=timezone.utc)
-        if t.timestamp() >= cutoff:
-            result.setdefault(r["user_id"], []).append((r["alc_grams"], t))
+        if t.timestamp() >= cutoff_bac:
+            by_user.setdefault(r["user_id"], []).append((r["alc_grams"], t))
+    # Filtre : ne garde que les users dont le dernier verre est < 6h (soirée en cours)
+    now = datetime.now(timezone.utc)
+    result: dict[int, list] = {}
+    for uid, drinks in by_user.items():
+        if not drinks:
+            continue
+        last_t = drinks[-1][1]
+        if (now - last_t).total_seconds() > SESSION_TIMEOUT_SEC:
+            continue
+        result[uid] = drinks
     return result
 
 

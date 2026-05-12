@@ -1776,8 +1776,33 @@ async def login_endpoint(request: Request):
     }
 
 
+SESSION_TIMEOUT_HOURS = 6   # Une soirée se termine après 6h sans verre
+
+
 def _ensure_session(telegram_id: int):
-    if not get_active_session(telegram_id):
+    """Garantit qu'une session active existe pour l'utilisateur. Si la session
+    existante n'a pas vu de verre depuis SESSION_TIMEOUT_HOURS, on la ferme
+    automatiquement et on en ouvre une nouvelle. Permet de bien séparer les
+    soirées : on rentre se coucher, on se réveille, c'est une nouvelle soirée
+    dès le prochain verre."""
+    sess = get_active_session(telegram_id)
+    if sess:
+        row = _fetchone(
+            "SELECT MAX(logged_at) m FROM drink_logs WHERE session_id=?",
+            [sess["id"]]
+        )
+        last = row and row.get("m")
+        if last:
+            try:
+                last_dt = datetime.fromisoformat(last)
+                if last_dt.tzinfo is None:
+                    last_dt = last_dt.replace(tzinfo=timezone.utc)
+                if (datetime.now(timezone.utc) - last_dt).total_seconds() > SESSION_TIMEOUT_HOURS * 3600:
+                    end_session(telegram_id)
+                    sess = None
+            except Exception:
+                pass
+    if not sess:
         start_session(telegram_id)
 
 
