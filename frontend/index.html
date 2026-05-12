@@ -994,6 +994,13 @@
 </head>
 <body>
 
+<!-- Bandeau notifs (sticky en haut) : visible si l'user n'a pas activé les push -->
+<div id="push-banner" style="display:none;background:linear-gradient(135deg,#6366f1,#a855f7);color:white;padding:10px 14px;font-size:0.82rem;font-weight:600;align-items:center;gap:8px;position:sticky;top:0;z-index:200;box-shadow:0 2px 8px rgba(0,0,0,0.2)">
+  <span style="flex:1;line-height:1.35">🔔 Active les notifs pour ne rien rater quand tes potes boivent !</span>
+  <button onclick="togglePush()" style="background:white;color:#6366f1;border:none;border-radius:8px;padding:6px 12px;font-weight:800;font-size:0.78rem;cursor:pointer;font-family:inherit;flex-shrink:0">Activer</button>
+  <button onclick="dismissPushBanner()" title="Cacher 24h" style="background:rgba(0,0,0,0.2);border:none;color:white;border-radius:50%;width:24px;height:24px;font-size:0.8rem;cursor:pointer;line-height:1;font-family:inherit;flex-shrink:0">✕</button>
+</div>
+
 <!-- Pas de header persistant : chaque panel gère son propre titre -->
 
 <!-- ══════════════════════════════════════════════════════════════
@@ -4739,6 +4746,8 @@
     }
     updateIdentityBtn();
     connect();
+    // Check bandeau push après un petit délai (laisse autoSubscribePush tenter d'abord)
+    setTimeout(showPushBannerIfNeeded, 2000);
   }
 
   // ── Toast ─────────────────────────────────────────────────────────────────
@@ -5046,6 +5055,33 @@
     } catch(e) { return null; }
   }
 
+  // ── Bandeau "active tes notifs" ──────────────────────────────────────────
+  async function showPushBannerIfNeeded() {
+    const banner = document.getElementById('push-banner');
+    if (!banner) return;
+    if (!myTid || !('PushManager' in window)) {
+      banner.style.display = 'none';
+      return;
+    }
+    const dismissed = parseInt(localStorage.getItem('push_banner_dismissed_at') || '0', 10);
+    if (dismissed && (Date.now() - dismissed) < 24 * 3600 * 1000) {
+      banner.style.display = 'none';
+      return;
+    }
+    try {
+      const sub = await getPushSub();
+      banner.style.display = sub ? 'none' : 'flex';
+    } catch(e) {
+      banner.style.display = 'none';
+    }
+  }
+
+  function dismissPushBanner() {
+    localStorage.setItem('push_banner_dismissed_at', String(Date.now()));
+    const b = document.getElementById('push-banner');
+    if (b) b.style.display = 'none';
+  }
+
   async function updatePushBtn() {
     const btn     = document.getElementById('push-btn');
     const testBtn = document.getElementById('push-test-btn');
@@ -5104,6 +5140,7 @@
       });
       showToast('🔔 Notifications activées !');
       updatePushBtn();
+      showPushBannerIfNeeded();
     } catch(e) { showToast('❌ ' + e.message); }
   }
 
