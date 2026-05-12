@@ -1042,6 +1042,73 @@ def get_badges(telegram_id: int):
     ]
 
 
+@app.get("/recap/{telegram_id}")
+def get_recap(telegram_id: int):
+    """Récap de la dernière session de l'utilisateur (active ou < 48h).
+    Retourne nb_verres, pic_bac, heure_pic, top boissons, coins gagnés."""
+    from collections import Counter
+    from data.database import _fetchone as _fo, _fetchall as _fa
+    user = get_user(telegram_id)
+    if not user:
+        return {"ok": False, "error": "Utilisateur introuvable"}
+    sess = get_active_session(telegram_id)
+    if not sess:
+        sess = _fo(
+            "SELECT * FROM sessions WHERE user_id=? AND started_at >= datetime('now','-48 hours') ORDER BY id DESC LIMIT 1",
+            [telegram_id]
+        )
+    if not sess:
+        return {"ok": True, "has_session": False}
+    drinks_rows = _fa(
+        "SELECT drink_key, alc_grams, logged_at FROM drink_logs WHERE session_id=? ORDER BY logged_at",
+        [sess["id"]]
+    )
+    if not drinks_rows:
+        return {"ok": True, "has_session": True, "nb_drinks": 0}
+    weight_kg = user.get("weight_kg") or 70
+    gender = user.get("gender", "homme")
+    peak_bac = 0.0
+    peak_time = None
+    cumul = []
+    for d in drinks_rows:
+        t = datetime.fromisoformat(d["logged_at"]).replace(tzinfo=timezone.utc)
+        cumul.append((d["alc_grams"], t))
+        b = total_bac(cumul, weight_kg, gender, t)
+        if b > peak_bac:
+            peak_bac = b
+            peak_time = t
+    drink_counts = Counter(d["drink_key"] for d in drinks_rows)
+    top_drinks = [
+        {"drink_key": k, "count": c} for k, c in drink_counts.most_common(3)
+    ]
+    # Coins gagnés depuis le début de la session
+    txs = _fa(
+        "SELECT amount FROM transactions WHERE user_id=? AND created_at >= ?",
+        [telegram_id, sess["started_at"]]
+    )
+    coins_diff = sum(int(t["amount"] or 0) for t in txs)
+    duration_h = None
+    try:
+        start_dt = datetime.fromisoformat(sess["started_at"]).replace(tzinfo=timezone.utc)
+        last_dt = cumul[-1][1] if cumul else datetime.now(timezone.utc)
+        duration_h = round((last_dt - start_dt).total_seconds() / 3600, 1)
+    except Exception:
+        pass
+    return {
+        "ok": True,
+        "has_session": True,
+        "username": user.get("username"),
+        "started_at": sess["started_at"],
+        "active": bool(sess.get("active")),
+        "nb_drinks": len(drinks_rows),
+        "peak_bac": round(peak_bac, 2),
+        "peak_time": peak_time.isoformat() if peak_time else None,
+        "top_drinks": top_drinks,
+        "coins_diff": coins_diff,
+        "duration_h": duration_h,
+    }
+
+
 @app.get("/locations/{telegram_id}")
 def get_locations(telegram_id: int):
     """Renvoie les positions [{username, lat, lon, bac}] uniquement pour les
