@@ -825,16 +825,27 @@ def get_followers(following_id: int) -> list[int]:
 
 
 def get_blackjack_stats(user_id: int) -> dict:
-    """Retourne les stats blackjack d'un joueur : parties jouées, gagnées, perdues, égalités."""
+    """Stats BJ : parties jouées/gagnées/perdues/égalités + coins net cumulé."""
     rows = _fetchall(
-        "SELECT result FROM blackjack_players WHERE user_id=? AND result IS NOT NULL",
+        "SELECT result, bet FROM blackjack_players WHERE user_id=? AND result IS NOT NULL",
         [user_id]
     )
     played = len(rows)
     won    = sum(1 for r in rows if r["result"] in ("win", "blackjack"))
-    lost   = sum(1 for r in rows if r["result"] == "lose")
+    lost   = sum(1 for r in rows if r["result"] in ("lose", "bust"))
     push   = sum(1 for r in rows if r["result"] == "push")
-    return {"played": played, "won": won, "lost": lost, "push": push}
+    coins_net = 0
+    for r in rows:
+        bet = int(r.get("bet") or 0)
+        res = r.get("result")
+        if res == "win":
+            coins_net += bet
+        elif res == "blackjack":
+            coins_net += int(bet * 1.5)
+        elif res in ("lose", "bust"):
+            coins_net -= bet
+        # push = 0
+    return {"played": played, "won": won, "lost": lost, "push": push, "coins_net": coins_net}
 
 
 def get_profile_follows(user_id: int) -> dict:

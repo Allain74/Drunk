@@ -3724,18 +3724,22 @@
     const visible = _bjStats.filter(u => {
       if (!u.telegram_id) return false;
       return u.telegram_id === myTid || followingSet.has(u.telegram_id) || isAdmin(u.telegram_id);
-    }).sort((a, b) => b.played - a.played);
+    }).sort((a, b) => (b.coins_net || 0) - (a.coins_net || 0));
     if (!visible.length) {
       box.innerHTML = `<div class="rank-empty">Aucune partie jouée pour l'instant.</div>`;
       return;
     }
     box.innerHTML = visible.map((u, i) => {
       const isAdm = isAdmin(u.telegram_id);
-      const winPct = u.played > 0 ? Math.round((u.won / u.played) * 100) : 0;
+      // Taux win = victoires / (victoires + défaites). Les égalités sont neutres.
+      const decisive = (u.won || 0) + (u.lost || 0);
+      const winPct = decisive > 0 ? Math.round((u.won / decisive) * 100) : 0;
+      const net = u.coins_net || 0;
+      const netStr = (net >= 0 ? '+' : '') + net + ' 🪙';
       return _rankCard({
         pos: i+1, username: u.username, isAdm,
-        mainVal: winPct + '%', mainLbl: 'wins',
-        subTxt: `${u.played} parties · ${u.won}V · ${u.lost}D`,
+        mainVal: netStr, mainLbl: 'net',
+        subTxt: `${u.played} parties · ${winPct}% wins · ${u.won}V/${u.lost}D`,
       });
     }).join('');
   }
