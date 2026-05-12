@@ -122,6 +122,10 @@ _danger_notified: dict[int, datetime] = {}
 _drunk_follower_notified: dict[tuple, datetime] = {}
 # (drinker_id, follower_id) → dernière notif "premier verre" envoyée (fenêtre 8h)
 _first_drink_notified: dict[tuple, datetime] = {}
+
+# user_id → task asyncio des notifs FOMO en attente (30s après log-drink).
+# Annulé si undo-drink dans les 30s.
+_pending_first_drink_notifs: dict[int, asyncio.Task] = {}
 _last_weekly_recap_date: str = ""  # "YYYY-MM-DD" du dernier lundi envoyé
 PARIS = ZoneInfo("Europe/Paris")
 
@@ -780,6 +784,9 @@ def admin_get_users(caller_id: int = 0, admin_secret: str = ""):
     drinks_by_user = get_all_active_drinks()
     now = datetime.now(timezone.utc)
     banned = {u["telegram_id"] for u in _get_banned_list()}
+    # Set des user_ids qui ont au moins 1 push_subscription
+    push_rows = _fetchall("SELECT DISTINCT user_id FROM push_subscriptions")
+    push_users = {int(r["user_id"]) for r in push_rows if r.get("user_id")}
     result = []
     for u in users:
         uid    = u["telegram_id"]
@@ -794,6 +801,7 @@ def admin_get_users(caller_id: int = 0, admin_secret: str = ""):
             "coins":       get_coins(uid),
             "bac":         bac,
             "nb_drinks":   len(drinks),
+            "has_push":    uid in push_users,
         })
     result.sort(key=lambda x: x["username"].lower())
     return {"ok": True, "users": result}
@@ -1447,27 +1455,45 @@ async def toggle_discreet(request: Request):
 
 @app.get("/recap/{telegram_id}")
 def get_recap(telegram_id: int):
-    """Récap de la dernière session de l'utilisateur (active ou < 48h).
-    Retourne nb_verres, pic_bac, heure_pic, top boissons, coins gagnés."""
+    """Récap de la dernière "vraie soirée" : on prend tous les verres du user
+    et on identifie le bloc contigu le plus récent (sans gap > 6h). Ça évite
+    qu'une session jamais fermée s'étende sur plusieurs jours."""
     from collections import Counter
-    from data.database import _fetchone as _fo, _fetchall as _fa
     user = get_user(telegram_id)
     if not user:
         return {"ok": False, "error": "Utilisateur introuvable"}
-    sess = get_active_session(telegram_id)
-    if not sess:
-        sess = _fo(
-            "SELECT * FROM sessions WHERE user_id=? AND started_at >= datetime('now','-48 hours') ORDER BY id DESC LIMIT 1",
-            [telegram_id]
-        )
-    if not sess:
-        return {"ok": True, "has_session": False}
-    drinks_rows = _fa(
-        "SELECT drink_key, alc_grams, logged_at FROM drink_logs WHERE session_id=? ORDER BY logged_at",
-        [sess["id"]]
+    # Tous les verres du user (limité à 200 lignes pour éviter une grosse charge)
+    all_rows = _fetchall(
+        "SELECT drink_key, alc_grams, logged_at FROM drink_logs WHERE user_id=? ORDER BY logged_at DESC LIMIT 200",
+        [telegram_id]
     )
+    if not all_rows:
+        return {"ok": True, "has_session": False}
+    # Identifie la "vraie soirée" = bloc contigu avec moins de SESSION_TIMEOUT_HOURS
+    # entre deux verres successifs (parcouru du plus récent vers le plus ancien).
+    gap_sec = SESSION_TIMEOUT_HOURS * 3600
+    real_session_desc = []
+    last_t = None
+    for d in all_rows:
+        try:
+            t = datetime.fromisoformat(d["logged_at"])
+            if t.tzinfo is None:
+                t = t.replace(tzinfo=timezone.utc)
+        except Exception:
+            continue
+        if last_t is None or (last_t - t).total_seconds() < gap_sec:
+            real_session_desc.append(d)
+            last_t = t
+        else:
+            break
+    drinks_rows = list(reversed(real_session_desc))
     if not drinks_rows:
-        return {"ok": True, "has_session": True, "nb_drinks": 0}
+        return {"ok": True, "has_session": False}
+    # On synthétise un "sess" virtuel basé sur la première heure de la soirée
+    sess = {
+        "started_at": drinks_rows[0]["logged_at"],
+        "active": 1 if last_t and (datetime.now(timezone.utc) - last_t).total_seconds() < gap_sec else 0,
+    }
     weight_kg = user.get("weight_kg") or 70
     gender = user.get("gender", "homme")
     peak_bac = 0.0
@@ -1485,7 +1511,7 @@ def get_recap(telegram_id: int):
         {"drink_key": k, "count": c} for k, c in drink_counts.most_common(3)
     ]
     # Coins gagnés depuis le début de la session
-    txs = _fa(
+    txs = _fetchall(
         "SELECT amount FROM transactions WHERE user_id=? AND created_at >= ?",
         [telegram_id, sess["started_at"]]
     )
@@ -2077,38 +2103,31 @@ async def log_drink_web(request: Request):
 
     await _broadcast(build_snapshot())
 
-    # ── Notifications aux abonnés ────────────────────────────────────────────
+    # ── Notifications aux abonnés (différées 30s, annulables si undo) ────────
     if is_first:
-        # Premier verre de la session → notif intelligente contextuelle
-        loop     = asyncio.get_event_loop()
+        # On capture les infos maintenant mais on retarde l'envoi des push de
+        # 30s pour permettre un éventuel undo-drink sans avoir spammé les amis.
         gender   = user.get("gender", "homme")
         le_la    = "la" if gender == "femme" else "le"
         name     = user["username"]
         followers = get_followers(telegram_id)
-
-        # Set des buveurs actifs AVANT ce verre (on a déjà enregistré le verre,
-        # donc on exclut telegram_id lui-même)
         active_drinkers = set(get_all_active_drinks().keys()) - {telegram_id}
-
-        # Map follower → who they follow (pour compter leurs amis qui boivent)
         all_follows = get_all_follows()
         follower_following: dict[int, set[int]] = {}
         for row in all_follows:
             follower_following.setdefault(row["follower_id"], set()).add(row["following_id"])
 
+        # Pré-calcule la liste (fid, title, body) à envoyer
+        plan = []
         now_ts = datetime.now(timezone.utc)
         for fid in followers:
             key = (telegram_id, fid)
             last_fn = _first_drink_notified.get(key)
-            # Fenêtre 8h : pas deux notifs "premier verre" pour la même paire dans la journée
             if last_fn and (now_ts - last_fn).total_seconds() < 8 * 3600:
                 continue
-            _first_drink_notified[key] = now_ts
-
             fid_following = follower_following.get(fid, set())
             others = [oid for oid in fid_following if oid != telegram_id and oid in active_drinkers]
             n_others = len(others)
-
             if n_others == 0:
                 title = "🍺 Drunk"
                 body  = f"{name} est en train de se mettre des verres, rejoins {le_la} !"
@@ -2121,8 +2140,28 @@ async def log_drink_web(request: Request):
             else:
                 title = "🍺 Drunk"
                 body  = f"{name} s'est également envoyé un godet, tu attends quoi toi ?"
+            plan.append((fid, key, title, body))
 
-            loop.run_in_executor(None, _send_push, fid, title, body, "/?tab=live")
+        async def _delayed_first_drink_notifs(drinker_id, plan):
+            try:
+                await asyncio.sleep(30)
+            except asyncio.CancelledError:
+                return  # undo dans les 30s → on n'envoie rien
+            loop = asyncio.get_event_loop()
+            now2 = datetime.now(timezone.utc)
+            for fid, key, title, body in plan:
+                _first_drink_notified[key] = now2
+                loop.run_in_executor(None, _send_push, fid, title, body, "/?tab=live")
+            _pending_first_drink_notifs.pop(drinker_id, None)
+
+        # Annule une éventuelle notif déjà programmée pour ce user
+        old = _pending_first_drink_notifs.get(telegram_id)
+        if old and not old.done():
+            old.cancel()
+        if plan:
+            _pending_first_drink_notifs[telegram_id] = asyncio.create_task(
+                _delayed_first_drink_notifs(telegram_id, plan)
+            )
 
     return {
         "ok": True,
@@ -2152,6 +2191,11 @@ async def undo_drink_web(request: Request):
 
     if not delete_last_drink(telegram_id):
         return {"ok": False, "error": "Aucun verre à annuler"}
+    # Annule toute notif FOMO en attente pour ce user (si dans les 30s)
+    pending = _pending_first_drink_notifs.get(telegram_id)
+    if pending and not pending.done():
+        pending.cancel()
+        _pending_first_drink_notifs.pop(telegram_id, None)
     # Retire les récompenses gagnées au log : 5 coins + 10 XP
     add_coins(telegram_id, -5, "Annulation verre")
     _execute(
@@ -2655,6 +2699,53 @@ async def accept_bet_web(request: Request):
 
     accept_bet(bet_id)
     return {"ok": True, "coinflip": False}
+
+
+@app.post("/bets/relance")
+async def relance_bet(request: Request):
+    """Envoie une notif push de relance à l'opponent d'un pari en attente."""
+    body        = await request.json()
+    telegram_id = _resolve_user(request, body)
+    bet_id      = body.get("bet_id")
+    if not telegram_id or not bet_id:
+        return {"ok": False, "error": "Données manquantes"}
+    bet = get_bet(bet_id)
+    if not bet:
+        return {"ok": False, "error": "Pari introuvable"}
+    if bet["challenger_id"] != telegram_id:
+        return {"ok": False, "error": "Seul le créateur peut relancer"}
+    if bet["status"] != "pending":
+        return {"ok": False, "error": "Pari déjà traité"}
+    # Rate limit anti-spam : max 1 relance / heure par pari
+    from data.database import _execute as _ex
+    try:
+        _ex("ALTER TABLE bets ADD COLUMN last_relance_at TEXT", [])
+    except Exception:
+        pass
+    last = _fetchone("SELECT last_relance_at FROM bets WHERE id=?", [bet_id])
+    if last and last.get("last_relance_at"):
+        try:
+            last_dt = datetime.fromisoformat(last["last_relance_at"])
+            if last_dt.tzinfo is None:
+                last_dt = last_dt.replace(tzinfo=timezone.utc)
+            if (datetime.now(timezone.utc) - last_dt).total_seconds() < 3600:
+                return {"ok": False, "error": "Tu as déjà relancé ce pari récemment"}
+        except Exception:
+            pass
+    _execute("UPDATE bets SET last_relance_at=? WHERE id=?",
+             [datetime.now(timezone.utc).isoformat(), bet_id])
+    # Push à l'opponent
+    challenger = get_user(telegram_id)
+    if challenger:
+        import asyncio
+        loop = asyncio.get_event_loop()
+        loop.run_in_executor(None, _send_push,
+            bet["opponent_id"],
+            "⏰ Pari en attente !",
+            f"{challenger['username']} te relance : {bet['amount']} 🪙. Accepte ou refuse !",
+            "/?tab=menu"
+        )
+    return {"ok": True}
 
 
 @app.post("/bets/refuse")

@@ -314,25 +314,25 @@
 
     /* ── Graphique — bottom sheet compact ── */
     .modal-bg {
-      position:fixed; inset:auto 0 0 0;
-      background:var(--card);
-      border-radius:20px 20px 0 0;
-      box-shadow:0 -8px 40px #00000030;
+      position:fixed; inset:0;
+      background:var(--bg);
       z-index:510;
       display:flex; flex-direction:column;
       overflow:hidden;
-      transform:translateY(100%);
+      transform:translateX(100%);
       transition:transform .28s cubic-bezier(.4,0,.2,1);
     }
-    .modal-bg.open { transform:translateY(0); }
+    .modal-bg.open { transform:translateX(0); }
     .modal-chart-hd {
       display:flex; align-items:center; gap:10px;
-      padding:12px 16px 10px;
+      padding:14px 16px;
+      padding-top:max(14px, env(safe-area-inset-top, 0px));
       border-bottom:1px solid var(--border);
       flex-shrink:0;
+      background:var(--card);
     }
-    .modal-chart-body { padding:12px 16px 16px; display:flex; flex-direction:column; }
-    .modal-chart-canvas-wrap { height:200px; position:relative; }
+    .modal-chart-body { padding:16px; display:flex; flex-direction:column; flex:1; overflow-y:auto; }
+    .modal-chart-canvas-wrap { flex:1; min-height:300px; position:relative; }
     /* (ancien modal card — inutilisé désormais) */
     .modal { display:none; }
     .modal-close { display:none; }
@@ -1401,18 +1401,14 @@
 <div id="modal-bg-backdrop" onclick="closeModal()"
   style="display:none;position:fixed;inset:0;z-index:509;background:#00000050"></div>
 
-<!-- Graphique — bottom sheet compact -->
+<!-- Graphique — plein écran avec bouton retour -->
 <div class="modal-bg" id="modal-bg">
-  <!-- Drag indicator -->
-  <div style="display:flex;justify-content:center;padding:8px 0 4px">
-    <div style="width:36px;height:4px;border-radius:2px;background:var(--border)"></div>
-  </div>
   <div class="modal-chart-hd">
-    <span style="font-weight:900;font-size:0.95rem;flex:1" id="modal-title">📈 Historique taux d'alcool</span>
-    <button onclick="closeModal()" style="background:none;border:none;color:var(--sub);font-size:1.2rem;cursor:pointer;padding:4px;line-height:1">✕</button>
+    <button onclick="closeModal()" style="background:none;border:none;color:var(--text);font-size:1.4rem;cursor:pointer;padding:4px 8px;line-height:1;font-weight:700">←</button>
+    <span style="font-weight:900;font-size:1rem;flex:1" id="modal-title">📈 Historique taux d'alcool</span>
   </div>
   <div class="modal-chart-body">
-    <div id="chart-empty" style="display:none;color:var(--sub);text-align:center;padding:20px 0;font-size:0.9rem">Aucun verre enregistré 🫗</div>
+    <div id="chart-empty" style="display:none;color:var(--sub);text-align:center;padding:60px 0;font-size:1rem">Aucun verre enregistré 🫗</div>
     <div class="modal-chart-canvas-wrap">
       <canvas id="chart"></canvas>
     </div>
@@ -2403,8 +2399,28 @@
 
   function updateMap(withLoc) {
     const section = document.getElementById('map-section');
-    if (!withLoc.length) { section.style.display = 'none'; return; }
+    if (!myTid) { section.style.display = 'none'; return; }
     section.style.display = 'block';
+    if (!withLoc.length) {
+      // Aucune position partagée → si la carte Leaflet n'est pas encore créée,
+      // on affiche un message à la place. Sinon on retire juste les markers.
+      if (!map) {
+        const mapEl = document.getElementById('map');
+        if (mapEl) mapEl.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:200px;color:var(--sub);font-size:0.85rem;text-align:center;padding:20px;background:var(--card);border-radius:14px;border:1px dashed var(--border)">
+          <div>📍 Aucune position partagée</div>
+          <div style="font-size:0.72rem;margin-top:6px;opacity:0.7">Active la géoloc et bois un verre pour apparaître ici</div>
+        </div>`;
+      } else {
+        Object.keys(markers).forEach(name => { try { map.removeLayer(markers[name]); } catch(e) {} delete markers[name]; });
+      }
+      return;
+    }
+    // Reset le placeholder si on en avait un
+    const mapEl = document.getElementById('map');
+    if (mapEl && mapEl.querySelector('div[style*="dashed"]')) {
+      mapEl.innerHTML = '';
+      map = null; markers = {};
+    }
 
     const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
     const tileUrl = isDark
@@ -2916,7 +2932,7 @@
             <div id="profil-level-content" style="text-align:center;color:var(--sub);font-size:0.85rem">Chargement…</div>
           </div>
           <div class="p-card">
-            <div class="p-card-label">Statistiques</div>
+            <div class="p-card-label">Statistiques du soir</div>
             <div class="p-stat-grid">
               <div class="p-stat">
                 <div class="p-stat-val" style="color:${color}">${bac.toFixed(2)} g/L</div>
@@ -2937,7 +2953,7 @@
             </div>
           </div>
           <div class="p-card">
-            <div class="p-card-label">🏆 Records perso</div>
+            <div class="p-card-label">🏆 Records all-time</div>
             <div id="profil-records"><div style="color:var(--sub);font-size:0.85rem">Chargement…</div></div>
           </div>
           <div class="p-card">
@@ -3033,6 +3049,12 @@
             </div>
             <button class="p-action-btn" id="push-btn" onclick="togglePush()">🔔 Activer les notifications</button>
             <button class="p-action-btn" id="push-test-btn" onclick="testPush()" style="display:none">📨 Notif test</button>
+          </div>
+
+          <div class="p-card">
+            <div class="p-card-label">⚠️ Zone de danger</div>
+            <button class="p-action-btn" onclick="resetSession()" style="color:#f97316;border-color:rgba(249,115,22,0.4)">🔄 Réinitialiser mon taux d'alcool</button>
+            <div style="font-size:0.72rem;color:var(--sub);margin-top:6px;padding:0 4px">Termine ta soirée actuelle et remet ton taux à 0. Les verres déjà loggés sont conservés dans l'historique.</div>
           </div>
 
           <div class="p-card">
@@ -3229,10 +3251,11 @@
       if (u.is_admin) badges.push('<span style="color:#facc15;font-size:0.7rem;font-weight:700">⭐ ADMIN</span>');
       if (u.is_premium && !u.is_admin) badges.push('<span style="color:#facc15;font-size:0.7rem;font-weight:700">👑</span>');
       if (u.is_banned) badges.push('<span style="color:#ef4444;font-size:0.7rem;font-weight:700">🚫 BANNI</span>');
+      if (!u.has_push)  badges.push('<span style="color:#94a3b8;font-size:0.7rem;font-weight:700" title="N\'a pas activé les notifications">🔕</span>');
       const badgesHtml = badges.length ? ` ${badges.join(' ')}` : '';
       const sub = [
         u.bac > 0 ? `<span style="color:#f97316;font-weight:700">${u.bac.toFixed(2)} g/L</span>` : '',
-        `${u.nb_drinks || 0}v`,
+        `${u.nb_drinks || 0} verre${(u.nb_drinks||0)>1?'s':''}`,
         `${u.coins || 0}🪙`,
         u.gender || '?',
       ].filter(Boolean).join(' · ');
@@ -3613,7 +3636,7 @@
       const subTxt = `${u.total_drinks} verre${u.total_drinks>1?'s':''}${recordTxt ? ' · ' + recordTxt : ''}`;
       return _rankCard({
         pos: i+1, username: u.username, isAdm,
-        mainVal: doses, mainLbl: 'doses', subTxt,
+        mainVal: doses, mainLbl: "doses d'alcool", subTxt,
         onClick: `openModal2('${esc(u.username)}')`,
       });
     }).join('');
@@ -4281,7 +4304,7 @@
     if (!r || !r.ok) { box.innerHTML = '<div style="color:var(--sub);font-size:0.85rem">—</div>'; return; }
     const items = [
       { label: 'Pic d\'alcool',      val: r.max_bac > 0 ? r.max_bac.toFixed(2) + ' g/L' : '—', color: '#f97316' },
-      { label: 'Plus grosse soirée', val: r.max_session_drinks > 0 ? r.max_session_drinks + ' v' : '—', color: '#a855f7' },
+      { label: 'Plus grosse soirée', val: r.max_session_drinks > 0 ? r.max_session_drinks + ' verre' + (r.max_session_drinks>1?'s':'') : '—', color: '#a855f7' },
       { label: 'Plus gros pari',     val: r.biggest_bet_won > 0 ? r.biggest_bet_won + ' 🪙' : '—', color: '#22c55e' },
       { label: 'Plus grosse mise BJ', val: r.biggest_bj_win > 0 ? r.biggest_bj_win + ' 🪙' : '—', color: '#06b6d4' },
     ];
@@ -5778,6 +5801,7 @@ async function parisLoadBets() {
     const statusCls    = { pending:'pb-pending', active:'pb-active', settled:'pb-settled', cancelled:'pb-settled' };
     el.innerHTML = bets.map(b => {
       const isChallenged = b.opponent_id === myTid && b.status === 'pending';
+      const isMyPending = b.challenger_id === myTid && b.status === 'pending';
       const winnerLine = b.status === 'settled' ? `<div style="font-size:0.78rem;font-weight:700;margin-top:6px;color:${b.winner_id === myTid ? '#22c55e' : '#ef4444'}">${b.winner_id === myTid ? '🏆 Tu as gagné !' : `💸 ${_escHtml(b.winner_name || '?')} a gagné`}</div>` : '';
       return `<div class="pari-card">
         <div class="pari-top">
@@ -5790,12 +5814,24 @@ async function parisLoadBets() {
           <button class="pari-accept" onclick="parisAccept(${b.id})">✅ Accepter</button>
           <button class="pari-refuse" onclick="parisRefuse(${b.id})">❌ Refuser</button>
         </div>` : ''}
+        ${isMyPending ? `<div class="pari-actions">
+          <button class="pari-accept" style="background:#6366f1" onclick="parisRelance(${b.id})">⏰ Relancer</button>
+        </div>` : ''}
       </div>`;
     }).join('');
     _parisRefreshCoins();
   } catch(e) {
     el.innerHTML = `<div style="text-align:center;color:#ef4444;padding:16px;font-size:0.85rem">Erreur de chargement</div>`;
   }
+}
+
+async function parisRelance(betId) {
+  const r = await fetch(`${API}/bets/relance`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ telegram_id: myTid, bet_id: betId }),
+  }).then(r => r.json()).catch(() => ({ ok: false, error: 'Erreur réseau' }));
+  if (!r.ok) { showToast('❌ ' + r.error); return; }
+  showToast('⏰ Relance envoyée !');
 }
 
 async function parisAccept(betId) {
