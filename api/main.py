@@ -2186,33 +2186,35 @@ async def log_drink_web(request: Request):
     # Le user a déjà sa réponse. Tout ça tourne sans bloquer.
     async def _post_drink_work():
         try:
-            # 1) DB write (essentiel, en premier)
-            _ensure_session(telegram_id)
-            if not db_log_drink(telegram_id, drink_key, g):
-                # Très rare. Le cache mémoire reste avec le drink "fantôme"
-                # mais sera ré-aligné au prochain reset ou redémarrage serveur.
+            # 1) DB write (essentiel, en premier). Tous les calls Turso sync
+            # sont wrappés dans asyncio.to_thread pour ne pas bloquer l'event loop.
+            await asyncio.to_thread(_ensure_session, telegram_id)
+            inserted = await asyncio.to_thread(db_log_drink, telegram_id, drink_key, g)
+            if not inserted:
                 print(f"[log_drink] INSERT failed pour user {telegram_id}")
                 return
             # 2) Gamification + coins
-            add_coins(telegram_id, 5, f"Verre bu ({drink.name})")
-            _award_drink(telegram_id)
-            update_max_bac(telegram_id, bac)
+            await asyncio.to_thread(add_coins, telegram_id, 5, f"Verre bu ({drink.name})")
+            await asyncio.to_thread(_award_drink, telegram_id)
+            await asyncio.to_thread(update_max_bac, telegram_id, bac)
             if lat is not None and lon is not None:
                 try:
-                    update_location(telegram_id, float(lat), float(lon))
+                    await asyncio.to_thread(update_location, telegram_id, float(lat), float(lon))
                 except Exception:
                     pass
             # 3) Broadcast snapshot aux WS
-            await _broadcast(build_snapshot())
+            snapshot = await asyncio.to_thread(build_snapshot)
+            await _broadcast(snapshot)
 
             # 4) Notifs aux abonnés (premier verre uniquement, différé 30s)
             if is_first:
                 gender = user.get("gender", "homme")
                 le_la  = "la" if gender == "femme" else "le"
                 name   = user["username"]
-                followers = get_followers(telegram_id)
-                active_drinkers = set(get_all_active_drinks().keys()) - {telegram_id}
-                all_follows = get_all_follows()
+                followers = await asyncio.to_thread(get_followers, telegram_id)
+                active_drinkers_map = await asyncio.to_thread(get_all_active_drinks)
+                active_drinkers = set(active_drinkers_map.keys()) - {telegram_id}
+                all_follows = await asyncio.to_thread(get_all_follows)
                 follower_following: dict[int, set[int]] = {}
                 for row in all_follows:
                     follower_following.setdefault(row["follower_id"], set()).add(row["following_id"])
@@ -2322,16 +2324,17 @@ async def undo_drink_web(request: Request):
     # ─── BACKGROUND : DELETE DB + retour coins/XP + broadcast ───────────────
     async def _post_undo_work():
         try:
-            if not delete_last_drink(telegram_id):
-                # Rare : pas de verre côté DB. Le cache va se ré-aligner au
-                # prochain log-drink (lazy reload).
+            deleted = await asyncio.to_thread(delete_last_drink, telegram_id)
+            if not deleted:
                 return
-            add_coins(telegram_id, -5, "Annulation verre")
-            _execute(
+            await asyncio.to_thread(add_coins, telegram_id, -5, "Annulation verre")
+            await asyncio.to_thread(
+                _execute,
                 "UPDATE users SET xp = MAX(0, COALESCE(xp,0) - ?) WHERE user_id=?",
                 [XP_PER_DRINK, telegram_id]
             )
-            await _broadcast(build_snapshot())
+            snapshot = await asyncio.to_thread(build_snapshot)
+            await _broadcast(snapshot)
         except Exception as e:
             print(f"[post_undo_work] erreur (non-critique) : {e}")
 
@@ -2364,9 +2367,10 @@ async def reset_session_web(request: Request):
     # Tout le DB work en background
     async def _post_reset_work():
         try:
-            end_session(telegram_id)
-            start_session(telegram_id)
-            await _broadcast(build_snapshot())
+            await asyncio.to_thread(end_session, telegram_id)
+            await asyncio.to_thread(start_session, telegram_id)
+            snapshot = await asyncio.to_thread(build_snapshot)
+            await _broadcast(snapshot)
         except Exception as e:
             print(f"[post_reset_work] erreur : {e}")
 
