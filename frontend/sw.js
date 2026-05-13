@@ -1,4 +1,4 @@
-const CACHE = "drunk-v1";
+const CACHE = "drunk-v4";
 
 // Fichiers à mettre en cache lors de l'installation
 const PRECACHE = [
@@ -6,14 +6,18 @@ const PRECACHE = [
   "/index.html",
   "/blackjack.html",
   "/manifest.json",
-  "/icons/icon-192.png",
-  "/icons/icon-512.png",
+  "/icons/icon-192-v2.png",
+  "/icons/icon-512-v2.png",
 ];
 
 // ── Installation ──────────────────────────────────────────────────────────────
 self.addEventListener("install", (e) => {
+  // Precache best-effort : Promise.allSettled pour ne pas échouer si un fichier
+  // manque (vs addAll qui est atomique).
   e.waitUntil(
-    caches.open(CACHE).then((cache) => cache.addAll(PRECACHE))
+    caches.open(CACHE).then((cache) =>
+      Promise.allSettled(PRECACHE.map((url) => cache.add(url)))
+    )
   );
   self.skipWaiting();
 });
@@ -105,8 +109,8 @@ self.addEventListener("push", (event) => {
       // 1. Afficher la notification système
       self.registration.showNotification(notif.title, {
         body: notif.body,
-        icon:  "/icons/icon-192.png",
-        badge: "/icons/icon-192.png",
+        icon:  "/icons/icon-192-v2.png",
+        badge: "/icons/icon-192-v2.png",
         data:  { url: notif.url },
       }),
 

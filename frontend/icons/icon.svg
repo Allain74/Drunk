@@ -1,25 +1,46 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <!-- Fond sombre arrondi -->
-  <rect width="512" height="512" rx="100" fill="#111111"/>
-
-  <!-- Bière (chope) centrée -->
-  <!-- Corps de la chope -->
-  <rect x="140" y="180" width="200" height="240" rx="20" fill="#f59e0b"/>
-  <!-- Mousse -->
-  <ellipse cx="240" cy="175" rx="105" ry="35" fill="#fef3c7"/>
-  <ellipse cx="200" cy="165" rx="40" ry="20" fill="white" opacity="0.8"/>
-  <ellipse cx="265" cy="160" rx="30" ry="16" fill="white" opacity="0.7"/>
-  <!-- Anse -->
-  <path d="M340 230 Q400 230 400 280 Q400 330 340 330"
-        fill="none" stroke="#f59e0b" stroke-width="28" stroke-linecap="round"/>
-  <!-- Reflet -->
-  <rect x="170" y="200" width="25" height="180" rx="12" fill="white" opacity="0.15"/>
-  <!-- Texte D -->
-  <text x="240" y="310"
-        font-family="Arial Black, Arial, sans-serif"
-        font-weight="900"
-        font-size="100"
-        fill="white"
-        opacity="0.25"
-        text-anchor="middle">D</text>
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%"   stop-color="#1e1b4b"/>
+      <stop offset="50%"  stop-color="#4c1d95"/>
+      <stop offset="100%" stop-color="#831843"/>
+    </linearGradient>
+    <linearGradient id="beerGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%"   stop-color="#fde047"/>
+      <stop offset="60%"  stop-color="#f59e0b"/>
+      <stop offset="100%" stop-color="#b45309"/>
+    </linearGradient>
+    <radialGradient id="foamGrad" cx="50%" cy="40%" r="60%">
+      <stop offset="0%"   stop-color="#ffffff"/>
+      <stop offset="70%"  stop-color="#fef9c3"/>
+      <stop offset="100%" stop-color="#fef3c7"/>
+    </radialGradient>
+    <radialGradient id="halo" cx="50%" cy="40%" r="55%">
+      <stop offset="0%"   stop-color="#a855f7" stop-opacity="0.6"/>
+      <stop offset="60%"  stop-color="#ec4899" stop-opacity="0.2"/>
+      <stop offset="100%" stop-color="transparent"/>
+    </radialGradient>
+  </defs>
+  <rect width="512" height="512" rx="110" fill="url(#bgGrad)"/>
+  <ellipse cx="256" cy="240" rx="200" ry="180" fill="url(#halo)"/>
+  <path d="M340 235 Q420 235 420 295 Q420 355 340 355"
+        fill="none" stroke="url(#beerGrad)" stroke-width="32" stroke-linecap="round"/>
+  <rect x="125" y="195" width="220" height="245" rx="22" fill="url(#beerGrad)"/>
+  <rect x="148" y="215" width="28" height="195" rx="14" fill="white" opacity="0.30"/>
+  <rect x="320" y="220" width="14" height="180" rx="7" fill="white" opacity="0.12"/>
+  <ellipse cx="235" cy="190" rx="120" ry="40" fill="url(#foamGrad)"/>
+  <circle cx="195" cy="170" r="28" fill="white" opacity="0.95"/>
+  <circle cx="245" cy="160" r="22" fill="white" opacity="0.90"/>
+  <circle cx="290" cy="172" r="20" fill="#fef9c3" opacity="0.95"/>
+  <circle cx="170" cy="185" r="14" fill="white" opacity="0.7"/>
+  <circle cx="320" cy="185" r="12" fill="white" opacity="0.7"/>
+  <circle cx="180" cy="280" r="6"  fill="white" opacity="0.4"/>
+  <circle cx="200" cy="350" r="4"  fill="white" opacity="0.5"/>
+  <circle cx="270" cy="320" r="5"  fill="white" opacity="0.4"/>
+  <circle cx="290" cy="395" r="3"  fill="white" opacity="0.6"/>
+  <text x="235" y="350"
+        font-family="Impact, Arial Black, sans-serif"
+        font-weight="900" font-size="120"
+        fill="white" opacity="0.15"
+        text-anchor="middle" letter-spacing="-2">D</text>
 </svg>

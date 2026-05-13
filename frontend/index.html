@@ -12,15 +12,43 @@
   <meta name="apple-mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
   <meta name="apple-mobile-web-app-title" content="Drunk"/>
-  <link rel="apple-touch-icon" href="/icons/icon-192.png"/>
+  <link rel="apple-touch-icon" href="/icons/icon-192-v2.png"/>
 
   <!-- Android / navigateurs -->
   <meta name="theme-color" content="#111111"/>
   <meta name="mobile-web-app-capable" content="yes"/>
 
   <!-- Icônes favicon -->
-  <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png"/>
-  <link rel="icon" type="image/png" sizes="512x512" href="/icons/icon-512.png"/>
+  <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192-v2.png"/>
+  <link rel="icon" type="image/png" sizes="512x512" href="/icons/icon-512-v2.png"/>
+
+  <!-- ── Mode reset d'urgence : ?reset=1 purge SW + caches + localStorage ── -->
+  <script>
+    (function() {
+      try {
+        if (location.search.indexOf('reset=1') !== -1) {
+          if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(regs => regs.forEach(r => r.unregister()));
+          }
+          if ('caches' in window) {
+            caches.keys().then(keys => keys.forEach(k => caches.delete(k)));
+          }
+          try {
+            const keep = {
+              auth_token: localStorage.getItem('auth_token'),
+              myTid:      localStorage.getItem('myTid'),
+              myName:     localStorage.getItem('myName'),
+              authV:      localStorage.getItem('authV'),
+            };
+            localStorage.clear();
+            Object.keys(keep).forEach(k => { if (keep[k]) localStorage.setItem(k, keep[k]); });
+          } catch(e) {}
+          setTimeout(() => location.replace(location.origin + location.pathname), 1000);
+          document.write('<div style="font-family:system-ui;padding:40px;text-align:center"><h1>🔄 Reset en cours...</h1></div>');
+        }
+      } catch(e) { console.error(e); }
+    })();
+  </script>
 
   <!-- ── Diagnostic d'urgence : capture toutes les erreurs JS et les affiche ── -->
   <script>
@@ -50,6 +78,10 @@
 
   <!-- ── Bibliothèques ──────────────────────────────────────────────────────── -->
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
+  <!-- Noto Color Emoji : fallback pour Android < 11 qui rend 🪙 comme une lune.
+       Le browser ne télécharge la font QUE pour les glyphs manquants dans l'OS. -->
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Color+Emoji&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -77,7 +109,9 @@
     }
 
     body {
-      font-family: 'Inter', sans-serif;
+      /* Inter pour le texte. En fallback : fonts emoji des OS, puis Noto Color
+         Emoji (web font) pour les Android trop anciens qui ne rendent pas 🪙. */
+      font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif;
       background: var(--bg);
       color: var(--text);
       min-height: 100vh;
@@ -4640,22 +4674,18 @@
           <div style="font-size:0.7rem;letter-spacing:2px;opacity:0.7;font-weight:700;text-transform:uppercase">RÉCAP DE TA SOIRÉE</div>
           <div style="font-size:1.5rem;font-weight:800;margin-top:6px">${esc(r.username || myName)}</div>
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-          <div style="background:rgba(255,255,255,0.1);border-radius:14px;padding:14px;text-align:center">
-            <div style="font-size:1.8rem;font-weight:800">${r.nb_drinks}</div>
-            <div style="font-size:0.7rem;opacity:0.75;text-transform:uppercase;letter-spacing:1px;margin-top:2px">Verres</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
+          <div style="background:rgba(255,255,255,0.1);border-radius:14px;padding:14px 8px;text-align:center">
+            <div style="font-size:1.6rem;font-weight:800">${r.nb_drinks}</div>
+            <div style="font-size:0.65rem;opacity:0.75;text-transform:uppercase;letter-spacing:0.8px;margin-top:2px">Verres</div>
           </div>
-          <div style="background:rgba(255,255,255,0.1);border-radius:14px;padding:14px;text-align:center">
-            <div style="font-size:1.8rem;font-weight:800;color:#fde047">${r.peak_bac.toFixed(2)}</div>
-            <div style="font-size:0.7rem;opacity:0.75;text-transform:uppercase;letter-spacing:1px;margin-top:2px">Pic g/L</div>
+          <div style="background:rgba(255,255,255,0.1);border-radius:14px;padding:14px 8px;text-align:center">
+            <div style="font-size:1.6rem;font-weight:800;color:#fde047">${r.peak_bac.toFixed(2)}</div>
+            <div style="font-size:0.65rem;opacity:0.75;text-transform:uppercase;letter-spacing:0.8px;margin-top:2px">Pic g/L</div>
           </div>
-          <div style="background:rgba(255,255,255,0.1);border-radius:14px;padding:14px;text-align:center">
-            <div style="font-size:1.4rem;font-weight:800">${peakTimeStr}</div>
-            <div style="font-size:0.7rem;opacity:0.75;text-transform:uppercase;letter-spacing:1px;margin-top:2px">Heure pic</div>
-          </div>
-          <div style="background:rgba(255,255,255,0.1);border-radius:14px;padding:14px;text-align:center">
-            <div style="font-size:1.4rem;font-weight:800;color:${r.coins_diff>=0?'#22c55e':'#ef4444'}">${r.coins_diff>=0?'+':''}${r.coins_diff} 🪙</div>
-            <div style="font-size:0.7rem;opacity:0.75;text-transform:uppercase;letter-spacing:1px;margin-top:2px">Bilan coins</div>
+          <div style="background:rgba(255,255,255,0.1);border-radius:14px;padding:14px 8px;text-align:center">
+            <div style="font-size:1.3rem;font-weight:800">${peakTimeStr}</div>
+            <div style="font-size:0.65rem;opacity:0.75;text-transform:uppercase;letter-spacing:0.8px;margin-top:2px">Heure pic</div>
           </div>
         </div>
         <div style="margin-top:14px;padding:14px;background:rgba(255,255,255,0.08);border-radius:14px">
@@ -4676,21 +4706,164 @@
     }
   }
 
+  // ── Image story 1080x1920 du récap (canvas) ─────────────────────────────
+  function _generateRecapImage(r, username) {
+    const W = 1080, H = 1920;
+    const canvas = document.createElement('canvas');
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext('2d');
+
+    // Fond gradient violet/indigo
+    const bg = ctx.createLinearGradient(0, 0, W, H);
+    bg.addColorStop(0, '#1e1b4b');
+    bg.addColorStop(0.5, '#4c1d95');
+    bg.addColorStop(1, '#581c87');
+    ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+
+    // Halos décoratifs
+    ctx.globalAlpha = 0.25;
+    let g = ctx.createRadialGradient(W*0.2, H*0.15, 50, W*0.2, H*0.15, 400);
+    g.addColorStop(0, '#a855f7'); g.addColorStop(1, 'transparent');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    g = ctx.createRadialGradient(W*0.85, H*0.85, 50, W*0.85, H*0.85, 450);
+    g.addColorStop(0, '#ec4899'); g.addColorStop(1, 'transparent');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    ctx.globalAlpha = 1;
+
+    // Header DRUNK
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#fbbf24';
+    ctx.font = 'bold 90px system-ui, -apple-system, sans-serif';
+    ctx.fillText('🍺', W/2 - 130, 220);
+    ctx.fillStyle = 'white';
+    ctx.font = '900 110px system-ui, -apple-system, sans-serif';
+    ctx.fillText('DRUNK', W/2 + 60, 220);
+    ctx.font = '500 36px system-ui, sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    ctx.fillText('TRACK · BOIRE · PARTAGER', W/2, 290);
+
+    // Pseudo
+    ctx.font = '900 100px system-ui, sans-serif';
+    ctx.fillStyle = 'white';
+    ctx.fillText(username || 'Moi', W/2, 480);
+    ctx.font = '600 38px system-ui, sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    ctx.fillText('Récap de soirée', W/2, 540);
+
+    // 3 cartes stats
+    const stats = [
+      { val: String(r.nb_drinks),                       label: 'VERRES',     color: 'white' },
+      { val: r.peak_bac.toFixed(2),                     label: 'PIC g/L',    color: '#fde047' },
+      { val: r.duration_h ? r.duration_h+'h' : '—',     label: 'DURÉE',      color: '#a5f3fc' },
+    ];
+    const cardW = 290, cardH = 290, gap = 30;
+    const startX = (W - (cardW*3 + gap*2)) / 2;
+    const startY = 660;
+    stats.forEach((s, i) => {
+      const x = startX + (cardW+gap)*i;
+      ctx.fillStyle = 'rgba(255,255,255,0.12)';
+      _roundRect(ctx, x, startY, cardW, cardH, 28); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+      ctx.lineWidth = 2;
+      _roundRect(ctx, x, startY, cardW, cardH, 28); ctx.stroke();
+      ctx.fillStyle = s.color;
+      ctx.font = '900 120px system-ui, sans-serif';
+      ctx.fillText(s.val, x + cardW/2, startY + 165);
+      ctx.fillStyle = 'rgba(255,255,255,0.6)';
+      ctx.font = '700 28px system-ui, sans-serif';
+      ctx.fillText(s.label, x + cardW/2, startY + 230);
+    });
+
+    // Top boissons
+    const topDrinks = (r.top_drinks || []).slice(0, 3).map(d => {
+      const name = (window.DRINK_NAMES && window.DRINK_NAMES[d.drink_key]) || d.drink_key;
+      return `${name.replace(/^[^\w🍺-🥃]+/, '')} ×${d.count}`;
+    }).join(' · ') || '—';
+    ctx.fillStyle = 'rgba(255,255,255,0.08)';
+    _roundRect(ctx, 80, 1050, W-160, 220, 28); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    ctx.font = '700 30px system-ui, sans-serif';
+    ctx.fillText('🍻 TOP BOISSONS', W/2, 1110);
+    ctx.fillStyle = 'white';
+    ctx.font = '800 44px system-ui, sans-serif';
+    _wrapText(ctx, topDrinks, W/2, 1180, W - 220, 56);
+
+    if (r.peak_time) {
+      const peakStr = new Date(r.peak_time).toLocaleTimeString('fr-FR', {hour:'2-digit',minute:'2-digit'});
+      ctx.fillStyle = 'rgba(255,255,255,0.5)';
+      ctx.font = '500 34px system-ui, sans-serif';
+      ctx.fillText(`Pic atteint à ${peakStr}`, W/2, 1380);
+    }
+
+    // CTA
+    ctx.fillStyle = 'rgba(255,255,255,0.95)';
+    _roundRect(ctx, 80, 1640, W-160, 130, 35); ctx.fill();
+    ctx.fillStyle = '#581c87';
+    ctx.font = '900 46px system-ui, sans-serif';
+    ctx.fillText('Rejoins-moi sur DRUNK 🍺', W/2, 1725);
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.font = '500 28px system-ui, sans-serif';
+    ctx.fillText(location.host || 'drunk-weld.vercel.app', W/2, 1840);
+
+    return canvas;
+  }
+
+  function _roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+  }
+
+  function _wrapText(ctx, text, x, y, maxW, lineH) {
+    const words = text.split(' ');
+    let line = '';
+    let yy = y;
+    for (const w of words) {
+      const test = line + (line ? ' ' : '') + w;
+      if (ctx.measureText(test).width > maxW && line) {
+        ctx.fillText(line, x, yy);
+        line = w;
+        yy += lineH;
+      } else { line = test; }
+    }
+    if (line) ctx.fillText(line, x, yy);
+  }
+
   async function shareRecap() {
     if (!_lastRecap || !_lastRecap.ok) return;
     const r = _lastRecap;
-    const text = `🍺 Ma soirée sur Drunk\n\n` +
-      `🥤 ${r.nb_drinks} verres\n` +
-      `📊 Pic à ${r.peak_bac.toFixed(2)} g/L\n` +
-      `🪙 ${r.coins_diff>=0?'+':''}${r.coins_diff} pièces\n\n` +
-      `Rejoins-moi : ${location.origin}/?ref=${myTid}`;
-    if (navigator.share) {
-      try { await navigator.share({ title: 'Drunk 🍺', text }); return; } catch(e) {}
-    }
+    const btn = document.getElementById('recap-share-btn');
+    const oldTxt = btn ? btn.textContent : '';
+    if (btn) { btn.textContent = '🎨 Préparation...'; btn.disabled = true; }
     try {
-      await navigator.clipboard.writeText(text);
-      showToast('📋 Récap copié !');
-    } catch(e) { showToast('❌ Impossible de partager'); }
+      const canvas = _generateRecapImage(r, r.username || myName);
+      const blob = await new Promise(res => canvas.toBlob(res, 'image/png', 0.92));
+      const file = new File([blob], 'drunk-recap.png', { type: 'image/png' });
+      const shareText = `🍺 Ma soirée sur Drunk\nRejoins-moi : ${location.origin}/?ref=${myTid}`;
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        try { await navigator.share({ files: [file], title: 'Drunk 🍺', text: shareText }); return; } catch(e) {}
+      }
+      // Fallback : download
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'drunk-recap.png';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      showToast('📥 Image téléchargée — à partager sur ta story !');
+    } catch(e) {
+      console.error(e);
+      showToast("❌ Impossible de générer l'image");
+    } finally {
+      if (btn) { btn.textContent = oldTxt; btn.disabled = false; }
+    }
   }
 
   // ── Onboarding 5 étapes ────────────────────────────────────────────────────
