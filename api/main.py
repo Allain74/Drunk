@@ -398,7 +398,10 @@ async def _broadcast(data: list[dict]):
 async def _broadcast_loop():
     while True:
         await asyncio.sleep(300)
-        await _broadcast(build_snapshot())
+        # build_snapshot() fait 3 calls Turso HTTP sync — on l'isole dans un
+        # thread pour ne pas bloquer l'event loop pendant la requête réseau.
+        snapshot = await asyncio.to_thread(build_snapshot)
+        await _broadcast(snapshot)
 
 
 async def _danger_loop():
@@ -407,11 +410,14 @@ async def _danger_loop():
         await asyncio.sleep(300)
         now   = datetime.now(timezone.utc)
         loop  = asyncio.get_event_loop()
-        users = {u["telegram_id"]: u for u in get_all_users()}
-        drinks_by_user = get_all_active_drinks()
+        # Tous les calls DB sync wrapped dans des threads pour libérer
+        # l'event loop pendant la latence HTTP Turso (~200-500ms chacun).
+        users_list = await asyncio.to_thread(get_all_users)
+        users = {u["telegram_id"]: u for u in users_list}
+        drinks_by_user = await asyncio.to_thread(get_all_active_drinks)
 
         # ── Construit la map follower_id → set(following_ids) ────────────────
-        all_follows = get_all_follows()
+        all_follows = await asyncio.to_thread(get_all_follows)
         follower_map: dict[int, set[int]] = {}   # follower → who they follow
         drinker_followers: dict[int, list[int]] = {}  # drinker → their followers
         for row in all_follows:
@@ -477,16 +483,16 @@ async def _danger_loop():
             ("🚨 *{name}*, un mois sans picoler. Appelle le 15, c'est une urgence médicale. 🏥",
              "🚨 {name}, un mois sans picoler. Appelle le 15, c'est une urgence médicale. 🏥"),
         ]
-        for user in get_all_users():
+        for user in await asyncio.to_thread(get_all_users):
             uid    = user["telegram_id"]
-            last_t = get_last_drink_time(uid)
+            last_t = await asyncio.to_thread(get_last_drink_time, uid)
             if last_t is None:
                 continue
             days_inactive = (now - last_t).total_seconds() / 86400
             if days_inactive >= 7:
-                last_notif = get_last_inactivity_notif(uid)
+                last_notif = await asyncio.to_thread(get_last_inactivity_notif, uid)
                 if last_notif is None or (now - last_notif).total_seconds() >= 7 * 86400:
-                    set_last_inactivity_notif(uid, now)
+                    await asyncio.to_thread(set_last_inactivity_notif, uid, now)
                     weeks = int(days_inactive // 7)
                     idx   = min(weeks - 1, len(_INACTIVITY_MSGS) - 1)
                     tg_tpl, push_tpl = _INACTIVITY_MSGS[idx]
@@ -521,14 +527,14 @@ async def _weekly_recap_loop():
                 until = datetime.now(timezone.utc)
                 since = until - timedelta(days=7)
 
-                # Construit la map suivis par utilisateur
-                all_follows = get_all_follows()
+                # Construit la map suivis par utilisateur (DB sync → thread)
+                all_follows = await asyncio.to_thread(get_all_follows)
                 user_following: dict[int, list[int]] = {}
                 for row in all_follows:
                     user_following.setdefault(row["follower_id"], []).append(row["following_id"])
 
                 loop = asyncio.get_event_loop()
-                for user in get_all_users():
+                for user in await asyncio.to_thread(get_all_users):
                     uid      = user["telegram_id"]
                     username = user["username"]
                     following_ids = user_following.get(uid, [])
@@ -537,7 +543,9 @@ async def _weekly_recap_loop():
                     if not following_ids:
                         continue
 
-                    tg_msg, push_body = build_weekly_recap_for_user(username, following_ids, since, until)
+                    tg_msg, push_body = await asyncio.to_thread(
+                        build_weekly_recap_for_user, username, following_ids, since, until
+                    )
 
                     if _TG_NOTIFS:
                         try:
@@ -1664,7 +1672,15 @@ async def _bet_settlement_loop():
         now_paris = datetime.now(PARIS)
         current_time = now_paris.strftime("%H:%M")
 
-        for bet in get_active_bets():
+        # Calls DB sync wrapped dans asyncio.to_thread pour ne pas bloquer
+        # l'event loop pendant la latence HTTP Turso.
+        active_bets = await asyncio.to_thread(get_active_bets)
+        if not active_bets:
+            continue
+        users_list = await asyncio.to_thread(get_all_users)
+        users = {u["telegram_id"]: u for u in users_list}
+
+        for bet in active_bets:
             if not bet.get("end_time"):
                 continue
             if current_time < bet["end_time"]:
@@ -1672,11 +1688,10 @@ async def _bet_settlement_loop():
 
             from data.database import get_session_drinks
             uid1, uid2 = bet["challenger_id"], bet["opponent_id"]
-            users = {u["telegram_id"]: u for u in get_all_users()}
 
             if bet["bet_type"] == "verres":
-                drinks1 = get_session_drinks(uid1)
-                drinks2 = get_session_drinks(uid2)
+                drinks1 = await asyncio.to_thread(get_session_drinks, uid1)
+                drinks2 = await asyncio.to_thread(get_session_drinks, uid2)
                 count1, count2 = len(drinks1), len(drinks2)
                 winner_id = uid1 if count1 >= count2 else uid2
                 loser_id = uid2 if winner_id == uid1 else uid1
@@ -1687,8 +1702,8 @@ async def _bet_settlement_loop():
                 from data.database import get_session_drinks
                 u1 = users.get(uid1, {})
                 u2 = users.get(uid2, {})
-                drinks1 = get_session_drinks(uid1)
-                drinks2 = get_session_drinks(uid2)
+                drinks1 = await asyncio.to_thread(get_session_drinks, uid1)
+                drinks2 = await asyncio.to_thread(get_session_drinks, uid2)
                 now_utc = datetime.now(timezone.utc)
                 bac1 = _total_bac(drinks1, u1.get("weight_kg", 70), u1.get("gender", "homme"), now_utc)
                 bac2 = _total_bac(drinks2, u2.get("weight_kg", 70), u2.get("gender", "homme"), now_utc)
@@ -1699,13 +1714,11 @@ async def _bet_settlement_loop():
             else:
                 continue
 
-            settle_bet(bet["id"], winner_id)
-            winner = get_user(winner_id)
-            loser = get_user(loser_id)
+            await asyncio.to_thread(settle_bet, bet["id"], winner_id)
+            winner = users.get(winner_id) or await asyncio.to_thread(get_user, winner_id)
+            loser = users.get(loser_id) or await asyncio.to_thread(get_user, loser_id)
             amount = bet["amount"]
-            # Les deux mises ont déjà été escrow à la création/accept.
-            # Le winner récupère 2x amount (sa mise + celle du perdant).
-            add_coins(winner_id, amount * 2, f"Pari gagné contre {loser['username']}")
+            await asyncio.to_thread(add_coins, winner_id, amount * 2, f"Pari gagné contre {loser['username']}")
             _award_bet_win(winner_id)
 
             msg = (
