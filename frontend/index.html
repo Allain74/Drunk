@@ -5064,10 +5064,15 @@
     if (pwd !== pwd2)              { err.textContent = 'Les mots de passe ne correspondent pas.'; err.style.display = 'block'; return; }
 
     try {
+      const refId = localStorage.getItem('referrer_id') || null;
       const data = await fetch(`${API}/register`, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ username: pseudo, password: pwd, gender: _regGenre, weight: poids }),
+        body: JSON.stringify({
+          username: pseudo, password: pwd,
+          gender: _regGenre, weight: poids,
+          referrer_id: refId,
+        }),
       }).then(r => r.json());
 
       if (!data.ok) { err.textContent = data.error; err.style.display = 'block'; return; }
@@ -5075,13 +5080,15 @@
       myTid  = data.telegram_id;
       myName = data.username;
       _saveAuth(data);
+      if (refId) localStorage.removeItem('referrer_id');
       await loadUsers();
       await loadFollowing();
       loadFollowers();
       updateIdentityBtn();
       closeIdentityModal();
       render(lastData);
-      showToast('✅ Compte créé ! Bienvenue ' + myName);
+      showToast(refId ? '✅ Compte créé ! 🎁 +200 🪙 (bonus parrainage) — Bienvenue ' + myName
+                      : '✅ Compte créé ! Bienvenue ' + myName);
       updateDrinkBar();
     } catch(e) {
       err.textContent = 'Erreur réseau.'; err.style.display = 'block';
