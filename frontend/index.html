@@ -1665,6 +1665,21 @@
     try { localStorage.setItem(`cache_${CACHE_VERSION}_${key}`, JSON.stringify(val)); } catch(e) {}
   }
 
+  // ── Parser de timestamps backend ──
+  // SQLite stocke avec datetime('now') qui retourne du UTC sans suffixe Z
+  // (ex: "2026-05-13 08:00:00"). Sans Z, new Date() l'interprète comme heure
+  // locale -> décalage de 2h en été à Paris. Ce helper force l'interprétation
+  // UTC pour que toLocaleTimeString rendre l'heure correcte selon le fuseau
+  // du téléphone du user.
+  function _parseServerDate(s) {
+    if (!s) return null;
+    if (typeof s !== 'string') return new Date(s);
+    // Déjà un offset timezone (Z, +02:00, -05:00, etc.) -> tel quel
+    if (/[Zz]$|[+\-]\d{2}:?\d{2}$/.test(s)) return new Date(s);
+    // Sinon : timestamp UTC sans marqueur -> on ajoute Z
+    return new Date(s.replace(' ', 'T') + 'Z');
+  }
+
   let allUsers = _cacheGet('users', []);   // [{telegram_id, username, is_admin, is_premium}]
   let adminId = (allUsers.find(u => u.is_admin) || {}).telegram_id || 0;
   let followingSet = new Set(_cacheGet('following', []));
@@ -2077,7 +2092,7 @@
         } else {
           timelineHtml = sessionDrinks.map(d => {
             const label = DRINK_LABELS[d.drink_key] || ('🍹 ' + d.drink_key);
-            const t = new Date(d.logged_at + 'Z');
+            const t = _parseServerDate(d.logged_at);
             const timeStr = `${t.getHours()}h${String(t.getMinutes()).padStart(2,'0')}`;
             return `<div class="session-drink-row">
               <span class="session-drink-name">${label}</span>
@@ -4008,7 +4023,7 @@
         const pos = t.amount >= 0;
         const sign = pos ? '+' : '';
         const cls = pos ? 'tx-pos' : 'tx-neg';
-        const d = new Date(t.at);
+        const d = _parseServerDate(t.at);
         const fmt = d.toLocaleString('fr-FR', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
         return `<div class="tx-item">
           <span>${esc(t.reason)}</span>
@@ -4663,7 +4678,7 @@
         return;
       }
       const peakTimeStr = r.peak_time
-        ? new Date(r.peak_time).toLocaleTimeString('fr-FR', {hour:'2-digit',minute:'2-digit'})
+        ? _parseServerDate(r.peak_time).toLocaleTimeString('fr-FR', {hour:'2-digit',minute:'2-digit'})
         : '—';
       const topDrinksStr = (r.top_drinks || []).map(d => {
         const name = (window.DRINK_NAMES && window.DRINK_NAMES[d.drink_key]) || d.drink_key;
@@ -4789,7 +4804,7 @@
     _wrapText(ctx, topDrinks, W/2, 1180, W - 220, 56);
 
     if (r.peak_time) {
-      const peakStr = new Date(r.peak_time).toLocaleTimeString('fr-FR', {hour:'2-digit',minute:'2-digit'});
+      const peakStr = _parseServerDate(r.peak_time).toLocaleTimeString('fr-FR', {hour:'2-digit',minute:'2-digit'});
       ctx.fillStyle = 'rgba(255,255,255,0.5)';
       ctx.font = '500 34px system-ui, sans-serif';
       ctx.fillText(`Pic atteint à ${peakStr}`, W/2, 1380);
