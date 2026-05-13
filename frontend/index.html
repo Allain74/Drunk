@@ -22,6 +22,32 @@
   <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png"/>
   <link rel="icon" type="image/png" sizes="512x512" href="/icons/icon-512.png"/>
 
+  <!-- ── Diagnostic d'urgence : capture toutes les erreurs JS et les affiche ── -->
+  <script>
+    (function() {
+      const errs = [];
+      function showErr() {
+        let box = document.getElementById('__drunk_err');
+        if (!box) {
+          box = document.createElement('div');
+          box.id = '__drunk_err';
+          box.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#dc2626;color:white;padding:10px;font:12px monospace;z-index:99999;max-height:50vh;overflow:auto;white-space:pre-wrap;word-break:break-all';
+          (document.body || document.documentElement).appendChild(box);
+        }
+        box.textContent = '⚠️ JS ERROR(s):\n' + errs.join('\n---\n') +
+          '\n\nFais une capture d\'écran et envoie-la à @allain74';
+      }
+      window.addEventListener('error', e => {
+        errs.push(`[${e.filename||'?'}:${e.lineno||'?'}] ${e.message}\n${e.error && e.error.stack || ''}`);
+        try { showErr(); } catch(_) {}
+      });
+      window.addEventListener('unhandledrejection', e => {
+        errs.push('PROMISE REJECT: ' + (e.reason && (e.reason.stack || e.reason.message || e.reason) || 'unknown'));
+        try { showErr(); } catch(_) {}
+      });
+    })();
+  </script>
+
   <!-- ── Bibliothèques ──────────────────────────────────────────────────────── -->
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
