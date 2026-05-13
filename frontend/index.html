@@ -4777,7 +4777,7 @@
     // Top boissons
     const topDrinks = (r.top_drinks || []).slice(0, 3).map(d => {
       const name = (window.DRINK_NAMES && window.DRINK_NAMES[d.drink_key]) || d.drink_key;
-      return `${name.replace(/^[^\w🍺-🥃]+/, '')} ×${d.count}`;
+      return `${name.replace(/^[^A-Za-z0-9_]+/, '')} ×${d.count}`;
     }).join(' · ') || '—';
     ctx.fillStyle = 'rgba(255,255,255,0.08)';
     _roundRect(ctx, 80, 1050, W-160, 220, 28); ctx.fill();
