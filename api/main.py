@@ -592,6 +592,7 @@ async def admin_reset_bj_stats(request: Request):
     _pipeline([
         ("DELETE FROM blackjack_players", []),
         ("DELETE FROM blackjack_sessions", []),
+        ("DELETE FROM blackjack_hands_history", []),
     ])
     return {"ok": True, "message": "Stats BJ réinitialisées"}
 
@@ -724,15 +725,15 @@ def _check_badges_for_user(user_id: int) -> list[str]:
     )
     coinflip_wins = int(coinflip_wins["c"]) if coinflip_wins else 0
 
-    # Blackjack wins
+    # Blackjack wins (compte chaque main jouée via l'historique)
     bj_wins_row = _fo(
-        "SELECT COUNT(*) c FROM blackjack_players WHERE user_id=? AND result IN ('win','blackjack')",
+        "SELECT COUNT(*) c FROM blackjack_hands_history WHERE user_id=? AND result IN ('win','blackjack')",
         [user_id]
     )
     bj_wins = int(bj_wins_row["c"]) if bj_wins_row else 0
 
     bj_naturel = _fo(
-        "SELECT 1 FROM blackjack_players WHERE user_id=? AND result='blackjack' LIMIT 1",
+        "SELECT 1 FROM blackjack_hands_history WHERE user_id=? AND result='blackjack' LIMIT 1",
         [user_id]
     )
 
@@ -1157,7 +1158,7 @@ def get_records(telegram_id: int):
     )
     biggest_bet_won = int((biggest_bet or {}).get("m") or 0)
     biggest_bj = _fo(
-        "SELECT MAX(bet) m FROM blackjack_players WHERE user_id=? AND result IN ('win','blackjack')",
+        "SELECT MAX(bet) m FROM blackjack_hands_history WHERE user_id=? AND result IN ('win','blackjack')",
         [telegram_id]
     )
     biggest_bj_win = int((biggest_bj or {}).get("m") or 0)
@@ -1241,9 +1242,9 @@ def get_favorites(telegram_id: int, limit: int = 3):
         for r in rows
         if r["drink_key"] in DRINKS
     ]
-    # Jeu favori : nb parties BJ vs nb paris créés. BJ par défaut.
+    # Jeu favori : nb mains BJ vs nb paris créés. BJ par défaut.
     bj_row = _fetchone(
-        "SELECT COUNT(*) c FROM blackjack_players WHERE user_id=? AND result IS NOT NULL",
+        "SELECT COUNT(*) c FROM blackjack_hands_history WHERE user_id=?",
         [telegram_id]
     )
     bj_count = int((bj_row or {}).get("c") or 0)
@@ -1448,9 +1449,8 @@ def _week_stats(user_id: int) -> dict:
         [user_id]
     )
     bj_played = _fo(
-        f"""SELECT COUNT(DISTINCT bp.session_id) c
-            FROM blackjack_players bp JOIN blackjack_sessions bs ON bp.session_id=bs.id
-            WHERE bp.user_id=? AND bs.created_at >= {week_start} AND bp.result IS NOT NULL""",
+        f"""SELECT COUNT(*) c FROM blackjack_hands_history
+            WHERE user_id=? AND finished_at >= {week_start}""",
         [user_id]
     )
     return {

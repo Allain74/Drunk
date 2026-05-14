@@ -333,7 +333,29 @@ def init_db():
             status     TEXT NOT NULL DEFAULT 'waiting',
             result     TEXT
         )""", []),
+        # Historique de chaque main terminée (1 row par main, pas par session).
+        # Permet de compter correctement les vraies stats W/L au lieu de garder
+        # uniquement le résultat de la dernière main d'une session.
+        ("""CREATE TABLE IF NOT EXISTS blackjack_hands_history (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id  INTEGER NOT NULL,
+            user_id     INTEGER NOT NULL,
+            bet         INTEGER NOT NULL,
+            result      TEXT NOT NULL,
+            finished_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )""", []),
     ])
+    # Migration one-shot : si la table history est vide, migre les rows
+    # actuelles de blackjack_players avec un result (ne perd pas les stats
+    # déjà accumulées).
+    existing = _fetchone("SELECT COUNT(*) AS c FROM blackjack_hands_history")
+    if existing and (existing.get("c") or 0) == 0:
+        _execute("""
+            INSERT INTO blackjack_hands_history (session_id, user_id, bet, result)
+            SELECT session_id, user_id, bet, result
+            FROM blackjack_players WHERE result IS NOT NULL
+        """)
+
     # Follows table
     _execute("""CREATE TABLE IF NOT EXISTS follows (
         follower_id  INTEGER NOT NULL,
@@ -771,6 +793,25 @@ def get_blackjack_players(session_id: int) -> list[dict]:
 
 
 def update_blackjack_player(session_id: int, user_id: int, **kwargs):
+    # Si on définit un result (= fin de main), archive d'abord dans l'historique
+    # pour pouvoir compter les vraies stats W/L par main jouée (pas seulement la
+    # dernière main de la session, qui était écrasée à chaque rematch).
+    new_result = kwargs.get("result")
+    if new_result:
+        existing = _fetchone(
+            "SELECT bet, result FROM blackjack_players WHERE session_id=? AND user_id=?",
+            [session_id, user_id]
+        )
+        # On archive seulement si on passe de "pas de résultat" à un résultat
+        # (évite de double-compter si on appelle update_player(result=...) deux
+        # fois de suite sans rematch entre les deux).
+        if existing and not existing.get("result"):
+            bet = int(existing.get("bet") or 0)
+            _execute(
+                "INSERT INTO blackjack_hands_history (session_id, user_id, bet, result) VALUES (?, ?, ?, ?)",
+                [session_id, user_id, bet, new_result]
+            )
+
     sets = ", ".join(f"{k}=?" for k in kwargs)
     vals = list(kwargs.values()) + [session_id, user_id]
     _execute(f"UPDATE blackjack_players SET {sets} WHERE session_id=? AND user_id=?", vals)
@@ -825,9 +866,11 @@ def get_followers(following_id: int) -> list[int]:
 
 
 def get_blackjack_stats(user_id: int) -> dict:
-    """Stats BJ : parties jouées/gagnées/perdues/égalités + coins net cumulé."""
+    """Stats BJ : parties jouées/gagnées/perdues/égalités + coins net cumulé.
+    Compte CHAQUE main jouée (via blackjack_hands_history) — pas seulement la
+    dernière main d'une session comme avant le 14/05."""
     rows = _fetchall(
-        "SELECT result, bet FROM blackjack_players WHERE user_id=? AND result IS NOT NULL",
+        "SELECT result, bet FROM blackjack_hands_history WHERE user_id=?",
         [user_id]
     )
     played = len(rows)
