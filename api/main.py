@@ -154,6 +154,8 @@ async def lifespan(app: FastAPI):
     )
     init_db()
     init_push_subscriptions()
+    # Charge le cache mémoire des bannis pour bloquer leurs requêtes API
+    _reload_banned_set()
 
     from bot.bot import create_application
     _bot_app = create_application()
@@ -623,6 +625,19 @@ async def admin_set_coins(request: Request):
 _auth_token_cache: dict[str, tuple[int, float]] = {}  # token → (uid, expiry_ts)
 _AUTH_TOKEN_TTL = 300.0  # 5 min en mémoire
 
+# Cache mémoire des user_ids bannis — évite une query DB à chaque requête.
+# Rafraîchi au boot et à chaque ban/unban.
+_banned_user_ids: set[int] = set()
+
+
+def _reload_banned_set():
+    """Recharge le set des user_ids bannis depuis la DB."""
+    global _banned_user_ids
+    try:
+        _banned_user_ids = {u["user_id"] for u in _get_banned_list()}
+    except Exception:
+        pass
+
 
 def _authed_uid(request: Request) -> int | None:
     """Extrait l'user_id du header Authorization: Bearer <token>.
@@ -649,15 +664,19 @@ def _authed_uid(request: Request) -> int | None:
 def _resolve_user(request: Request, body: dict, key: str = "telegram_id") -> int | None:
     """Renvoie l'user_id à utiliser pour la requête.
     Priorité au token bearer si fourni (sécurisé), sinon fallback sur body[key]
-    pour la backwards-compat avec les anciens clients sans token."""
+    pour la backwards-compat avec les anciens clients sans token.
+    Retourne None si l'user est banni (bloque toutes les actions API)."""
     uid = _authed_uid(request)
-    if uid is not None:
-        return uid
-    val = body.get(key)
-    try:
-        return int(val) if val else None
-    except (ValueError, TypeError):
+    if uid is None:
+        val = body.get(key)
+        try:
+            uid = int(val) if val else None
+        except (ValueError, TypeError):
+            uid = None
+    # Blocage des bannis sur tous les endpoints qui passent par _resolve_user
+    if uid is not None and uid in _banned_user_ids:
         return None
+    return uid
 
 
 def _require_authed_uid(request: Request, claimed_id) -> tuple[int | None, dict | None]:
@@ -868,6 +887,9 @@ async def admin_ban(request: Request):
         return {"ok": False, "error": "target_id requis"}
     tid = int(target_id)
     ban_user(tid)
+    # Ajoute au cache mémoire des bannis : _resolve_user bloquera toutes les
+    # requêtes (même celles sans token, en mode legacy avec telegram_id en body).
+    _banned_user_ids.add(tid)
     # Révoque tous les auth_token du user banni : il sera déconnecté au prochain
     # appel API et ne pourra pas se reconnecter (login vérifie aussi is_banned).
     revoke_all_user_sessions(tid)
@@ -900,6 +922,7 @@ async def admin_unban(request: Request):
     if not target_id:
         return {"ok": False, "error": "target_id requis"}
     unban_user(int(target_id))
+    _banned_user_ids.discard(int(target_id))
     await _broadcast(build_snapshot())
     return {"ok": True}
 
@@ -929,8 +952,20 @@ async def admin_remove_drinks(request: Request):
     n         = int(body.get("n", 1))
     if not target_id:
         return {"ok": False, "error": "target_id requis"}
-    removed = delete_n_drinks(int(target_id), n)
+    tid = int(target_id)
+    removed = delete_n_drinks(tid, n)
+    # Vider le cache mémoire des drinks de ce user — sinon son prochain
+    # log-drink utiliserait l'ancienne liste (avec les verres déjà supprimés)
+    # pour calculer le BAC, et le user verrait ses verres "ressusciter".
+    _user_drinks_cache.pop(tid, None)
+    _last_drink_at.pop(tid, None)
     _invalidate_alltime_cache()
+    _invalidate_cache(
+        "snapshot", "coins_all", "history_24h",
+        f"me:{tid}", f"records:{tid}",
+        f"profile:{tid}", f"locations:{tid}",
+        f"favorites:{tid}:3", f"favorites:{tid}:2",
+    )
     await _broadcast(build_snapshot())
     return {"ok": True, "removed": removed}
 
@@ -943,7 +978,15 @@ async def admin_end_session(request: Request):
     target_id = body.get("target_id")
     if not target_id:
         return {"ok": False, "error": "target_id requis"}
-    end_session(int(target_id))
+    tid = int(target_id)
+    end_session(tid)
+    # Vide cache mémoire — session finie = 0 verres pour la prochaine
+    _user_drinks_cache.pop(tid, None)
+    _last_drink_at.pop(tid, None)
+    _invalidate_cache(
+        "snapshot", "history_24h",
+        f"me:{tid}", f"profile:{tid}", f"locations:{tid}",
+    )
     await _broadcast(build_snapshot())
     return {"ok": True}
 
