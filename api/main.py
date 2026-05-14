@@ -143,6 +143,15 @@ RENDER_URL = os.environ.get("RENDER_URL", "https://drunk-l34t.onrender.com")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _bot_app
+    # ── Threadpool : augmenter le default executor pour gérer les nombreux
+    # asyncio.to_thread() qu'on utilise (calls DB Turso + push notifications).
+    # Sur Render free tier 0.5 CPU, le default est ~5 workers ; on monte à 50
+    # pour ne pas saturer la queue interne d'asyncio quand beaucoup de tasks
+    # s'accumulent (drinks, broadcasts, push notifs, etc.).
+    import concurrent.futures
+    asyncio.get_event_loop().set_default_executor(
+        concurrent.futures.ThreadPoolExecutor(max_workers=50, thread_name_prefix="drunk-bg")
+    )
     init_db()
     init_push_subscriptions()
 
@@ -1029,7 +1038,10 @@ async def websocket_endpoint(ws: WebSocket):
     _ws_clients.add(ws)
     try:
         try:
-            await ws.send_text(json.dumps(build_snapshot()))
+            # build_snapshot fait 3 calls Turso sync — to_thread pour ne pas
+            # bloquer l'event loop à chaque accept de WS.
+            snapshot = await asyncio.to_thread(build_snapshot)
+            await ws.send_text(json.dumps(snapshot))
         except Exception:
             pass
         while True:
@@ -3117,16 +3129,19 @@ async def _resolve_hand(sess_id: int, token: str):
 
 async def _bj_broadcast(token: str):
     """Diffuse l'état actuel d'une session blackjack à tous ses clients WS."""
-    sess = get_blackjack_session(token)
+    # Calls Turso sync wrappés dans threads pour ne pas bloquer l'event loop
+    sess = await asyncio.to_thread(get_blackjack_session, token)
     if not sess:
         return
-    players = get_blackjack_players(sess["id"])
+    players = await asyncio.to_thread(get_blackjack_players, sess["id"])
     dealer_hand = json.loads(sess["dealer_hand"])
     hide_dealer = sess["status"] == "active"
 
     # Cache users (évite N get_user calls par broadcast)
-    users_by_id = _cached("users_by_id_map", 30.0,
-                          lambda: {u["telegram_id"]: u for u in get_all_users()})
+    users_by_id = await asyncio.to_thread(
+        _cached, "users_by_id_map", 30.0,
+        lambda: {u["telegram_id"]: u for u in get_all_users()}
+    )
     player_data = []
     for p in players:
         u = users_by_id.get(p["telegram_id"])
