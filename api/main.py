@@ -349,8 +349,13 @@ async def telegram_webhook(request: Request):
 # ── Helpers dashboard ─────────────────────────────────────────────────────────
 
 def build_snapshot() -> list[dict]:
+    from data.database import get_current_session_drink_counts
     users = {u["user_id"]: u for u in get_all_users()}
     drinks_by_user = get_all_active_drinks()
+    # nb_drinks affiché = verres de la session ACTIVE uniquement (cohérent avec
+    # la timeline qui ne montre que la session active). Le BAC reste calculé
+    # sur les drinks <48h pour l'alcoolémie résiduelle.
+    session_counts = get_current_session_drink_counts()
     now = datetime.now(timezone.utc)
     banned_ids = {u["user_id"] for u in _get_banned_list()}
     admin_id = int(os.environ.get("ADMIN_ID", "0"))
@@ -373,7 +378,7 @@ def build_snapshot() -> list[dict]:
             "bac":         round(bac, 3),
             "label":       bac_label(bac),
             "sober_in_h":  round(sober_in_hours(bac), 1),
-            "nb_drinks":   len(drinks),
+            "nb_drinks":   session_counts.get(uid, 0),
             "has_session": uid in drinks_by_user,
             # lat/lon/weight_kg ne sont plus dans le snapshot public.
             # Pour la carte : utiliser /locations/{telegram_id} (filtré par suivis).

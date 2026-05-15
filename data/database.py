@@ -558,11 +558,10 @@ SESSION_TIMEOUT_SEC = 6 * 3600  # 6h sans verre → soirée terminée
 
 
 def get_all_active_drinks() -> dict[int, list[tuple[float, datetime]]]:
-    """Retourne les verres des soirées EN COURS uniquement.
-    Une soirée est considérée terminée si le dernier verre date de plus de 6h
-    (cohérent avec _ensure_session côté API qui ferme la session au prochain
-    log si > 6h). On garde une fenêtre de 48h pour le calcul du BAC, qui
-    s'élimine naturellement dans total_bac()."""
+    """Retourne les verres pour le CALCUL DU BAC : sessions actives + sessions
+    fermées récemment (<48h, pour l'alcoolémie résiduelle).
+    NOTE : pour compter les verres de la SEUL session courante (affichage
+    'Session en cours · X verres'), utiliser get_current_session_drink_counts."""
     cutoff_bac = datetime.now(timezone.utc).timestamp() - 172800  # 48h
     rows = _fetchall("""
         SELECT dl.user_id, dl.alc_grams, dl.logged_at
@@ -587,6 +586,21 @@ def get_all_active_drinks() -> dict[int, list[tuple[float, datetime]]]:
             continue
         result[uid] = drinks
     return result
+
+
+def get_current_session_drink_counts() -> dict[int, int]:
+    """Retourne {user_id: nb_verres_session_active} pour TOUS les users.
+    Utilisé pour le compteur 'Session en cours · X verres' affiché dans Live et
+    profil — qui doit refléter UNIQUEMENT la session active courante (pas les
+    sessions précédentes des dernières 48h qui sont incluses dans le calcul BAC)."""
+    rows = _fetchall("""
+        SELECT s.user_id, COUNT(dl.id) AS c
+        FROM sessions s
+        LEFT JOIN drink_logs dl ON dl.session_id = s.id
+        WHERE s.active = 1
+        GROUP BY s.user_id
+    """)
+    return {int(r["user_id"]): int(r.get("c") or 0) for r in rows}
 
 
 def get_all_time_stats() -> list[dict]:
