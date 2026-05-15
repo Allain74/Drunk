@@ -851,6 +851,23 @@ def _check_admin(caller_id, secret: str | None = None) -> bool:
     return True
 
 
+@app.get("/admin/debug-drinks-dates/{telegram_id}")
+def admin_debug_drinks_dates(telegram_id: int, days: int = 14):
+    """DEBUG : retourne le count de verres par jour pour un user sur les N derniers jours.
+    Utile pour vérifier la cohérence du streak."""
+    from data.database import _fetchall as _fa
+    rows = _fa(
+        f"""SELECT DATE(logged_at) AS d, COUNT(*) AS c
+            FROM drink_logs
+            WHERE user_id = ?
+              AND logged_at >= datetime('now', '-{int(days)} days')
+            GROUP BY DATE(logged_at)
+            ORDER BY d DESC""",
+        [telegram_id]
+    )
+    return {"telegram_id": telegram_id, "days": [{"date": r["d"], "count": int(r["c"])} for r in rows]}
+
+
 @app.get("/admin/users")
 def admin_get_users(caller_id: int = 0, admin_secret: str = ""):
     if not _check_admin(caller_id, admin_secret):
