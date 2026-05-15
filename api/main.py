@@ -859,6 +859,18 @@ def _check_admin(caller_id, secret: str | None = None) -> bool:
     return True
 
 
+@app.post("/admin/recalc-streaks")
+async def admin_recalc_streaks(request: Request):
+    """Force le recalcul de tous les streaks depuis drink_logs."""
+    from data.database import recalc_all_streaks
+    n = recalc_all_streaks()
+    # Invalide les caches /me pour refléter les nouveaux streaks immédiatement
+    for key in list(_endpoint_cache.keys()):
+        if key.startswith("me:") or key.startswith("profile:"):
+            _endpoint_cache.pop(key, None)
+    return {"ok": True, "users_recalculated": n}
+
+
 @app.get("/admin/debug-drinks-dates/{telegram_id}")
 def admin_debug_drinks_dates(telegram_id: int, days: int = 14):
     """DEBUG : retourne le count de verres par jour pour un user sur les N derniers jours.
