@@ -2312,6 +2312,28 @@ async def log_drink_web(request: Request):
             snapshot = await asyncio.to_thread(build_snapshot)
             await _broadcast(snapshot)
 
+            # 3bis) Notif spéciale "cercle Max" : à CHAQUE verre de Maximelebg,
+            # envoie un push aux 4 destinataires hardcoded avec un message
+            # aléatoire. S'ajoute aux notifs normales (followers).
+            if user.get("username") == "Maximelebg":
+                import random
+                msgs = [
+                    "Max est en train de se faire péter le cul, ça envoie !",
+                    "Max est en train de se faire limer l'oignon",
+                    "Max est en train de se faire péter le sac de bille",
+                ]
+                targets = ["Allain", "Gab", "Brian", "Sarah"]
+                name_to_tid = {u.get("username"): u.get("telegram_id") for u in users_by_id.values()}
+                body_text = random.choice(msgs)
+                push_loop = asyncio.get_event_loop()
+                for tname in targets:
+                    tid_t = name_to_tid.get(tname)
+                    if tid_t:
+                        push_loop.run_in_executor(
+                            None, _send_push, tid_t,
+                            "🚨 Max boit !", body_text, "/?tab=live"
+                        )
+
             # 4) Notifs aux abonnés (premier verre uniquement, différé 30s)
             if is_first:
                 gender = user.get("gender", "homme")
