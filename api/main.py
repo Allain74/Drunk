@@ -156,6 +156,14 @@ async def lifespan(app: FastAPI):
     init_push_subscriptions()
     # Charge le cache mémoire des bannis pour bloquer leurs requêtes API
     _reload_banned_set()
+    # Recalcule les streaks de tous les users depuis drink_logs (répare les
+    # valeurs corrompues : race conditions historiques, dérèglements temporels)
+    try:
+        from data.database import recalc_all_streaks
+        n = recalc_all_streaks()
+        print(f"[startup] Streaks recalculés pour {n} users")
+    except Exception as e:
+        print(f"[startup] recalc_all_streaks erreur (non-critique) : {e}")
 
     from bot.bot import create_application
     _bot_app = create_application()

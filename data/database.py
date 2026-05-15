@@ -1043,6 +1043,63 @@ def get_user_badges(user_id: int) -> list[str]:
     return [r["badge_key"] for r in rows]
 
 
+def recalc_streak_for_user(user_id: int) -> dict:
+    """Recalcule le streak réel d'un user depuis les drink_logs et écrit en DB.
+    Utilisé pour réparer les streaks corrompus (race conditions, dérèglements
+    temporels). Idempotent : safe d'appeler plusieurs fois."""
+    from datetime import date as _date, timedelta as _td
+    today = _date.today()
+    rows = _fetchall(
+        """SELECT DISTINCT DATE(logged_at) AS d
+           FROM drink_logs
+           WHERE user_id = ?
+             AND logged_at >= datetime('now', '-60 days')
+           ORDER BY d DESC""",
+        [user_id]
+    )
+    drink_dates = set()
+    last_drink_date = None
+    for r in rows:
+        try:
+            d = _date.fromisoformat(r["d"])
+            drink_dates.add(d)
+            if last_drink_date is None or d > last_drink_date:
+                last_drink_date = d
+        except Exception:
+            pass
+
+    # Compte les jours consécutifs en remontant depuis la dernière date de drink
+    current = 0
+    if last_drink_date is not None:
+        d = last_drink_date
+        while d in drink_dates:
+            current += 1
+            d = d - _td(days=1)
+
+    old = get_streak(user_id)
+    longest = max(old.get("longest", 0), current)
+    last_iso = last_drink_date.isoformat() if last_drink_date else None
+
+    _execute(
+        "UPDATE users SET current_streak=?, longest_streak=?, last_drink_date=? WHERE user_id=?",
+        [current, longest, last_iso, user_id]
+    )
+    return {"current": current, "longest": longest, "last": last_iso}
+
+
+def recalc_all_streaks() -> int:
+    """Recalcule le streak de tous les users. Renvoie le nombre d'users traités."""
+    rows = _fetchall("SELECT user_id FROM users")
+    n = 0
+    for r in rows:
+        try:
+            recalc_streak_for_user(int(r["user_id"]))
+            n += 1
+        except Exception:
+            pass
+    return n
+
+
 def get_streak(user_id: int) -> dict:
     row = _fetchone(
         "SELECT current_streak, longest_streak, last_drink_date FROM users WHERE user_id=?",
@@ -1059,35 +1116,53 @@ def get_streak(user_id: int) -> dict:
 
 def bump_streak(user_id: int) -> dict:
     """Met à jour le streak d'un user en fonction de l'ajout d'un verre.
-    Si dernier verre = aujourd'hui → ne change rien.
-    Si dernier verre = hier → +1.
-    Sinon → reset à 1.
-    Renvoie le nouveau state."""
-    from datetime import date as _date
-    s = get_streak(user_id)
-    today = _date.today().isoformat()
-    new_current = s["current"]
-    if s["last"] == today:
-        # Déjà compté aujourd'hui : pas de changement
-        return s
-    if s["last"]:
+    Self-healing : recalcule le streak réel depuis drink_logs au lieu d'incrémenter
+    une valeur stockée (qui peut être corrompue par race conditions ou
+    déréglages temporels). Garantit que current_streak reflète toujours la
+    réalité des drink_logs."""
+    from datetime import date as _date, timedelta as _td
+    today = _date.today()
+    today_iso = today.isoformat()
+
+    # Récupère TOUTES les dates où ce user a bu, ordre décroissant (plus récent
+    # en premier). Limite à 60 jours en arrière pour éviter de scanner toute
+    # la table (un streak réaliste reste sous 60 jours).
+    rows = _fetchall(
+        """SELECT DISTINCT DATE(logged_at) AS d
+           FROM drink_logs
+           WHERE user_id = ?
+             AND logged_at >= datetime('now', '-60 days')
+           ORDER BY d DESC""",
+        [user_id]
+    )
+    drink_dates = set()
+    for r in rows:
         try:
-            last = _date.fromisoformat(s["last"])
-            delta = (_date.today() - last).days
-            if delta == 1:
-                new_current = s["current"] + 1
-            else:
-                new_current = 1  # reset
+            drink_dates.add(_date.fromisoformat(r["d"]))
         except Exception:
-            new_current = 1
-    else:
-        new_current = 1
-    new_longest = max(s["longest"], new_current)
+            pass
+    # Ajoute aujourd'hui (le drink qu'on vient de logger, peut ne pas encore
+    # être dans drink_logs si bump_streak est appelé avant le commit DB)
+    drink_dates.add(today)
+
+    # Compte les jours consécutifs en remontant depuis aujourd'hui
+    current = 0
+    d = today
+    while d in drink_dates:
+        current += 1
+        d = d - _td(days=1)
+    if current == 0:
+        current = 1  # safety fallback
+
+    # Longest streak : max entre l'ancien et le nouveau
+    old = get_streak(user_id)
+    longest = max(old.get("longest", 0), current)
+
     _execute(
         "UPDATE users SET current_streak=?, longest_streak=?, last_drink_date=? WHERE user_id=?",
-        [new_current, new_longest, today, user_id]
+        [current, longest, today_iso, user_id]
     )
-    return {"current": new_current, "longest": new_longest, "last": today}
+    return {"current": current, "longest": longest, "last": today_iso}
 
 
 def set_referrer(user_id: int, referrer_id: int):
