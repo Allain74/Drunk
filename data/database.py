@@ -7,7 +7,18 @@ _RAW_URL = os.environ.get("TURSO_DATABASE_URL", "")
 TURSO_URL = _RAW_URL.replace("libsql://", "https://")
 TURSO_TOKEN = os.environ.get("TURSO_AUTH_TOKEN", "")
 
-_client = httpx.Client(timeout=10)
+# Pool généreux pour absorber les bursts de calls Turso quand plusieurs users
+# utilisent l'app simultanément. Sans ces limits, le default httpx (100 max
+# connections, pool_timeout 5s) sature sous charge -> PoolTimeout exceptions
+# -> endpoints qui fail -> downs.
+_client = httpx.Client(
+    timeout=httpx.Timeout(20.0, connect=5.0, pool=30.0),
+    limits=httpx.Limits(
+        max_connections=200,
+        max_keepalive_connections=100,
+        keepalive_expiry=60.0,
+    ),
+)
 
 
 def _args(values: list) -> list:

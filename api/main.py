@@ -397,13 +397,22 @@ async def _broadcast(data: list[dict]):
         payload = json.dumps(data)
     except Exception:
         return
-    dead = set()
-    for ws in _ws_clients:
+    # Envoi en parallèle (gather) avec timeout par client pour ne pas qu'un
+    # client lent bloque la diffusion aux autres. Avant : envoi en série,
+    # un client mobile en zone moche bloquait pendant ~10s tous les autres.
+    clients = list(_ws_clients)
+    if not clients:
+        return
+    async def _send_one(ws):
         try:
-            await ws.send_text(payload)
+            await asyncio.wait_for(ws.send_text(payload), timeout=3.0)
+            return None
         except Exception:
-            dead.add(ws)
-    _ws_clients.difference_update(dead)
+            return ws
+    results = await asyncio.gather(*[_send_one(ws) for ws in clients], return_exceptions=True)
+    for r in results:
+        if isinstance(r, WebSocket):
+            _ws_clients.discard(r)
 
 
 async def _broadcast_loop():
@@ -3207,13 +3216,22 @@ async def _bj_broadcast(token: str):
         "players": player_data,
     }
 
-    dead = set()
-    for client in list(_bj_clients.get(token, set())):
+    # Envoi en parallèle avec timeout par client (idem _broadcast principal)
+    payload = json.dumps(state)
+    clients = list(_bj_clients.get(token, set()))
+    if not clients:
+        return
+    async def _send_one(ws):
         try:
-            await client.send_text(json.dumps(state))
+            await asyncio.wait_for(ws.send_text(payload), timeout=3.0)
+            return None
         except Exception:
-            dead.add(client)
-    _bj_clients.get(token, set()).difference_update(dead)
+            return ws
+    results = await asyncio.gather(*[_send_one(ws) for ws in clients], return_exceptions=True)
+    bj_set = _bj_clients.get(token, set())
+    for r in results:
+        if isinstance(r, WebSocket):
+            bj_set.discard(r)
 
 
 @app.websocket("/ws/blackjack/{token}")
