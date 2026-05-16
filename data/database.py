@@ -14,9 +14,9 @@ TURSO_TOKEN = os.environ.get("TURSO_AUTH_TOKEN", "")
 _client = httpx.Client(
     timeout=httpx.Timeout(20.0, connect=5.0, pool=30.0),
     limits=httpx.Limits(
-        max_connections=200,
-        max_keepalive_connections=100,
-        keepalive_expiry=60.0,
+        max_connections=50,
+        max_keepalive_connections=30,
+        keepalive_expiry=30.0,
     ),
 )
 

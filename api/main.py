@@ -143,14 +143,12 @@ RENDER_URL = os.environ.get("RENDER_URL", "https://drunk-l34t.onrender.com")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _bot_app
-    # ── Threadpool : augmenter le default executor pour gérer les nombreux
-    # asyncio.to_thread() qu'on utilise (calls DB Turso + push notifications).
-    # Sur Render free tier 0.5 CPU, le default est ~5 workers ; on monte à 50
-    # pour ne pas saturer la queue interne d'asyncio quand beaucoup de tasks
-    # s'accumulent (drinks, broadcasts, push notifs, etc.).
+    # ── Threadpool : 20 workers (entre ~5 du default et 50 qui faisait OOM
+    # sur Render free tier 512 MB). 20 suffit pour absorber les bursts sans
+    # consommer trop de RAM (chaque thread ~8 MB stack + httpx connections).
     import concurrent.futures
     asyncio.get_event_loop().set_default_executor(
-        concurrent.futures.ThreadPoolExecutor(max_workers=50, thread_name_prefix="drunk-bg")
+        concurrent.futures.ThreadPoolExecutor(max_workers=20, thread_name_prefix="drunk-bg")
     )
     init_db()
     init_push_subscriptions()
