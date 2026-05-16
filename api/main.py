@@ -70,6 +70,35 @@ VAPID_PRIVATE_KEY = os.environ.get("VAPID_PRIVATE_KEY", "")
 VAPID_PUBLIC_KEY  = os.environ.get("VAPID_PUBLIC_KEY", "")
 VAPID_CLAIMS      = {"sub": "mailto:admin@drunk.app"}
 
+# Threadpool dédié pour les push notifications (initialisé dans lifespan).
+# Isolé du pool principal pour qu'un burst de pushs ne bloque pas les
+# requêtes HTTP utilisateurs.
+_PUSH_EXECUTOR = None
+
+# Sémaphore pour limiter le nombre de tâches background concurrentes des
+# actions user (log-drink, undo, reset). Sans limite, 10 users qui boivent
+# simultanément créent 10 tâches × 10 calls Turso = saturation event loop.
+# Avec 4 max : les autres attendent en queue mais l'event loop reste libre
+# pour servir les requêtes HTTP des autres users.
+_BG_TASK_SEM = asyncio.Semaphore(4)
+
+
+async def _run_bg_limited(coro):
+    """Wrap une coroutine background dans le semaphore pour limiter
+    le nombre de tâches concurrentes (4 max)."""
+    async with _BG_TASK_SEM:
+        await coro
+
+
+def _fire_push(user_id: int, title: str, body: str, url: str = "/"):
+    """Envoie un push notif sans bloquer l'event loop. Utilise le threadpool
+    dédié _PUSH_EXECUTOR si dispo, sinon fallback sur le default executor."""
+    try:
+        loop = asyncio.get_event_loop()
+        loop.run_in_executor(_PUSH_EXECUTOR, _send_push, user_id, title, body, url)
+    except Exception as e:
+        print(f"[fire_push] erreur : {e}")
+
 
 def _send_push(user_id: int, title: str, body: str, url: str = "/"):
     """Envoie une notification push à tous les appareils d'un utilisateur."""
@@ -109,7 +138,7 @@ async def _notify_followers(actor_id: int, title: str, body: str, url: str = "/"
     loop = asyncio.get_event_loop()
     followers = get_followers(actor_id)
     for fid in followers:
-        loop.run_in_executor(None, _send_push, fid, title, body, url)
+        loop.run_in_executor(_PUSH_EXECUTOR, _send_push, fid, title, body, url)
 
 # ── Notifs Telegram : mettre à False pour ne pas spammer par Telegram ─────────
 _TG_NOTIFS = False
@@ -143,13 +172,17 @@ RENDER_URL = os.environ.get("RENDER_URL", "https://drunk-l34t.onrender.com")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _bot_app
-    # ── Threadpool : 20 workers (entre ~5 du default et 50 qui faisait OOM
-    # sur Render free tier 512 MB). 20 suffit pour absorber les bursts sans
-    # consommer trop de RAM (chaque thread ~8 MB stack + httpx connections).
+    # ── 2 threadpools séparés pour isoler les workloads ───────────────────
+    # PRINCIPAL (15 workers) : calls Turso, FastAPI sync endpoints.
+    # PUSH (5 workers) : webpush sync vers Apple/Mozilla. Isolé pour qu'un
+    # burst de push (genre 30 followers notifiés en même temps) ne bloque
+    # plus le pool principal et ne fasse plus timeout les requêtes HTTP user.
     import concurrent.futures
+    global _PUSH_EXECUTOR
     asyncio.get_event_loop().set_default_executor(
-        concurrent.futures.ThreadPoolExecutor(max_workers=20, thread_name_prefix="drunk-bg")
+        concurrent.futures.ThreadPoolExecutor(max_workers=15, thread_name_prefix="drunk-bg")
     )
+    _PUSH_EXECUTOR = concurrent.futures.ThreadPoolExecutor(max_workers=5, thread_name_prefix="drunk-push")
     init_db()
     init_push_subscriptions()
     # Charge le cache mémoire des bannis pour bloquer leurs requêtes API
@@ -497,7 +530,7 @@ async def _danger_loop():
                         continue
                     _drunk_follower_notified[key] = now
                     loop.run_in_executor(
-                        None, _send_push, fid,
+                        _PUSH_EXECUTOR, _send_push, fid,
                         "🚨 Drunk",
                         f"{name} est en train de se mettre une énorme charge, fais attention à {lui_elle} !",
                         "/?tab=live"
@@ -538,7 +571,7 @@ async def _danger_loop():
                         except Exception:
                             pass
                     loop.run_in_executor(
-                        None, _send_push, uid,
+                        _PUSH_EXECUTOR, _send_push, uid,
                         "🍺 Drunk",
                         push_tpl.format(name=name),
                         "/"
@@ -589,7 +622,7 @@ async def _weekly_recap_loop():
                             pass
 
                     loop.run_in_executor(
-                        None, _send_push, uid,
+                        _PUSH_EXECUTOR, _send_push, uid,
                         "📊 Recap de la semaine",
                         push_body,
                         "/?tab=classement"
@@ -1079,7 +1112,7 @@ async def admin_broadcast_push(request: Request):
     loop = asyncio.get_event_loop()
     users = get_all_users()
     for u in users:
-        loop.run_in_executor(None, _send_push, u["telegram_id"], title, message, url)
+        loop.run_in_executor(_PUSH_EXECUTOR, _send_push, u["telegram_id"], title, message, url)
     return {"ok": True, "sent_to": len(users)}
 
 
@@ -1966,7 +1999,7 @@ async def follow_endpoint(request: Request):
         import asyncio
         loop = asyncio.get_event_loop()
         loop.run_in_executor(
-            None, _send_push, int(following_id),
+            _PUSH_EXECUTOR, _send_push, int(following_id),
             "👤 Nouveau follower",
             f"{follower['username']} vient de s'abonner à toi sur Drunk !",
             "/?tab=amis"
@@ -2223,7 +2256,7 @@ async def push_test(request: Request):
         return {"ok": False, "error": "Non authentifié"}
     import asyncio
     loop = asyncio.get_event_loop()
-    await loop.run_in_executor(None, _send_push, telegram_id, "🍺 Test Drunk", "Les notifications fonctionnent !", "/")
+    await loop.run_in_executor(_PUSH_EXECUTOR, _send_push, telegram_id, "🍺 Test Drunk", "Les notifications fonctionnent !", "/")
     return {"ok": True}
 
 # ── Logger un verre depuis le web ─────────────────────────────────────────────
@@ -2328,7 +2361,7 @@ async def log_drink_web(request: Request):
                     tid_t = name_to_tid.get(tname)
                     if tid_t:
                         push_loop.run_in_executor(
-                            None, _send_push, tid_t,
+                            _PUSH_EXECUTOR, _send_push, tid_t,
                             "🚨 Max boit !", body_text, "/?tab=live"
                         )
 
@@ -2378,7 +2411,7 @@ async def log_drink_web(request: Request):
                     now3 = datetime.now(timezone.utc)
                     for fid, key, title, body in plan:
                         _first_drink_notified[key] = now3
-                        loop.run_in_executor(None, _send_push, fid, title, body, "/?tab=live")
+                        loop.run_in_executor(_PUSH_EXECUTOR, _send_push, fid, title, body, "/?tab=live")
                     _pending_first_drink_notifs.pop(drinker_id, None)
 
                 old = _pending_first_drink_notifs.get(telegram_id)
@@ -2391,7 +2424,7 @@ async def log_drink_web(request: Request):
         except Exception as e:
             print(f"[post_drink_work] erreur (non-critique) : {e}")
 
-    asyncio.create_task(_post_drink_work())
+    asyncio.create_task(_run_bg_limited(_post_drink_work()))
 
     # Réponse instantanée (0 query DB). Badges visibles au prochain refresh.
     return {
@@ -2464,7 +2497,7 @@ async def undo_drink_web(request: Request):
         except Exception as e:
             print(f"[post_undo_work] erreur (non-critique) : {e}")
 
-    asyncio.create_task(_post_undo_work())
+    asyncio.create_task(_run_bg_limited(_post_undo_work()))
 
     # Réponse instantanée
     return {
@@ -2500,7 +2533,7 @@ async def reset_session_web(request: Request):
         except Exception as e:
             print(f"[post_reset_work] erreur : {e}")
 
-    asyncio.create_task(_post_reset_work())
+    asyncio.create_task(_run_bg_limited(_post_reset_work()))
     return {"ok": True}
 
 
@@ -2942,7 +2975,7 @@ async def create_bet_web(request: Request):
     type_labels = {"verres": "plus de verres", "ivre": "TAC le plus haut", "coinflip": "pile ou face"}
     import asyncio
     loop = asyncio.get_event_loop()
-    loop.run_in_executor(None, _send_push,
+    loop.run_in_executor(_PUSH_EXECUTOR, _send_push,
         opponent["telegram_id"],
         f"🎰 Pari de {challenger['username']}",
         f"{amount} 🪙 sur {type_labels[bet_type]} — accepte ou refuse !",
@@ -3024,7 +3057,7 @@ async def relance_bet(request: Request):
     if challenger:
         import asyncio
         loop = asyncio.get_event_loop()
-        loop.run_in_executor(None, _send_push,
+        loop.run_in_executor(_PUSH_EXECUTOR, _send_push,
             bet["opponent_id"],
             "⏰ Pari en attente !",
             f"{challenger['username']} te relance : {bet['amount']} 🪙. Accepte ou refuse !",
