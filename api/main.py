@@ -177,6 +177,77 @@ RENDER_URL = os.environ.get("RENDER_URL", "https://drunk-l34t.onrender.com")
 import threading
 _loop_heartbeat = {"ts": 0.0}
 
+# ── Monitoring : snapshot d'état toutes les 60s ───────────────────────────
+# Pour pouvoir diagnostiquer un freeze au prochain down. Garde 1h d'historique
+# en mémoire (60 snapshots) accessible via /admin/diag.
+_diag_snapshots: list[dict] = []
+_DIAG_MAX = 60
+
+
+def _take_diag_snapshot() -> dict:
+    """Capture l'état actuel du serveur : RAM, asyncio tasks, threads,
+    file descriptors, taille des dicts mémoire. Léger (~quelques ms)."""
+    import resource as _resource
+    import os as _os
+    snap = {"ts": datetime.now(timezone.utc).isoformat()}
+    try:
+        ru = _resource.getrusage(_resource.RUSAGE_SELF)
+        # Linux retourne ru_maxrss en KB, macOS en bytes
+        snap["ram_mb"] = round(ru.ru_maxrss / 1024, 1)
+    except Exception:
+        snap["ram_mb"] = -1
+    try:
+        snap["asyncio_tasks"] = len(asyncio.all_tasks())
+    except Exception:
+        snap["asyncio_tasks"] = -1
+    try:
+        snap["threads"] = threading.active_count()
+    except Exception:
+        snap["threads"] = -1
+    try:
+        snap["fds"] = len(_os.listdir(f"/proc/{_os.getpid()}/fd"))
+    except Exception:
+        snap["fds"] = -1
+    # Dicts mémoire de l'app (souvent suspects pour les leaks)
+    try:
+        snap["ws_clients"] = len(_ws_clients)
+        snap["bj_clients"] = sum(len(s) for s in _bj_clients.values()) if _bj_clients else 0
+        snap["pending_fomo"] = len(_pending_first_drink_notifs)
+        snap["user_drinks_cache"] = len(_user_drinks_cache)
+        snap["auth_tokens"] = len(_auth_token_cache)
+        snap["endpoint_cache"] = len(_endpoint_cache)
+        snap["first_drink_notified"] = len(_first_drink_notified)
+        snap["drunk_follower_notified"] = len(_drunk_follower_notified)
+        snap["danger_notified"] = len(_danger_notified)
+        snap["banned_set"] = len(_banned_user_ids)
+        snap["last_drink_at_dict"] = len(_last_drink_at)
+    except Exception:
+        pass
+    return snap
+
+
+async def _diag_loop():
+    """Coroutine qui prend un snapshot toutes les 60s et le logge."""
+    while True:
+        await asyncio.sleep(60)
+        try:
+            snap = _take_diag_snapshot()
+            _diag_snapshots.append(snap)
+            if len(_diag_snapshots) > _DIAG_MAX:
+                _diag_snapshots.pop(0)
+            # Log compact pour pouvoir grep facilement dans Render logs
+            short = (
+                f"ram={snap.get('ram_mb')}MB tasks={snap.get('asyncio_tasks')} "
+                f"thr={snap.get('threads')} fds={snap.get('fds')} "
+                f"ws={snap.get('ws_clients')} cache={snap.get('endpoint_cache')} "
+                f"pending={snap.get('pending_fomo')} "
+                f"first_notif={snap.get('first_drink_notified')} "
+                f"drunk_notif={snap.get('drunk_follower_notified')}"
+            )
+            print(f"[DIAG] {short}")
+        except Exception as e:
+            print(f"[DIAG] erreur snapshot : {e}")
+
 
 async def _heartbeat_async_loop():
     """Coroutine qui met à jour _loop_heartbeat toutes les 5s.
@@ -188,7 +259,8 @@ async def _heartbeat_async_loop():
 
 def _watchdog_thread():
     """Thread système (indépendant d'asyncio) qui surveille le heartbeat.
-    Si l'event loop n'a pas pulsé depuis >90s, force kill du process."""
+    Si l'event loop n'a pas pulsé depuis >90s, dump l'état complet PUIS
+    force kill du process."""
     import os as _os
     consecutive_dead = 0
     while True:
@@ -200,6 +272,15 @@ def _watchdog_thread():
         if elapsed > 90:
             consecutive_dead += 1
             print(f"[WATCHDOG] Event loop figé depuis {elapsed:.0f}s (check #{consecutive_dead})")
+            # Capture le snapshot AU MOMENT du freeze pour diagnostic
+            try:
+                snap = _take_diag_snapshot()
+                print(f"[WATCHDOG] DIAG au moment du freeze : {snap}")
+                # Dump aussi les 5 derniers snapshots pour voir l'évolution
+                if _diag_snapshots:
+                    print(f"[WATCHDOG] Snapshots récents : {_diag_snapshots[-5:]}")
+            except Exception as e:
+                print(f"[WATCHDOG] diag dump failed : {e}")
             # Après 2 checks consécutifs (= ~60-90s d'event loop figé), on tue
             if consecutive_dead >= 2:
                 print("[WATCHDOG] FORCE EXIT — Render va redémarrer l'instance")
@@ -332,6 +413,7 @@ async def lifespan(app: FastAPI):
     #   - un thread système qui vérifie le pulse toutes les 30s et fait
     #     os._exit() si pas de pulse depuis >90s (Render redémarre l'instance)
     asyncio.create_task(_heartbeat_async_loop())
+    asyncio.create_task(_diag_loop())
     threading.Thread(target=_watchdog_thread, daemon=True, name="watchdog").start()
 
     yield
@@ -950,6 +1032,17 @@ async def admin_recalc_streaks(request: Request):
         if key.startswith("me:") or key.startswith("profile:"):
             _endpoint_cache.pop(key, None)
     return {"ok": True, "users_recalculated": n}
+
+
+@app.get("/admin/diag")
+def admin_diag():
+    """Diagnostic temps réel : état actuel + historique des 60 dernières min.
+    Permet d'identifier ce qui croît anormalement (memory leak, tasks accumulées,
+    file descriptors épuisés, etc.) avant un freeze."""
+    return {
+        "current": _take_diag_snapshot(),
+        "history_60min": _diag_snapshots,
+    }
 
 
 @app.get("/admin/debug-drinks-dates/{telegram_id}")
