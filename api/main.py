@@ -169,6 +169,47 @@ PARIS = ZoneInfo("Europe/Paris")
 RENDER_URL = os.environ.get("RENDER_URL", "https://drunk-l34t.onrender.com")
 
 
+# ── Watchdog : détecte un event loop bloqué et force restart ──────────────
+# Comment ça marche : un thread Python (indépendant de l'event loop asyncio)
+# update un timestamp toutes les 5s. Un autre thread vérifie l'écart et si
+# >90s sans update → l'event loop est figé → os._exit() pour forcer Render
+# à redémarrer l'instance. Plus rapide que d'attendre que Render détecte.
+import threading
+_loop_heartbeat = {"ts": 0.0}
+
+
+async def _heartbeat_async_loop():
+    """Coroutine qui met à jour _loop_heartbeat toutes les 5s.
+    Si l'event loop est bloqué, cette coroutine ne progresse plus."""
+    while True:
+        _loop_heartbeat["ts"] = time.time()
+        await asyncio.sleep(5)
+
+
+def _watchdog_thread():
+    """Thread système (indépendant d'asyncio) qui surveille le heartbeat.
+    Si l'event loop n'a pas pulsé depuis >90s, force kill du process."""
+    import os as _os
+    consecutive_dead = 0
+    while True:
+        time.sleep(30)
+        last = _loop_heartbeat["ts"]
+        if last == 0:
+            continue  # pas encore démarré
+        elapsed = time.time() - last
+        if elapsed > 90:
+            consecutive_dead += 1
+            print(f"[WATCHDOG] Event loop figé depuis {elapsed:.0f}s (check #{consecutive_dead})")
+            # Après 2 checks consécutifs (= ~60-90s d'event loop figé), on tue
+            if consecutive_dead >= 2:
+                print("[WATCHDOG] FORCE EXIT — Render va redémarrer l'instance")
+                _os._exit(1)
+        else:
+            if consecutive_dead > 0:
+                print(f"[WATCHDOG] OK, event loop a repris (était figé)")
+            consecutive_dead = 0
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _bot_app
@@ -283,6 +324,15 @@ async def lifespan(app: FastAPI):
     asyncio.create_task(_danger_loop())
     asyncio.create_task(_weekly_recap_loop())
     asyncio.create_task(_bet_settlement_loop())
+
+    # Watchdog : détecte un event loop bloqué et force le restart de l'instance.
+    # 2 composants :
+    #   - une coroutine qui pulse toutes les 5s (si l'event loop bloque, ça
+    #     ne pulse plus)
+    #   - un thread système qui vérifie le pulse toutes les 30s et fait
+    #     os._exit() si pas de pulse depuis >90s (Render redémarre l'instance)
+    asyncio.create_task(_heartbeat_async_loop())
+    threading.Thread(target=_watchdog_thread, daemon=True, name="watchdog").start()
 
     yield
 
