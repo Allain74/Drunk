@@ -1072,6 +1072,19 @@ def _check_admin(caller_id, secret: str | None = None) -> bool:
     return True
 
 
+@app.get("/admin/soiree-badges-by-user")
+def admin_soiree_badges_by_user():
+    """Liste qui a obtenu quels badges de soirée (pour debug/curiosité)."""
+    rows = _fetchall("""
+        SELECT u.username, sb.badge_key, sb.peak_bac, sb.had_vomi, sb.awarded_at,
+               sb.user_id, sb.session_id
+        FROM soiree_badges sb
+        JOIN users u ON u.user_id = sb.user_id
+        ORDER BY sb.awarded_at DESC
+    """)
+    return rows
+
+
 @app.post("/admin/backfill-soiree-badges")
 async def admin_backfill_soiree_badges(request: Request):
     """Force le calcul des badges de soirée pour TOUTES les sessions fermées
