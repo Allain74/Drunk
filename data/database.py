@@ -682,14 +682,25 @@ def end_session(user_id: int):
     _execute("UPDATE sessions SET active=0 WHERE user_id=? AND active=1", [user_id])
 
 
-def log_drink(user_id: int, drink_key: str, alc_grams: float) -> bool:
+def log_drink(user_id: int, drink_key: str, alc_grams: float, logged_at: datetime | None = None) -> bool:
+    """Insère un verre. Si logged_at est fourni, utilise ce timestamp (pour
+    rattraper un verre oublié plus tôt dans la soirée). Sinon, datetime('now')."""
     session = get_active_session(user_id)
     if not session:
         return False
-    _execute(
-        "INSERT INTO drink_logs (session_id, user_id, drink_key, alc_grams) VALUES (?, ?, ?, ?)",
-        [session["id"], user_id, drink_key, alc_grams]
-    )
+    if logged_at is not None:
+        # Stocke au format SQLite naïf UTC (sans suffixe Z, cohérent avec
+        # datetime('now') qui retourne aussi du naïf UTC).
+        ts_str = logged_at.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+        _execute(
+            "INSERT INTO drink_logs (session_id, user_id, drink_key, alc_grams, logged_at) VALUES (?, ?, ?, ?, ?)",
+            [session["id"], user_id, drink_key, alc_grams, ts_str]
+        )
+    else:
+        _execute(
+            "INSERT INTO drink_logs (session_id, user_id, drink_key, alc_grams) VALUES (?, ?, ?, ?)",
+            [session["id"], user_id, drink_key, alc_grams]
+        )
     return True
 
 

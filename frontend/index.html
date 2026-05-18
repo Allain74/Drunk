@@ -1320,6 +1320,36 @@
 </div>
 
 <!-- ── Modal Récap soirée ── -->
+<!-- ── Modal "Heure réelle du verre" (rattrapage d'un verre oublié) ── -->
+<div id="modal-bg-pasttime" onclick="if(event.target===this)closePastTimeModal()" style="display:none;position:fixed;inset:0;background:#0009;z-index:3600;align-items:center;justify-content:center;padding:16px">
+  <div onclick="event.stopPropagation()" style="background:var(--card);color:var(--text);border-radius:20px;max-width:380px;width:100%;padding:24px 20px;box-shadow:0 20px 60px #0008">
+    <div style="text-align:center;font-size:2.4rem;line-height:1;margin-bottom:8px">⏰</div>
+    <div style="text-align:center;font-size:1.15rem;font-weight:800;margin-bottom:14px">Ce verre a été bu il y a combien de temps ?</div>
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px">
+      <button onclick="confirmPastDrink(0)"   class="past-time-btn" style="grid-column:span 2;background:linear-gradient(135deg,#22c55e,#16a34a)">⚡ Maintenant</button>
+      <button onclick="confirmPastDrink(15)"  class="past-time-btn">Il y a 15 min</button>
+      <button onclick="confirmPastDrink(30)"  class="past-time-btn">Il y a 30 min</button>
+      <button onclick="confirmPastDrink(45)"  class="past-time-btn">Il y a 45 min</button>
+      <button onclick="confirmPastDrink(60)"  class="past-time-btn">Il y a 1h</button>
+      <button onclick="confirmPastDrink(90)"  class="past-time-btn">Il y a 1h30</button>
+      <button onclick="confirmPastDrink(120)" class="past-time-btn">Il y a 2h</button>
+      <button onclick="confirmPastDrink(180)" class="past-time-btn">Il y a 3h</button>
+      <button onclick="confirmPastDrink(240)" class="past-time-btn">Il y a 4h</button>
+    </div>
+  </div>
+</div>
+<style>
+  .past-time-btn {
+    padding: 12px 8px; border-radius: 12px;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    color: white; border: none; font-weight: 700; font-size: 0.92rem;
+    cursor: pointer; font-family: inherit;
+    transition: transform .12s, opacity .12s;
+  }
+  .past-time-btn:hover { opacity: 0.9; }
+  .past-time-btn:active { transform: scale(0.96); }
+</style>
+
 <div id="recap-overlay" onclick="closeRecap(event)" style="display:none;position:fixed;inset:0;background:#0009;z-index:3500;align-items:center;justify-content:center;padding:16px">
   <div onclick="event.stopPropagation()" id="recap-card" style="background:linear-gradient(135deg,#1e1b4b,#581c87);color:white;border-radius:20px;max-width:400px;width:100%;padding:28px 22px;position:relative;box-shadow:0 20px 60px #0008">
     <button onclick="closeRecap()" style="position:absolute;top:12px;right:12px;background:rgba(255,255,255,0.15);border:none;color:white;border-radius:50%;width:32px;height:32px;font-size:0.9rem;cursor:pointer">✕</button>
@@ -5319,29 +5349,68 @@
 
   function quickDrink(drinkKey) {
     if (!myTid) { showTab('profil'); return; }
-    // Garde locale : bloque le double-clic accidentel
     const now = Date.now();
     const elapsed = now - _lastDrinkAt;
-    if (elapsed < DRINK_COOLDOWN_MS) {
-      const remaining = Math.ceil((DRINK_COOLDOWN_MS - elapsed) / 1000);
-      showToast(`⏳ Attends ${remaining}s avant le prochain verre`);
+    // Si dernier verre < 5 min : l'user a probablement oublié un verre
+    // précédent. On ouvre un modal pour qu'il saisisse l'heure RÉELLE de
+    // ce verre (dans le passé jusqu'à 6h).
+    if (_lastDrinkAt > 0 && elapsed < 5 * 60 * 1000) {
+      openPastTimeModal(drinkKey);
       return;
     }
+    // Garde anti double-clic (~1.5s)
+    if (elapsed < 1500) return;
     _lastDrinkAt = now;
     _drinkButtonsDisabled(true);
     setTimeout(() => _drinkButtonsDisabled(false), DRINK_COOLDOWN_MS);
+    _doLogDrink(drinkKey, null);
+  }
 
-    // ── OPTIMISTIC UI : toast immédiat, sans attendre le réseau (200-500ms RTT) ──
-    // Le user voit son verre confirmé instantanément. Le fetch tourne en
-    // background. Si erreur réseau ou refus serveur, on annule avec un toast
-    // correctif.
-    showToast('✅ Verre ajouté !');
+  let _pendingPastDrinkKey = null;
 
-    // Capture la position en parallèle (sans bloquer)
+  function openPastTimeModal(drinkKey) {
+    _pendingPastDrinkKey = drinkKey;
+    document.getElementById('modal-bg-pasttime').style.display = 'flex';
+  }
+
+  function closePastTimeModal() {
+    document.getElementById('modal-bg-pasttime').style.display = 'none';
+    _pendingPastDrinkKey = null;
+  }
+
+  // Confirme avec un offset en minutes dans le passé (preset : 0=maintenant, 15, 30, 45, 60, 90, 120, 180, 240)
+  function confirmPastDrink(offsetMinutes) {
+    if (!_pendingPastDrinkKey) { closePastTimeModal(); return; }
+    const drinkKey = _pendingPastDrinkKey;
+    closePastTimeModal();
+    if (offsetMinutes === 0) {
+      // "Maintenant" : log normal, met à jour le cooldown
+      _lastDrinkAt = Date.now();
+      _drinkButtonsDisabled(true);
+      setTimeout(() => _drinkButtonsDisabled(false), DRINK_COOLDOWN_MS);
+      _doLogDrink(drinkKey, null);
+    } else {
+      // Verre dans le passé : pas de cooldown (peut être suivi d'un autre rattrapage)
+      const drinkTime = new Date(Date.now() - offsetMinutes * 60 * 1000);
+      _doLogDrink(drinkKey, drinkTime.toISOString());
+    }
+  }
+
+  function useNowForDrink() {
+    const drinkKey = _pendingPastDrinkKey;
+    closePastTimeModal();
+    _lastDrinkAt = Date.now();
+    _drinkButtonsDisabled(true);
+    setTimeout(() => _drinkButtonsDisabled(false), DRINK_COOLDOWN_MS);
+    _doLogDrink(drinkKey, null);
+  }
+
+  function _doLogDrink(drinkKey, customISO) {
+    // Optimistic UI : toast immédiat
+    showToast(customISO ? '⏰ Verre rattrapé !' : '✅ Verre ajouté !');
     _refreshPosition();
-
-    // Fetch en background (pas d'await)
     const payload = { telegram_id: myTid, drink_key: drinkKey };
+    if (customISO) payload.logged_at = customISO;
     if (_cachedPos) { payload.lat = _cachedPos.lat; payload.lon = _cachedPos.lon; }
     fetch(`${API}/log-drink`, {
       method: 'POST',
@@ -5349,12 +5418,10 @@
       body: JSON.stringify(payload),
     }).then(r => r.json()).then(data => {
       if (!data.ok) {
-        _lastDrinkAt = 0;
-        _drinkButtonsDisabled(false);
+        if (!customISO) { _lastDrinkAt = 0; _drinkButtonsDisabled(false); }
         showToast('❌ ' + (data.error || 'Erreur'));
         return;
       }
-      // Met à jour avec le BAC précis (après confirmation serveur)
       if (typeof data.bac === 'number') {
         setTimeout(() => showToast(`📊 ${data.bac.toFixed(2)} g/L`), 800);
       }
@@ -5365,8 +5432,7 @@
       }
       loadFavorites();
     }).catch(() => {
-      _lastDrinkAt = 0;
-      _drinkButtonsDisabled(false);
+      if (!customISO) { _lastDrinkAt = 0; _drinkButtonsDisabled(false); }
       showToast('❌ Erreur réseau — verre non enregistré');
     });
   }

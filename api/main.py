@@ -2542,6 +2542,10 @@ async def log_drink_web(request: Request):
     drink_key   = body.get("drink_key")
     lat         = body.get("lat")
     lon         = body.get("lon")
+    # logged_at_override : ISO datetime string fournie par le frontend quand
+    # l'user rattrape un verre oublié plus tôt dans la soirée. Si présent,
+    # on utilise ce timestamp au lieu de "maintenant" et on skip le cooldown.
+    logged_at_override = body.get("logged_at")
 
     if not telegram_id or not drink_key:
         return {"ok": False, "error": "Paramètres manquants"}
@@ -2549,12 +2553,31 @@ async def log_drink_web(request: Request):
         return {"ok": False, "error": "Boisson inconnue"}
 
     # ─── CHEMIN CRITIQUE : 0 query DB (tout en mémoire) ─────────────────────
-    # Cooldown 30s
-    now_ts = datetime.now(timezone.utc)
-    last_dt = _last_drink_at.get(telegram_id)
-    if last_dt and (now_ts - last_dt).total_seconds() < 30:
-        remaining = int(30 - (now_ts - last_dt).total_seconds()) + 1
-        return {"ok": False, "error": f"Attends encore {remaining}s avant le prochain verre"}
+    real_now = datetime.now(timezone.utc)
+    drink_ts: datetime
+    is_past = False
+    if logged_at_override:
+        try:
+            dt = datetime.fromisoformat(logged_at_override.replace("Z", "+00:00"))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            if dt > real_now:
+                return {"ok": False, "error": "L'heure doit être dans le passé"}
+            if (real_now - dt).total_seconds() > 6 * 3600:
+                return {"ok": False, "error": "Trop ancien (max 6h en arrière)"}
+            drink_ts = dt
+            is_past = True
+        except Exception:
+            return {"ok": False, "error": "Heure invalide"}
+    else:
+        drink_ts = real_now
+        # Cooldown 30s (uniquement pour les verres en temps réel)
+        last_dt = _last_drink_at.get(telegram_id)
+        if last_dt and (real_now - last_dt).total_seconds() < 30:
+            remaining = int(30 - (real_now - last_dt).total_seconds()) + 1
+            return {"ok": False, "error": f"Attends encore {remaining}s avant le prochain verre"}
+    # now_ts est conservé pour la compat avec le reste du code (heure du verre)
+    now_ts = drink_ts
 
     # User : réutilise le map cached
     users_by_id = _cached("users_by_id_map", 30.0,
@@ -2584,11 +2607,19 @@ async def log_drink_web(request: Request):
         _user_drinks_cache[telegram_id] = list(existing_drinks)
     is_first = len(existing_drinks) == 0
 
-    # Compute le BAC + update cache mémoire ATOMIQUEMENT
-    new_drinks = existing_drinks + [(g, now_ts)]
+    # Compute le BAC + update cache mémoire ATOMIQUEMENT.
+    # Si verre dans le passé : insertion dans l'ordre chronologique.
+    if is_past:
+        new_drinks = sorted(existing_drinks + [(g, drink_ts)], key=lambda d: d[1])
+        # Pas de mise à jour de _last_drink_at : ce verre est dans le passé,
+        # l'user doit pouvoir cliquer à nouveau sans cooldown si besoin.
+    else:
+        new_drinks = existing_drinks + [(g, drink_ts)]
+        _last_drink_at[telegram_id] = drink_ts
     _user_drinks_cache[telegram_id] = new_drinks
-    _last_drink_at[telegram_id] = now_ts
-    bac = total_bac(new_drinks, user["weight_kg"], user["gender"])
+    # BAC calculé à l'instant présent (real_now), pas à l'heure du verre :
+    # ainsi le verre rattrapé dans le passé montre déjà son élimination partielle.
+    bac = total_bac(new_drinks, user["weight_kg"], user["gender"], real_now)
 
     _invalidate_alltime_cache()
     _invalidate_cache("snapshot", "coins_all")
@@ -2600,7 +2631,10 @@ async def log_drink_web(request: Request):
             # 1) DB write (essentiel, en premier). Tous les calls Turso sync
             # sont wrappés dans asyncio.to_thread pour ne pas bloquer l'event loop.
             await asyncio.to_thread(_ensure_session, telegram_id)
-            inserted = await asyncio.to_thread(db_log_drink, telegram_id, drink_key, g)
+            # Si verre dans le passé : on passe drink_ts au log_drink pour
+            # que la DB stocke l'heure réelle, pas datetime('now').
+            db_logged_at = drink_ts if is_past else None
+            inserted = await asyncio.to_thread(db_log_drink, telegram_id, drink_key, g, db_logged_at)
             if not inserted:
                 print(f"[log_drink] INSERT failed pour user {telegram_id}")
                 return
