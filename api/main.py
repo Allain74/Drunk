@@ -14,6 +14,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 
 from data.database import (
+    log_vomi, count_vomis_session, count_vomis_total,
+    award_soiree_badge_if_eligible, get_soiree_badges_counts,
     _execute, _fetchall, _fetchone,
     init_db, get_all_users, get_all_active_drinks, get_active_session,
     get_drinks_by_session, get_all_time_stats, get_last_drink_time,
@@ -551,13 +553,21 @@ async def telegram_webhook(request: Request):
 # ── Helpers dashboard ─────────────────────────────────────────────────────────
 
 def build_snapshot() -> list[dict]:
-    from data.database import get_current_session_drink_counts
+    from data.database import get_current_session_drink_counts, _fetchall as _fa_sn
     users = {u["user_id"]: u for u in get_all_users()}
     drinks_by_user = get_all_active_drinks()
     # nb_drinks affiché = verres de la session ACTIVE uniquement (cohérent avec
     # la timeline qui ne montre que la session active). Le BAC reste calculé
     # sur les drinks <48h pour l'alcoolémie résiduelle.
     session_counts = get_current_session_drink_counts()
+    # Compte de vomis de la session active de chaque user (visible Live + classement)
+    vomi_rows = _fa_sn("""
+        SELECT v.user_id, COUNT(*) AS c FROM vomi_logs v
+        JOIN sessions s ON v.session_id = s.id
+        WHERE s.active = 1
+        GROUP BY v.user_id
+    """)
+    vomis_session = {int(r["user_id"]): int(r["c"] or 0) for r in vomi_rows}
     now = datetime.now(timezone.utc)
     banned_ids = {u["user_id"] for u in _get_banned_list()}
     admin_id = int(os.environ.get("ADMIN_ID", "0"))
@@ -594,6 +604,7 @@ def build_snapshot() -> list[dict]:
             "active_skin": user.get("active_skin") or "default",
             "discreet":    bool(user.get("discreet_mode")),
             "is_banned":   uid in banned_ids,
+            "vomis":       vomis_session.get(uid, 0),
         })
     result.sort(key=lambda x: x["bac"], reverse=True)
     return result
@@ -1433,6 +1444,8 @@ def get_me(telegram_id: int):
         "streak": streak,
         "referrals_count": count_referrals(uid),
         "discreet_mode": bool(user.get("discreet_mode")),
+        "soiree_badges": get_soiree_badges_counts(uid),
+        "vomis_total": count_vomis_total(uid),
     }
 
 
@@ -2226,7 +2239,9 @@ def _ensure_session(telegram_id: int):
     existante n'a pas vu de verre depuis SESSION_TIMEOUT_HOURS, on la ferme
     automatiquement et on en ouvre une nouvelle. Permet de bien séparer les
     soirées : on rentre se coucher, on se réveille, c'est une nouvelle soirée
-    dès le prochain verre."""
+    dès le prochain verre. À la fermeture, on attribue le badge de soirée
+    (petite_chauffe / bleu_bite / cuite_monumentale / coma_ethylique) selon
+    le TAC max atteint et la présence de vomi."""
     sess = get_active_session(telegram_id)
     if sess:
         row = _fetchone(
@@ -2240,6 +2255,11 @@ def _ensure_session(telegram_id: int):
                 if last_dt.tzinfo is None:
                     last_dt = last_dt.replace(tzinfo=timezone.utc)
                 if (datetime.now(timezone.utc) - last_dt).total_seconds() > SESSION_TIMEOUT_HOURS * 3600:
+                    # Avant de fermer : attribuer le badge de soirée
+                    try:
+                        award_soiree_badge_if_eligible(telegram_id, sess["id"])
+                    except Exception as e:
+                        print(f"[soiree-badge] erreur: {e}")
                     end_session(telegram_id)
                     sess = None
             except Exception:
@@ -2610,6 +2630,27 @@ async def log_drink_web(request: Request):
     }
 
 
+# ── Vomi (compté pour les badges de soirée + classement) ──────────────────────
+
+@app.post("/vomi")
+async def log_vomi_endpoint(request: Request):
+    body = await request.json()
+    telegram_id = _resolve_user(request, body)
+    if not telegram_id:
+        return {"ok": False, "error": "Non authentifié"}
+    # Assure qu'une session existe (idem que pour drink)
+    _ensure_session(telegram_id)
+    ok = log_vomi(telegram_id)
+    if not ok:
+        return {"ok": False, "error": "Pas de session active"}
+    # Invalide les caches qui exposent les vomis
+    _invalidate_cache(
+        "snapshot", "coins_all",
+        f"me:{telegram_id}", f"profile:{telegram_id}",
+    )
+    return {"ok": True}
+
+
 # ── Annuler le dernier verre ──────────────────────────────────────────────────
 
 @app.post("/undo-drink")
@@ -2700,6 +2741,13 @@ async def reset_session_web(request: Request):
     # Tout le DB work en background
     async def _post_reset_work():
         try:
+            # Avant de fermer la session : attribuer le badge de soirée si éligible
+            try:
+                sess = await asyncio.to_thread(get_active_session, telegram_id)
+                if sess:
+                    await asyncio.to_thread(award_soiree_badge_if_eligible, telegram_id, sess["id"])
+            except Exception as e:
+                print(f"[reset/soiree-badge] erreur: {e}")
             await asyncio.to_thread(end_session, telegram_id)
             await asyncio.to_thread(start_session, telegram_id)
             snapshot = await asyncio.to_thread(build_snapshot)
@@ -3295,6 +3343,8 @@ def get_profile(telegram_id: int):
             for d in session_detail
         ],
         "bj": bj,
+        "soiree_badges": get_soiree_badges_counts(uid),
+        "vomis_total": count_vomis_total(uid),
         **follows,
     }
 

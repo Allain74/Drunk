@@ -376,6 +376,24 @@ def init_db():
             result      TEXT NOT NULL,
             finished_at TEXT NOT NULL DEFAULT (datetime('now'))
         )""", []),
+        # Vomis (logués par les users via bouton Menu → Vomi)
+        ("""CREATE TABLE IF NOT EXISTS vomi_logs (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id     INTEGER NOT NULL,
+            session_id  INTEGER,
+            logged_at   TEXT NOT NULL DEFAULT (datetime('now'))
+        )""", []),
+        # Badges de soirée (calculés à la fin de chaque session selon le pic
+        # de TAC atteint et la présence de vomi). 1 row par soirée par user.
+        ("""CREATE TABLE IF NOT EXISTS soiree_badges (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id     INTEGER NOT NULL,
+            session_id  INTEGER NOT NULL UNIQUE,
+            badge_key   TEXT NOT NULL,
+            peak_bac    REAL NOT NULL,
+            had_vomi    INTEGER NOT NULL DEFAULT 0,
+            awarded_at  TEXT NOT NULL DEFAULT (datetime('now'))
+        )""", []),
     ])
     # Migration one-shot : si la table history est vide, migre les rows
     # actuelles de blackjack_players avec un result (ne perd pas les stats
@@ -506,6 +524,120 @@ def start_session(user_id: int) -> int:
         ("INSERT INTO sessions (user_id) VALUES (?)", [user_id]),
     ])
     return int(results[-1]["last_insert_rowid"])
+
+
+# ── Vomis ────────────────────────────────────────────────────────────────
+
+def log_vomi(user_id: int) -> bool:
+    """Enregistre un vomi pour la session active courante. Retourne True
+    si OK, False s'il n'y a pas de session active."""
+    session = get_active_session(user_id)
+    if not session:
+        return False
+    _execute(
+        "INSERT INTO vomi_logs (user_id, session_id) VALUES (?, ?)",
+        [user_id, session["id"]]
+    )
+    return True
+
+
+def count_vomis_session(session_id: int) -> int:
+    row = _fetchone(
+        "SELECT COUNT(*) AS c FROM vomi_logs WHERE session_id=?",
+        [session_id]
+    )
+    return int((row or {}).get("c") or 0)
+
+
+def count_vomis_total(user_id: int) -> int:
+    row = _fetchone(
+        "SELECT COUNT(*) AS c FROM vomi_logs WHERE user_id=?",
+        [user_id]
+    )
+    return int((row or {}).get("c") or 0)
+
+
+# ── Badges de soirée ─────────────────────────────────────────────────────
+
+def _classify_soiree_badge(peak_bac: float, had_vomi: bool) -> str | None:
+    """Détermine le badge selon le TAC max + la présence de vomi.
+    Renvoie None si TAC trop faible (<0.05 g/L et pas de vomi)."""
+    if peak_bac > 3.0:
+        return "coma_ethylique"
+    if had_vomi or peak_bac > 2.0:
+        return "cuite_monumentale"
+    if peak_bac > 1.0:
+        return "bleu_bite"
+    if peak_bac >= 0.05:
+        return "petite_chauffe"
+    return None
+
+
+def award_soiree_badge_if_eligible(user_id: int, session_id: int) -> str | None:
+    """Calcule et enregistre le badge de soirée pour une session terminée.
+    Idempotent : si un badge existe déjà pour cette session, ne fait rien.
+    Retourne le badge_key attribué (ou None si pas éligible)."""
+    # Si déjà enregistré, skip
+    existing = _fetchone(
+        "SELECT badge_key FROM soiree_badges WHERE session_id=?",
+        [session_id]
+    )
+    if existing:
+        return existing.get("badge_key")
+
+    # Calcul du peak BAC depuis les drinks de la session
+    user = get_user(user_id)
+    if not user:
+        return None
+    drinks_rows = _fetchall(
+        "SELECT alc_grams, logged_at FROM drink_logs WHERE session_id=? ORDER BY logged_at",
+        [session_id]
+    )
+    if not drinks_rows:
+        return None
+
+    from core.widmark import total_bac as _total_bac
+    cumul = []
+    peak_bac = 0.0
+    for r in drinks_rows:
+        try:
+            t = datetime.fromisoformat(r["logged_at"]).replace(tzinfo=timezone.utc)
+        except Exception:
+            continue
+        cumul.append((r["alc_grams"], t))
+        b = _total_bac(cumul, user.get("weight_kg") or 70, user.get("gender", "homme"), t)
+        if b > peak_bac:
+            peak_bac = b
+
+    had_vomi = count_vomis_session(session_id) > 0
+    badge = _classify_soiree_badge(peak_bac, had_vomi)
+    if not badge:
+        return None
+
+    _execute(
+        "INSERT OR IGNORE INTO soiree_badges (user_id, session_id, badge_key, peak_bac, had_vomi) VALUES (?, ?, ?, ?, ?)",
+        [user_id, session_id, badge, round(peak_bac, 3), 1 if had_vomi else 0]
+    )
+    return badge
+
+
+def get_soiree_badges_counts(user_id: int) -> dict:
+    """Retourne {petite_chauffe: N, bleu_bite: N, cuite_monumentale: N, coma_ethylique: N}."""
+    rows = _fetchall(
+        "SELECT badge_key, COUNT(*) AS c FROM soiree_badges WHERE user_id=? GROUP BY badge_key",
+        [user_id]
+    )
+    counts = {
+        "petite_chauffe": 0,
+        "bleu_bite": 0,
+        "cuite_monumentale": 0,
+        "coma_ethylique": 0,
+    }
+    for r in rows:
+        k = r["badge_key"]
+        if k in counts:
+            counts[k] = int(r["c"] or 0)
+    return counts
 
 
 def get_active_session(user_id: int) -> dict | None:

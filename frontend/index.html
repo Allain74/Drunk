@@ -1137,8 +1137,9 @@
       <button class="picker-btn" onclick="quickDrink('suze')">Suze<span>4cl · 20%</span></button>
     </div>
   </div>
-  <div style="margin-top:4px">
-    <button class="db-action-btn" style="width:100%;padding:14px;font-size:1rem;font-weight:700;background:#ef444415;color:#ef4444;border-color:#ef444440" onclick="undoDrink()">↩️ Enlever le dernier verre</button>
+  <div style="margin-top:4px;display:grid;grid-template-columns:1fr 1fr;gap:8px">
+    <button class="db-action-btn" style="padding:14px;font-size:0.95rem;font-weight:700;background:#84cc1615;color:#65a30d;border-color:#84cc1640" onclick="logVomi()">🤮 Vomi</button>
+    <button class="db-action-btn" style="padding:14px;font-size:0.95rem;font-weight:700;background:#ef444415;color:#ef4444;border-color:#ef444440" onclick="undoDrink()">↩️ Annuler verre</button>
   </div>
 
   <!-- Jeux -->
@@ -1983,7 +1984,7 @@
       <div class="stats">
         <div class="stat"><div class="stat-val">${u.nb_drinks}</div><div class="stat-lbl">verre(s)</div></div>
         <div class="stat"><div class="stat-val">${u.sober_in_h}h</div><div class="stat-lbl">sobre dans</div></div>
-        ${u.max_bac > 0 ? `<div class="stat"><div class="stat-val" style="color:#f97316">${u.max_bac}</div><div class="stat-lbl">record g/L</div></div>` : ''}
+        ${(u.vomis || 0) > 0 ? `<div class="stat"><div class="stat-val" style="color:#65a30d">${u.vomis}</div><div class="stat-lbl">🤮 vomi${u.vomis > 1 ? 's' : ''}</div></div>` : (u.max_bac > 0 ? `<div class="stat"><div class="stat-val" style="color:#f97316">${u.max_bac}</div><div class="stat-lbl">record g/L</div></div>` : '')}
       </div>
     </div>`;
   }
@@ -2156,6 +2157,31 @@
         }
       }
 
+      // Bloc badges de soirée (les 4 badges fixes avec leurs counts)
+      let soireeBlock = '';
+      if (gameInfo && gameInfo.soiree_badges) {
+        const sb = gameInfo.soiree_badges;
+        const vomisT = gameInfo.vomis_total || 0;
+        const totalSoirees = (sb.petite_chauffe || 0) + (sb.bleu_bite || 0) + (sb.cuite_monumentale || 0) + (sb.coma_ethylique || 0);
+        if (totalSoirees > 0 || vomisT > 0) {
+          soireeBlock = `
+            <div style="margin:14px 0">
+              <div style="font-size:0.7rem;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;text-align:center">🌃 Soirées (${totalSoirees})</div>
+              <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">
+                ${SOIREE_BADGES_META.map(b => {
+                  const c = sb[b.key] || 0;
+                  const active = c > 0;
+                  return `<div title="${esc(b.desc)}" style="text-align:center;padding:6px 2px;border-radius:8px;background:${active ? 'rgba(168,85,247,0.10)' : 'var(--bg)'};border:1px solid ${active ? 'rgba(168,85,247,0.35)' : 'var(--border)'};opacity:${active ? 1 : 0.4}">
+                    <div style="font-size:1.2rem">${b.emoji}</div>
+                    <div style="font-size:0.78rem;font-weight:800;color:${active ? '#a855f7' : 'var(--sub)'}">×${c}</div>
+                  </div>`;
+                }).join('')}
+              </div>
+              ${vomisT > 0 ? `<div style="text-align:center;font-size:0.75rem;color:var(--sub);margin-top:6px">🤮 ${vomisT} vomi${vomisT > 1 ? 's' : ''} au total</div>` : ''}
+            </div>`;
+        }
+      }
+
       document.getElementById('modal4-title').innerHTML = nameHtml;
       document.getElementById('modal4-content').innerHTML = `
         <div style="text-align:center;margin-bottom:10px">
@@ -2165,6 +2191,7 @@
         </div>
         ${body}
         ${badgesBlock}
+        ${soireeBlock}
       `;
     };
 
@@ -2198,6 +2225,8 @@
         streak: p.streak,
         badges,
         badges_unlocked_count: unlocked.size,
+        soiree_badges: p.soiree_badges,
+        vomis_total: p.vomis_total,
       };
 
       renderModal(userCoins, socialInfo, sessionDrinks, gameInfo);
@@ -2898,6 +2927,40 @@
     }</div>`;
   }
 
+  // Badges de soirée : 4 badges fixes avec leur compte
+  const SOIREE_BADGES_META = [
+    { key: 'petite_chauffe',     emoji: '🥴', name: 'Petite chauffe',     desc: 'TAC max 0.05-1 g/L' },
+    { key: 'bleu_bite',          emoji: '🍻', name: 'Bleu bite',          desc: 'TAC max 1.01-2 g/L' },
+    { key: 'cuite_monumentale',  emoji: '🤮', name: 'Cuite monumentale',  desc: 'TAC max 2.01-3 g/L OU vomi' },
+    { key: 'coma_ethylique',     emoji: '💀', name: 'Coma éthylique',     desc: 'TAC max > 3 g/L' },
+  ];
+
+  function _renderSoireeBadges(counts, vomisTotal, containerId = 'profil-soiree-badges') {
+    const box = document.getElementById(containerId);
+    if (!box) return;
+    counts = counts || {};
+    const totalSoirees = Object.values(counts).reduce((a, b) => a + (b || 0), 0);
+    const vomiLine = (typeof vomisTotal === 'number')
+      ? `<div style="text-align:center;font-size:0.78rem;color:var(--sub);margin-top:10px">🤮 <strong>${vomisTotal}</strong> vomi${vomisTotal > 1 ? 's' : ''} au total</div>`
+      : '';
+    box.innerHTML = `
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">
+        ${SOIREE_BADGES_META.map(b => {
+          const count = counts[b.key] || 0;
+          const active = count > 0;
+          return `<div title="${esc(b.desc)}"
+                       style="text-align:center;padding:10px 4px;border-radius:10px;background:${active ? 'rgba(168,85,247,0.10)' : 'var(--bg)'};border:1px solid ${active ? 'rgba(168,85,247,0.35)' : 'var(--border)'};opacity:${active ? 1 : 0.45}">
+            <div style="font-size:1.6rem;line-height:1">${b.emoji}</div>
+            <div style="font-size:0.65rem;font-weight:700;margin-top:4px;line-height:1.2">${esc(b.name)}</div>
+            <div style="font-size:0.95rem;font-weight:900;color:${active ? '#a855f7' : 'var(--sub)'};margin-top:3px">×${count}</div>
+          </div>`;
+        }).join('')}
+      </div>
+      <div style="text-align:center;font-size:0.7rem;color:var(--sub);margin-top:8px;text-transform:uppercase;letter-spacing:1px">${totalSoirees} soirée${totalSoirees > 1 ? 's' : ''} compté${totalSoirees > 1 ? 'es' : 'e'}</div>
+      ${vomiLine}
+    `;
+  }
+
   let _refCount = 0;
   function _renderRefSection(me) {
     _refCount = me.referrals_count || 0;
@@ -3066,6 +3129,12 @@
               <div style="color:var(--sub);font-size:0.85rem;text-align:center;padding:8px 0">Chargement…</div>
             </div>
           </div>
+          <div class="p-card">
+            <div class="p-card-label">🌃 Badges de soirée</div>
+            <div id="profil-soiree-badges">
+              <div style="color:var(--sub);font-size:0.85rem;text-align:center;padding:8px 0">Chargement…</div>
+            </div>
+          </div>
           <button class="p-action-btn" style="background:linear-gradient(135deg,#1e1b4b,#581c87);color:white;font-weight:800" onclick="openRecap()">📊 Mon récap de soirée</button>
         </div>
 
@@ -3220,6 +3289,7 @@
         }
         _renderLevelCard(meData);
         _renderRefSection(meData);
+        _renderSoireeBadges(meData.soiree_badges, meData.vomis_total);
         // Toggle mode discret
         const tgl = document.getElementById('profil-discreet-toggle');
         const sld = document.getElementById('profil-discreet-slider');
@@ -4951,6 +5021,7 @@
             _meCache = d;
             _refCount = d.referrals_count || 0;
             if (document.getElementById('profil-level-content')) _renderLevelCard(d);
+            if (document.getElementById('profil-soiree-badges')) _renderSoireeBadges(d.soiree_badges, d.vomis_total);
           }
         }],
         ['/alltime', d => {
@@ -5275,6 +5346,20 @@
       _drinkButtonsDisabled(false);
       showToast('❌ Erreur réseau — verre non enregistré');
     });
+  }
+
+  function logVomi() {
+    if (!myTid) { showTab('profil'); return; }
+    if (!confirm("🤮 T'as gerbé ? On enregistre le vomi (visible classement + badge soirée).")) return;
+    // Optimistic UI
+    showToast('🤮 Vomi enregistré — ça envoie !');
+    fetch(`${API}/vomi`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ telegram_id: myTid }),
+    }).then(r => r.json()).then(data => {
+      if (!data.ok) showToast('❌ ' + (data.error || 'Erreur'));
+    }).catch(() => showToast('❌ Erreur réseau'));
   }
 
   function undoDrink() {
