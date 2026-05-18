@@ -5337,7 +5337,7 @@
   }
 
   // Cooldown 30s entre verres (anti double-clic + anti-spam)
-  const DRINK_COOLDOWN_MS = 30_000;
+  const DRINK_COOLDOWN_MS = 500;  // juste anti double-tap accidentel
   let _lastDrinkAt = 0;
 
   function _drinkButtonsDisabled(disabled) {
@@ -5358,8 +5358,9 @@
       openPastTimeModal(drinkKey);
       return;
     }
-    // Garde anti double-clic (~1.5s)
-    if (elapsed < 1500) return;
+    // Anti double-tap accidentel : 500ms invisible (juste pour éviter
+    // d'enregistrer 2 fois le même verre au tap mobile)
+    if (elapsed < DRINK_COOLDOWN_MS) return;
     _lastDrinkAt = now;
     _drinkButtonsDisabled(true);
     setTimeout(() => _drinkButtonsDisabled(false), DRINK_COOLDOWN_MS);

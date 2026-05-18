@@ -2571,11 +2571,9 @@ async def log_drink_web(request: Request):
             return {"ok": False, "error": "Heure invalide"}
     else:
         drink_ts = real_now
-        # Cooldown 30s (uniquement pour les verres en temps réel)
-        last_dt = _last_drink_at.get(telegram_id)
-        if last_dt and (real_now - last_dt).total_seconds() < 30:
-            remaining = int(30 - (real_now - last_dt).total_seconds()) + 1
-            return {"ok": False, "error": f"Attends encore {remaining}s avant le prochain verre"}
+        # Cooldown supprimé : l'utilisateur peut logger autant de verres
+        # qu'il veut sans délai bloquant (le double-tap accidentel est
+        # géré côté frontend par DRINK_COOLDOWN_MS=500ms).
     # now_ts est conservé pour la compat avec le reste du code (heure du verre)
     now_ts = drink_ts
 
