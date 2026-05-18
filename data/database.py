@@ -49,9 +49,13 @@ def _pipeline(statements: list[tuple[str, list]]) -> list[dict]:
         headers={"Authorization": f"Bearer {TURSO_TOKEN}"},
     )
     if not r.is_success:
-        raise Exception(f"Turso {r.status_code}: {r.text}")
+        err_text = r.text
+        r.close()
+        raise Exception(f"Turso {r.status_code}: {err_text}")
+    response_json = r.json()
+    r.close()  # Libère explicitement la connexion (combat le memory leak)
     parsed = []
-    for res in r.json()["results"]:
+    for res in response_json["results"]:
         if res["type"] == "error":
             raise Exception(res["error"]["message"])
         if res["type"] == "ok" and res["response"]["type"] == "execute":

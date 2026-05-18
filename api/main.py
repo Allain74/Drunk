@@ -227,9 +227,15 @@ def _take_diag_snapshot() -> dict:
 
 
 async def _diag_loop():
-    """Coroutine qui prend un snapshot toutes les 60s et le logge."""
+    """Coroutine qui prend un snapshot toutes les 60s et le logge.
+    Déclenche aussi un gc.collect() périodique pour combattre le memory leak
+    progressif identifié dans les logs (RAM monte de ~12 MB/h)."""
+    import gc as _gc
+    import os as _os
+    iteration = 0
     while True:
         await asyncio.sleep(60)
+        iteration += 1
         try:
             snap = _take_diag_snapshot()
             _diag_snapshots.append(snap)
@@ -245,6 +251,31 @@ async def _diag_loop():
                 f"drunk_notif={snap.get('drunk_follower_notified')}"
             )
             print(f"[DIAG] {short}")
+
+            ram = snap.get("ram_mb", 0)
+            # gc.collect() toutes les 5 min pour libérer les objets cycliques
+            # que le ref counting ne libère pas tout seul.
+            if iteration % 5 == 0:
+                collected = _gc.collect()
+                snap_after = _take_diag_snapshot()
+                ram_after = snap_after.get("ram_mb", 0)
+                freed = ram - ram_after
+                if freed > 1:
+                    print(f"[GC] collected={collected} objects, freed={freed:.1f}MB")
+
+            # Si RAM > 400 MB, force gc + log alerte. Si > 450 MB, restart
+            # propre AVANT que le kernel OOM kill (qui perd les tasks en cours).
+            if ram > 450:
+                print(f"[MEMORY] ALERTE CRITIQUE {ram}MB > 450MB, force restart propre")
+                # Petit délai pour que le log soit envoyé
+                await asyncio.sleep(2)
+                _os._exit(1)
+            elif ram > 400:
+                print(f"[MEMORY] ALERTE {ram}MB > 400MB, gc.collect() force")
+                _gc.collect()
+                # Log les stats GC pour identifier ce qui s'accumule
+                stats = _gc.get_stats()
+                print(f"[MEMORY] gc stats: {stats}")
         except Exception as e:
             print(f"[DIAG] erreur snapshot : {e}")
 
