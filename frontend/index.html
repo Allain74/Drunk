@@ -1323,8 +1323,9 @@
 <!-- ── Modal "Heure réelle du verre" (rattrapage d'un verre oublié) ── -->
 <div id="modal-bg-pasttime" onclick="if(event.target===this)closePastTimeModal()" style="display:none;position:fixed;inset:0;background:#0009;z-index:3600;align-items:center;justify-content:center;padding:16px">
   <div onclick="event.stopPropagation()" style="background:var(--card);color:var(--text);border-radius:20px;max-width:380px;width:100%;padding:24px 20px;box-shadow:0 20px 60px #0008">
-    <div style="text-align:center;font-size:2.4rem;line-height:1;margin-bottom:8px">⏰</div>
-    <div style="text-align:center;font-size:1.15rem;font-weight:800;margin-bottom:14px">Ce verre a été bu il y a combien de temps ?</div>
+    <div style="text-align:center;font-size:2.4rem;line-height:1;margin-bottom:8px">🍻</div>
+    <div style="text-align:center;font-size:1.15rem;font-weight:800;margin-bottom:6px">Ce verre, tu l'as bu quand ?</div>
+    <div style="text-align:center;font-size:0.82rem;color:var(--sub);margin-bottom:14px">Pour que le calcul du TAC soit juste</div>
     <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px">
       <button onclick="confirmPastDrink(0)"   class="past-time-btn" style="grid-column:span 2;background:linear-gradient(135deg,#22c55e,#16a34a)">⚡ Maintenant</button>
       <button onclick="confirmPastDrink(15)"  class="past-time-btn">Il y a 15 min</button>
@@ -5350,21 +5351,11 @@
   function quickDrink(drinkKey) {
     if (!myTid) { showTab('profil'); return; }
     const now = Date.now();
-    const elapsed = now - _lastDrinkAt;
-    // Si dernier verre < 5 min : l'user a probablement oublié un verre
-    // précédent. On ouvre un modal pour qu'il saisisse l'heure RÉELLE de
-    // ce verre (dans le passé jusqu'à 6h).
-    if (_lastDrinkAt > 0 && elapsed < 5 * 60 * 1000) {
-      openPastTimeModal(drinkKey);
-      return;
-    }
-    // Anti double-tap accidentel : 500ms invisible (juste pour éviter
-    // d'enregistrer 2 fois le même verre au tap mobile)
-    if (elapsed < DRINK_COOLDOWN_MS) return;
-    _lastDrinkAt = now;
-    _drinkButtonsDisabled(true);
-    setTimeout(() => _drinkButtonsDisabled(false), DRINK_COOLDOWN_MS);
-    _doLogDrink(drinkKey, null);
+    // Anti double-tap accidentel : 500ms invisible
+    if (now - _lastDrinkAt < DRINK_COOLDOWN_MS) return;
+    // À CHAQUE verre, on ouvre la popup pour que l'user puisse préciser
+    // quand il a vraiment bu : maintenant ou il y a X temps (verre oublié).
+    openPastTimeModal(drinkKey);
   }
 
   let _pendingPastDrinkKey = null;
