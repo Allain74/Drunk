@@ -1072,6 +1072,51 @@ def _check_admin(caller_id, secret: str | None = None) -> bool:
     return True
 
 
+@app.post("/admin/reset-soiree-badges")
+async def admin_reset_soiree_badges(request: Request):
+    """Efface TOUS les badges de soirée d'un user (et invalide ses caches)."""
+    body = await request.json()
+    target_id = int(body.get("target_id", 0))
+    if not target_id:
+        return {"ok": False, "error": "target_id requis"}
+    _execute("DELETE FROM soiree_badges WHERE user_id=?", [target_id])
+    _invalidate_cache(f"me:{target_id}", f"profile:{target_id}")
+    return {"ok": True}
+
+
+@app.post("/admin/remove-soiree-badge")
+async def admin_remove_soiree_badge(request: Request):
+    """Efface tous les badges d'un type spécifique pour un user.
+    body: {target_id, badge_key}"""
+    body = await request.json()
+    target_id = int(body.get("target_id", 0))
+    badge_key = body.get("badge_key", "")
+    if not target_id or not badge_key:
+        return {"ok": False, "error": "target_id et badge_key requis"}
+    _execute(
+        "DELETE FROM soiree_badges WHERE user_id=? AND badge_key=?",
+        [target_id, badge_key]
+    )
+    _invalidate_cache(f"me:{target_id}", f"profile:{target_id}")
+    return {"ok": True}
+
+
+@app.post("/admin/reset-max-bac")
+async def admin_reset_max_bac(request: Request):
+    """Remet à 0 le record all-time max_bac d'un user."""
+    body = await request.json()
+    target_id = int(body.get("target_id", 0))
+    if not target_id:
+        return {"ok": False, "error": "target_id requis"}
+    _execute("UPDATE users SET max_bac=0 WHERE user_id=?", [target_id])
+    _invalidate_cache(
+        "snapshot", "alltime_cache",
+        f"me:{target_id}", f"records:{target_id}", f"profile:{target_id}",
+    )
+    _invalidate_alltime_cache()
+    return {"ok": True}
+
+
 @app.get("/admin/soiree-badges-by-user")
 def admin_soiree_badges_by_user():
     """Liste qui a obtenu quels badges de soirée (pour debug/curiosité)."""

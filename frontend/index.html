@@ -2930,11 +2930,33 @@
 
   // Badges de soirée : 4 badges fixes avec leur compte
   const SOIREE_BADGES_META = [
-    { key: 'petite_chauffe',     emoji: '🥴', name: 'Petite chauffe',     desc: 'TAC max 0.05-1 g/L' },
-    { key: 'bleu_bite',          emoji: '🍻', name: 'Bleu bite',          desc: 'TAC max 1.01-2 g/L' },
-    { key: 'cuite_monumentale',  emoji: '🤮', name: 'Cuite monumentale',  desc: 'TAC max 2.01-3 g/L OU vomi' },
-    { key: 'coma_ethylique',     emoji: '💀', name: 'Coma éthylique',     desc: 'TAC max > 3 g/L' },
+    { key: 'petite_chauffe',     emoji: '🥴', name: 'Petite chauffe',     desc: 'Pic d\'alcool entre 0.05 et 1 g/L sur la soirée' },
+    { key: 'bleu_bite',          emoji: '🍻', name: 'Bleu bite',          desc: 'Pic d\'alcool entre 1.01 et 2 g/L sur la soirée' },
+    { key: 'cuite_monumentale',  emoji: '🤮', name: 'Cuite monumentale',  desc: 'Pic d\'alcool entre 2.01 et 3 g/L, OU au moins un vomi enregistré' },
+    { key: 'coma_ethylique',     emoji: '💀', name: 'Coma éthylique',     desc: 'Pic d\'alcool supérieur à 3 g/L sur la soirée (légendaire ou inquiétant)' },
   ];
+
+  function showSoireeBadgeInfo(key, count) {
+    const b = SOIREE_BADGES_META.find(x => x.key === key);
+    if (!b) return;
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:#0009;z-index:4000;display:flex;align-items:center;justify-content:center;padding:20px';
+    overlay.onclick = () => overlay.remove();
+    const box = document.createElement('div');
+    box.style.cssText = 'background:linear-gradient(135deg,#1e1b4b,#581c87);color:white;border-radius:20px;max-width:340px;width:100%;padding:28px 22px;text-align:center;box-shadow:0 20px 60px #0008';
+    box.onclick = e => e.stopPropagation();
+    box.innerHTML = `
+      <div style="font-size:4rem;line-height:1;margin-bottom:12px">${b.emoji}</div>
+      <div style="font-size:1.4rem;font-weight:900;margin-bottom:6px">${esc(b.name)}</div>
+      <div style="font-size:0.92rem;opacity:0.85;margin-bottom:18px;line-height:1.4">${esc(b.desc)}</div>
+      <div style="display:inline-block;padding:8px 16px;border-radius:12px;background:rgba(255,255,255,0.12);font-size:0.95rem;font-weight:700">
+        Obtenu <strong style="color:#fde047">${count}</strong> fois
+      </div>
+      <div style="margin-top:18px;font-size:0.78rem;opacity:0.6">Touche pour fermer</div>
+    `;
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+  }
 
   function _renderSoireeBadges(counts, vomisTotal, containerId = 'profil-soiree-badges') {
     const box = document.getElementById(containerId);
@@ -2949,8 +2971,8 @@
         ${SOIREE_BADGES_META.map(b => {
           const count = counts[b.key] || 0;
           const active = count > 0;
-          return `<div title="${esc(b.desc)}"
-                       style="text-align:center;padding:10px 4px;border-radius:10px;background:${active ? 'rgba(168,85,247,0.10)' : 'var(--bg)'};border:1px solid ${active ? 'rgba(168,85,247,0.35)' : 'var(--border)'};opacity:${active ? 1 : 0.45}">
+          return `<div onclick="showSoireeBadgeInfo('${b.key}', ${count})"
+                       style="text-align:center;padding:10px 4px;border-radius:10px;background:${active ? 'rgba(168,85,247,0.10)' : 'var(--bg)'};border:1px solid ${active ? 'rgba(168,85,247,0.35)' : 'var(--border)'};opacity:${active ? 1 : 0.45};cursor:pointer">
             <div style="font-size:1.6rem;line-height:1">${b.emoji}</div>
             <div style="font-size:0.65rem;font-weight:700;margin-top:4px;line-height:1.2">${esc(b.name)}</div>
             <div style="font-size:0.95rem;font-weight:900;color:${active ? '#a855f7' : 'var(--sub)'};margin-top:3px">×${count}</div>
