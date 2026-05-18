@@ -2038,6 +2038,34 @@
   // ── Profile modal ──
   let _profileUsername = '';
   let _profileGen = 0;
+  // Cache mémoire des /profile/{tid} pour affichage instantané au re-open
+  // (stale-while-revalidate : on affiche le cache puis on re-fetch en background).
+  const _profileCache = {};
+
+  // Rendu du profil à partir des données /profile/{tid}. Factorisé pour
+  // pouvoir rendre depuis le cache instantanément OU depuis le fetch frais.
+  function _renderProfileFromData(p, renderModal, hideSocial) {
+    const userCoins = (typeof p.coins === 'number') ? p.coins : null;
+    const socialInfo = hideSocial ? null : {
+      following: (p.following || []).map(u => u.user_id || u.telegram_id).filter(Boolean),
+      followers: (p.followers || []).map(u => u.user_id || u.telegram_id).filter(Boolean),
+    };
+    const sessionDrinks = p.session_drinks || [];
+    const unlocked = new Set(p.badges_unlocked || []);
+    let badges = [];
+    if (_allBadgesMeta && _allBadgesMeta.length) {
+      badges = _allBadgesMeta.map(b => ({...b, unlocked: unlocked.has(b.key)}));
+    }
+    const gameInfo = {
+      level: p.level,
+      streak: p.streak,
+      badges,
+      badges_unlocked_count: unlocked.size,
+      soiree_badges: p.soiree_badges,
+      vomis_total: p.vomis_total,
+    };
+    renderModal(userCoins, socialInfo, sessionDrinks, gameInfo);
+  }
   let _profileHideSocial = false;
 
   async function openProfile(username, hideSocial = false) {
@@ -2061,7 +2089,10 @@
     const lvl   = snapshotUser ? level(snapshotUser.bac) : 0;
     const color = COLORS[lvl];
 
-    await loadAvatars();
+    // Pas de await sur loadAvatars : la modale s'ouvre immédiatement avec
+    // les avatars déjà en cache. Si les nouveaux avatars arrivent après,
+    // le render des cards Live les utilisera à la prochaine update WS.
+    loadAvatars();
     const initLetter    = (username || '?')[0].toUpperCase();
     const profileUser   = allUsers.find(x => x.telegram_id === tid);
     const profileGender = profileUser?.gender || 'homme';
@@ -2227,60 +2258,42 @@
       `;
     };
 
-    renderModal(null, null, isActive ? null : [], null);
+    // Premier rendu : si on a un cache mémoire pour ce tid, on l'utilise
+    // direct pour un affichage instantané (stale-while-revalidate).
+    const cached = tid ? _profileCache[tid] : null;
+    if (cached) {
+      _renderProfileFromData(cached, renderModal, hideSocial);
+    } else {
+      renderModal(null, null, isActive ? null : [], null);
+    }
     document.getElementById('modal-bg4').classList.add('open');
 
     if (!tid) return;
-    // UN SEUL fetch /profile/{tid} qui agrège tout (au lieu de 6 round-trips).
+    // Fetch /profile/{tid} en background (le cache 15s côté backend assure
+    // une réponse rapide si on a déjà chargé récemment).
     try {
       const p = await fetch(`${API}/profile/${tid}`).then(r => r.json());
       if (_profileGen !== gen) return;
-      if (!p || !p.ok) { renderModal(null, null, [], null); return; }
+      if (!p || !p.ok) { if (!cached) renderModal(null, null, [], null); return; }
+      // Met en cache pour le prochain open instantané
+      _profileCache[tid] = p;
 
-      const userCoins = (typeof p.coins === 'number') ? p.coins : null;
-      const socialInfo = hideSocial ? null : {
-        following: (p.following || []).map(u => u.user_id || u.telegram_id).filter(Boolean),
-        followers: (p.followers || []).map(u => u.user_id || u.telegram_id).filter(Boolean),
-      };
-      const sessionDrinks = p.session_drinks || [];
-      // Construit les badges avec emoji/desc depuis le mapping côté frontend
-      const unlocked = new Set(p.badges_unlocked || []);
-      // Pour afficher au moins les 6 derniers, on doit avoir les meta des badges.
-      // On va piocher dans une variable globale `_allBadgesMeta` si elle existe,
-      // sinon faire un fetch unique et cacher.
-      let badges = [];
-      if (_allBadgesMeta && _allBadgesMeta.length) {
-        badges = _allBadgesMeta.map(b => ({...b, unlocked: unlocked.has(b.key)}));
-      }
-      const gameInfo = {
-        level: p.level,
-        streak: p.streak,
-        badges,
-        badges_unlocked_count: unlocked.size,
-        soiree_badges: p.soiree_badges,
-        vomis_total: p.vomis_total,
-      };
-
-      renderModal(userCoins, socialInfo, sessionDrinks, gameInfo);
+      _renderProfileFromData(p, renderModal, hideSocial);
 
       // Si on n'a pas encore les metadata badges, on les fetch en background une seule fois
       if (!_allBadgesMeta || !_allBadgesMeta.length) {
         fetch(`${API}/badges/${tid}`).then(r => r.json()).then(d => {
           if (Array.isArray(d)) {
-            // d est [{key, name, emoji, desc, unlocked: bool}]. On garde la meta sans le unlocked.
             _allBadgesMeta = d.map(b => ({key: b.key, name: b.name, emoji: b.emoji, desc: b.desc}));
             // Re-render si on est encore sur le même profil
             if (_profileGen === gen) {
-              const refreshed = _allBadgesMeta.map(b => ({...b, unlocked: unlocked.has(b.key)}));
-              renderModal(userCoins, socialInfo, sessionDrinks, {
-                ...gameInfo, badges: refreshed,
-              });
+              _renderProfileFromData(p, renderModal, hideSocial);
             }
           }
         }).catch(() => {});
       }
     } catch(e) {
-      renderModal(null, null, [], null);
+      if (!cached) renderModal(null, null, [], null);
     }
   }
 
