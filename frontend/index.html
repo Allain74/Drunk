@@ -3897,7 +3897,7 @@
       return _rankCard({
         pos: i+1, username: u.username, isAdm,
         mainVal: doses, mainLbl: "doses d'alcool", subTxt,
-        onClick: `openModal2('${esc(u.username)}')`,
+        onClick: `openProfile('${esc(u.username)}',true)`,
       });
     }).join('');
   }
@@ -4052,7 +4052,7 @@
       return _rankCard({
         pos: i+1, username: u.username, isAdm,
         mainVal: '🪙 ' + u.coins, mainLbl: '',
-        onClick: `openModal3('${esc(u.username)}')`,
+        onClick: `openProfile('${esc(u.username)}',true)`,
       });
     }).join('');
   }
@@ -4098,6 +4098,7 @@
         pos: i+1, username: u.username, isAdm,
         mainVal: netStr, mainLbl: 'net',
         subTxt: `${u.played} parties · ${winPct}% wins · ${u.won}V/${u.lost}D`,
+        onClick: `openProfile('${esc(u.username)}',true)`,
       });
     }).join('');
   }
@@ -4141,6 +4142,7 @@
         pos: i+1, username: u.username, isAdm,
         mainVal: netStr + ' 🪙', mainLbl: 'net',
         subTxt: `${u.played} paris · ${winPct}% wins`,
+        onClick: `openProfile('${esc(u.username)}',true)`,
       });
     }).join('');
   }
