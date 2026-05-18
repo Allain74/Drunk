@@ -2203,7 +2203,7 @@
                 ${SOIREE_BADGES_META.map(b => {
                   const c = sb[b.key] || 0;
                   const active = c > 0;
-                  return `<div title="${esc(b.desc)}" style="text-align:center;padding:6px 2px;border-radius:8px;background:${active ? 'rgba(168,85,247,0.10)' : 'var(--bg)'};border:1px solid ${active ? 'rgba(168,85,247,0.35)' : 'var(--border)'};opacity:${active ? 1 : 0.4}">
+                  return `<div onclick="event.stopPropagation();showSoireeBadgeInfo('${b.key}', ${c})" style="text-align:center;padding:6px 2px;border-radius:8px;background:${active ? 'rgba(168,85,247,0.10)' : 'var(--bg)'};border:1px solid ${active ? 'rgba(168,85,247,0.35)' : 'var(--border)'};opacity:${active ? 1 : 0.4};cursor:pointer">
                     <div style="font-size:1.2rem">${b.emoji}</div>
                     <div style="font-size:0.78rem;font-weight:800;color:${active ? '#a855f7' : 'var(--sub)'}">×${c}</div>
                   </div>`;
