@@ -350,6 +350,14 @@ async def lifespan(app: FastAPI):
         print(f"[startup] Streaks recalculés pour {n} users")
     except Exception as e:
         print(f"[startup] recalc_all_streaks erreur (non-critique) : {e}")
+    # Backfill rétroactif des badges de soirée pour toutes les sessions
+    # déjà fermées (one-shot la première fois, idempotent ensuite).
+    try:
+        from data.database import backfill_soiree_badges
+        result = backfill_soiree_badges()
+        print(f"[startup] Soirée badges backfill : {result}")
+    except Exception as e:
+        print(f"[startup] backfill_soiree_badges erreur : {e}")
 
     from bot.bot import create_application
     _bot_app = create_application()
@@ -1062,6 +1070,20 @@ def _check_admin(caller_id, secret: str | None = None) -> bool:
     if expected:
         return secret == expected
     return True
+
+
+@app.post("/admin/backfill-soiree-badges")
+async def admin_backfill_soiree_badges(request: Request):
+    """Force le calcul des badges de soirée pour TOUTES les sessions fermées
+    dans l'historique. Idempotent : ne crée pas de doublons. Skip les sessions
+    encore actives (peak peut encore monter)."""
+    from data.database import backfill_soiree_badges
+    result = backfill_soiree_badges()
+    # Invalide les caches /me et /profile pour refléter les nouveaux badges
+    for key in list(_endpoint_cache.keys()):
+        if key.startswith("me:") or key.startswith("profile:"):
+            _endpoint_cache.pop(key, None)
+    return {"ok": True, **result}
 
 
 @app.post("/admin/recalc-streaks")

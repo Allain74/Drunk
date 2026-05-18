@@ -1984,7 +1984,8 @@
       <div class="stats">
         <div class="stat"><div class="stat-val">${u.nb_drinks}</div><div class="stat-lbl">verre(s)</div></div>
         <div class="stat"><div class="stat-val">${u.sober_in_h}h</div><div class="stat-lbl">sobre dans</div></div>
-        ${(u.vomis || 0) > 0 ? `<div class="stat"><div class="stat-val" style="color:#65a30d">${u.vomis}</div><div class="stat-lbl">🤮 vomi${u.vomis > 1 ? 's' : ''}</div></div>` : (u.max_bac > 0 ? `<div class="stat"><div class="stat-val" style="color:#f97316">${u.max_bac}</div><div class="stat-lbl">record g/L</div></div>` : '')}
+        ${u.max_bac > 0 ? `<div class="stat"><div class="stat-val" style="color:#f97316">${u.max_bac}</div><div class="stat-lbl">record g/L</div></div>` : ''}
+        ${(u.vomis || 0) > 0 ? `<div class="stat"><div class="stat-val" style="color:#65a30d">${u.vomis}</div><div class="stat-lbl">🤮 vomi${u.vomis > 1 ? 's' : ''}</div></div>` : ''}
       </div>
     </div>`;
   }

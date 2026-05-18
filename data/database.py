@@ -621,6 +621,38 @@ def award_soiree_badge_if_eligible(user_id: int, session_id: int) -> str | None:
     return badge
 
 
+def backfill_soiree_badges() -> dict:
+    """Parcourt toutes les sessions FERMÉES de la DB et calcule rétroactivement
+    le badge de soirée pour chacune (si pas déjà fait). Skip les sessions
+    encore actives (le peak peut encore monter). Idempotent — chaque session
+    ne reçoit jamais 2 badges grâce à la contrainte UNIQUE.
+    Renvoie {sessions_scannees, badges_awarded, par_badge}."""
+    # Inclut aussi les sessions active=1 dont le dernier drink est > 6h
+    # (techniquement actives en DB mais soirée finie côté logique app).
+    rows = _fetchall("""
+        SELECT s.id, s.user_id, s.active,
+               (SELECT MAX(logged_at) FROM drink_logs dl WHERE dl.session_id=s.id) AS last_drink
+        FROM sessions s
+    """)
+    now_ts = datetime.now(timezone.utc).timestamp()
+    awarded = 0
+    by_badge = {"petite_chauffe": 0, "bleu_bite": 0, "cuite_monumentale": 0, "coma_ethylique": 0}
+    for r in rows:
+        try:
+            # Skip si session active ET dernier drink < 6h (soirée encore en cours)
+            if r.get("active") and r.get("last_drink"):
+                last_dt = datetime.fromisoformat(r["last_drink"]).replace(tzinfo=timezone.utc)
+                if (now_ts - last_dt.timestamp()) < 6 * 3600:
+                    continue
+            badge = award_soiree_badge_if_eligible(int(r["user_id"]), int(r["id"]))
+            if badge and badge in by_badge:
+                by_badge[badge] += 1
+                awarded += 1
+        except Exception:
+            continue
+    return {"sessions_scannees": len(rows), "badges_awarded": awarded, "par_badge": by_badge}
+
+
 def get_soiree_badges_counts(user_id: int) -> dict:
     """Retourne {petite_chauffe: N, bleu_bite: N, cuite_monumentale: N, coma_ethylique: N}."""
     rows = _fetchall(
