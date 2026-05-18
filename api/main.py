@@ -3424,8 +3424,8 @@ async def refuse_bet_web(request: Request):
 def get_profile(telegram_id: int):
     """Retourne le profil complet d'un utilisateur en un seul fetch :
     user info + level + streak + badges + followers + following + session drinks
-    + bj stats. Permet à openProfile() côté frontend de tout afficher
-    immédiatement au lieu de faire 6 round-trips parallèles."""
+    + bj stats + breakdown des drinks all-time + transactions récentes.
+    Permet à openProfile() côté frontend de tout afficher immédiatement."""
     user = get_user(telegram_id)
     if not user:
         return {"ok": False, "error": "Utilisateur introuvable"}
@@ -3438,6 +3438,22 @@ def get_profile(telegram_id: int):
     badges_unlocked = get_user_badges(telegram_id)
     streak  = get_streak(telegram_id)
     session_detail = get_session_drinks_detail(telegram_id)
+    # Breakdown all-time des drinks (top 20 par count décroissant)
+    breakdown_rows = _fetchall(
+        """SELECT drink_key, COUNT(*) AS c FROM drink_logs
+           WHERE user_id=? GROUP BY drink_key ORDER BY c DESC LIMIT 20""",
+        [telegram_id]
+    )
+    drinks_breakdown = [
+        {"drink_key": r["drink_key"], "count": int(r["c"])}
+        for r in breakdown_rows
+    ]
+    # Transactions récentes (10 dernières)
+    txs_rows = get_transactions(telegram_id, 10)
+    recent_transactions = [
+        {"amount": t["amount"], "reason": t["reason"], "at": t["created_at"]}
+        for t in txs_rows
+    ]
     return {
         "ok": True,
         "telegram_id":   uid,
@@ -3457,6 +3473,8 @@ def get_profile(telegram_id: int):
         "bj": bj,
         "soiree_badges": get_soiree_badges_counts(uid),
         "vomis_total": count_vomis_total(uid),
+        "drinks_breakdown": drinks_breakdown,
+        "recent_transactions": recent_transactions,
         **follows,
     }
 

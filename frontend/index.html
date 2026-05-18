@@ -2063,6 +2063,8 @@
       badges_unlocked_count: unlocked.size,
       soiree_badges: p.soiree_badges,
       vomis_total: p.vomis_total,
+      drinks_breakdown: p.drinks_breakdown || [],
+      recent_transactions: p.recent_transactions || [],
     };
     renderModal(userCoins, socialInfo, sessionDrinks, gameInfo);
   }
@@ -2245,6 +2247,49 @@
         }
       }
 
+      // Bloc breakdown drinks all-time (top 10)
+      let breakdownBlock = '';
+      const bd = gameInfo && gameInfo.drinks_breakdown;
+      if (Array.isArray(bd) && bd.length) {
+        const top = bd.slice(0, 10);
+        breakdownBlock = `
+          <div style="margin:14px 0">
+            <div style="font-size:0.7rem;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;text-align:center">🍻 Boissons préférées</div>
+            <div style="background:var(--bg);border-radius:12px;padding:10px;display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:0.85rem">
+              ${top.map(d => {
+                const nom = (window.DRINK_NAMES && window.DRINK_NAMES[d.drink_key]) || d.drink_key;
+                return `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 6px"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(nom)}</span><strong style="color:#6366f1;margin-left:6px">${d.count}×</strong></div>`;
+              }).join('')}
+            </div>
+          </div>`;
+      }
+
+      // Bloc transactions récentes (10 dernières)
+      let txsBlock = '';
+      const txs = gameInfo && gameInfo.recent_transactions;
+      if (Array.isArray(txs) && txs.length) {
+        txsBlock = `
+          <div style="margin:14px 0">
+            <div style="font-size:0.7rem;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;text-align:center">💸 Transactions récentes</div>
+            <div style="background:var(--bg);border-radius:12px;padding:8px 10px;font-size:0.82rem">
+              ${txs.map(t => {
+                const pos = (t.amount || 0) >= 0;
+                const sign = pos ? '+' : '';
+                const col = pos ? '#22c55e' : '#ef4444';
+                const d = _parseServerDate(t.at);
+                const fmt = d ? d.toLocaleString('fr-FR', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : '';
+                return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 4px;border-bottom:1px solid var(--border)">
+                  <div style="flex:1;min-width:0">
+                    <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(t.reason || '')}</div>
+                    <div style="font-size:0.7rem;color:var(--sub);margin-top:2px">${fmt}</div>
+                  </div>
+                  <div style="font-weight:800;color:${col};margin-left:8px;white-space:nowrap">${sign}${t.amount} 🪙</div>
+                </div>`;
+              }).join('')}
+            </div>
+          </div>`;
+      }
+
       document.getElementById('modal4-title').innerHTML = nameHtml;
       document.getElementById('modal4-content').innerHTML = `
         <div style="text-align:center;margin-bottom:10px">
@@ -2255,6 +2300,8 @@
         ${body}
         ${badgesBlock}
         ${soireeBlock}
+        ${breakdownBlock}
+        ${txsBlock}
       `;
     };
 
