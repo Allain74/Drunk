@@ -20,22 +20,35 @@ def bac_contribution(
     now: datetime | None = None,
 ) -> float:
     """
-    Contribution d'une boisson au TAC (g/L) à un instant donné.
-    Retourne 0 si l'alcool est déjà éliminé.
+    Contribution d'une boisson au TAC (g/L) à un instant donné, avec un
+    modèle d'absorption réaliste en 3 phases :
+      1) Pendant les ABSORPTION_DELAY premières minutes (~30 min) : le BAC
+         monte LINÉAIREMENT de 0 jusqu'au peak.
+      2) Au-delà : phase d'élimination à ELIMINATION_RATE g/L par heure.
+      3) Quand tout est éliminé : 0.
+
+    Avant cette version, le BAC montait instantanément au peak (irréaliste).
     """
     if now is None:
         now = datetime.now(timezone.utc)
 
+    if now < drink_time:
+        # Le verre n'a pas encore été bu (futur) : 0
+        return 0.0
+
     r = WIDMARK_R.get(gender, 0.68)
     hours_elapsed = (now - drink_time).total_seconds() / 3600
 
-    # Pic TAC apporté par cette boisson
+    # Peak TAC apporté par cette boisson (atteint après ABSORPTION_DELAY)
     peak = alc_grams / (weight_kg * r)
 
-    # L'élimination commence après la période d'absorption
-    hours_eliminating = max(0.0, hours_elapsed - ABSORPTION_DELAY)
-    eliminated = ELIMINATION_RATE * hours_eliminating
+    if hours_elapsed < ABSORPTION_DELAY:
+        # Phase 1 : absorption progressive (montée linéaire de 0 à peak)
+        return peak * (hours_elapsed / ABSORPTION_DELAY)
 
+    # Phase 2 : élimination après le peak
+    hours_eliminating = hours_elapsed - ABSORPTION_DELAY
+    eliminated = ELIMINATION_RATE * hours_eliminating
     return max(0.0, peak - eliminated)
 
 
