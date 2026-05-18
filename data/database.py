@@ -12,7 +12,11 @@ TURSO_TOKEN = os.environ.get("TURSO_AUTH_TOKEN", "")
 # connections, pool_timeout 5s) sature sous charge -> PoolTimeout exceptions
 # -> endpoints qui fail -> downs.
 _client = httpx.Client(
-    timeout=httpx.Timeout(20.0, connect=5.0, pool=30.0),
+    # Timeout court (4s) pour ne pas bloquer l'event loop quand Turso lag.
+    # 256 calls DB sync dans des async def -> chacun peut bloquer l'event
+    # loop pendant la duree du call. Avec 4s max, le blocage est limite et
+    # Render n'a pas le temps de timeout son health check (30s).
+    timeout=httpx.Timeout(4.0, connect=3.0, pool=5.0),
     limits=httpx.Limits(
         max_connections=50,
         max_keepalive_connections=30,
@@ -43,17 +47,30 @@ def _pipeline(statements: list[tuple[str, list]]) -> list[dict]:
         for sql, args in statements
     ]
     requests.append({"type": "close"})
-    r = _client.post(
-        f"{TURSO_URL}/v2/pipeline",
-        json={"requests": requests},
-        headers={"Authorization": f"Bearer {TURSO_TOKEN}"},
-    )
-    if not r.is_success:
-        err_text = r.text
-        r.close()
-        raise Exception(f"Turso {r.status_code}: {err_text}")
-    response_json = r.json()
-    r.close()  # Libère explicitement la connexion (combat le memory leak)
+    # 2 tentatives max. Si Turso lag (timeout 4s), on retry une fois.
+    # Sans ça, un seul glitch réseau plante toute une requête API.
+    last_err = None
+    for attempt in range(2):
+        try:
+            r = _client.post(
+                f"{TURSO_URL}/v2/pipeline",
+                json={"requests": requests},
+                headers={"Authorization": f"Bearer {TURSO_TOKEN}"},
+            )
+            if not r.is_success:
+                err_text = r.text
+                r.close()
+                last_err = Exception(f"Turso {r.status_code}: {err_text}")
+                continue
+            response_json = r.json()
+            r.close()
+            break
+        except (httpx.TimeoutException, httpx.ConnectError, httpx.ReadError) as e:
+            last_err = e
+            continue
+    else:
+        # Les 2 tentatives ont échoué
+        raise last_err if last_err else Exception("Turso failed after 2 attempts")
     parsed = []
     for res in response_json["results"]:
         if res["type"] == "error":
